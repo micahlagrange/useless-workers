@@ -3,7 +3,9 @@
  <editorsettings>
   <export target="swampy.lua" format="lua"/>
  </editorsettings>
- <tileset firstgid="1" source="swampy.tsx"/>
+ <tileset firstgid="1" name="swampy" tilewidth="32" tileheight="32" tilecount="60" columns="10">
+  <image source="Tileset.png" width="320" height="192"/>
+ </tileset>
  <layer id="3" name="Background" width="100" height="20">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,

@@ -8,14 +8,14 @@ local mapgen = require('mapgen')
 
 -- tilemap objects
 local spawnPoints = {}
-
 local workers = {}
-function love.load(args)
-    args = args or {
-        tilemap = 'spritesheets/swampy.lua'
-    }
 
+function love.load(args)
+    args.tilemap = args.tilemap or 'spritesheets/swampy.lua'
+
+    print('args', args, args.tilemap)
     PrettyPrint(args)
+
     local hump = require('libs/camera')
     local sti = require('libs/sti')
     local wf = require('libs/windfield')
@@ -27,8 +27,6 @@ function love.load(args)
     Camera = hump()
     Camera:zoomTo(2)
     World = wf.newWorld(0, GRAVITY)
-    SFX.DrWeeb:setLooping(true)
-    SFX.DrWeeb:play()
 
     World:addCollisionClass(COLLISION_WORKER)
     World:addCollisionClass(COLLISION_GROUND)
@@ -38,11 +36,14 @@ function love.load(args)
     mapgen.GenerateMapObjects('Ground', COLLISION_GROUND, { colliderType = 'static' })
 
     for _, sp in ipairs(spawnPoints) do
-        table.insert(workers, Worker:new(sp:getX(), sp:getY()))
+        table.insert(workers, worker.NewWorker(sp:getX(), sp:getY()))
     end
 end
 
 function love.update(dt)
+    for _, w in ipairs(workers) do
+        w:update(dt)
+    end
 end
 
 function love.draw(dt)
@@ -55,4 +56,6 @@ function love.draw(dt)
     for _, w in ipairs(workers) do
         w:draw(dt)
     end
+    Camera:lookAt(workers[1].x, workers[1].y)
+    Camera:detach()
 end

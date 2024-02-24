@@ -8,6 +8,7 @@ Worker = {
     facing = LEFT
 }
 
+local worker = {}
 function Worker:new(x, y, obj)
     obj = obj or {}
     setmetatable(obj, self)
@@ -15,11 +16,21 @@ function Worker:new(x, y, obj)
 
     obj.x = x
     obj.y = y
+    obj.scaleX = WORKER_SCALE
     obj.spritesheet = love.graphics.newImage('spritesheets/blue-worker-walk.png')
     obj.grid = spritesheet.NewAnim8Grid(obj.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     obj.animations = {}
-    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), obj.spritesheet)
+    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.1)
     obj.currentAnimation = obj.animations.walk
+    obj.collider = World:newBSGRectangleCollider(
+        obj.x,
+        obj.y,
+        obj.width,
+        obj.height,
+        5)
+    obj.collider:setCollisionClass(COLLISION_WORKER)
+    obj.collider:setFixedRotation(true)
+    return obj
 end
 
 function Worker:update(dt)
@@ -60,3 +71,25 @@ function Worker:draw()
         scaleX,
         self.scaleY)
 end
+
+function Worker:resetAnim()
+    self.currentAnim8 = self.animations.idle
+end
+
+function Worker:chooseConstantAnimation(velocity)
+    if self.currentAnim8 ~= self.animations.walk
+        and self.currentAnim8 ~= self.animations.idle then
+        return
+    end
+    if velocity == 0 then
+        self.currentAnim8 = self.animations.idle
+    else
+        self.currentAnim8 = self.animations.walk
+    end
+end
+
+function worker.NewWorker(x, y)
+    return Worker:new(x, y)
+end
+
+return worker

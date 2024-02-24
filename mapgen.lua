@@ -1,13 +1,18 @@
-
 require('constants')
 
-function GenerateMapObjects(objType, collisionClass, opts)
+local mapgen = {}
+function mapgen.GenerateMapObjects(objType, collisionClass, opts)
   opts.collisionIgnore = opts.collisionIgnore or COLLISION_GHOST
   opts.colliderType = opts.colliderType or 'static'
+  local mapObjects = {}
 
   if GameMap.layers[objType] then
-    local mapObjects = {}
     for _, obj in pairs(GameMap.layers[objType].objects) do
+      if objType == 'Spawn' then
+        obj.width = TILE_SIZE
+        obj.height = TILE_SIZE
+      end
+
       local mo = World:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
 
       mo:setCollisionClass(collisionClass, { ignore = opts.collisionIgnore })
@@ -21,4 +26,7 @@ function GenerateMapObjects(objType, collisionClass, opts)
       table.insert(mapObjects, mo)
     end
   end
+  return mapObjects
 end
+
+return mapgen

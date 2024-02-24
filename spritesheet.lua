@@ -1,7 +1,8 @@
-module('spritesheet')
+require('constants')
 
 -- takes a spritesheet
-function NewAnim8Grid(spriteSheet, w, h)
+local spritesheet = {}
+function spritesheet.NewAnim8Grid(spriteSheet, w, h)
     return Anim8.newGrid(
         w,
         h,
@@ -39,3 +40,5 @@ function SpriteSheetToQuads(spritesheet, spriteWidth, spriteHeight)
 
     return quads
 end
+
+return spritesheet
