@@ -1,0 +1,109 @@
+name: continuous-integration
+on: [push]
+env:
+  GAME_NAME: morphi
+  # unfortunately we need to also hardcode game name here in env since definitions in env can't reference eachother
+  ARTIFACT_PATH_LOVE: main/makelove-build/love/morphi.love
+  ARTIFACT_PATH_APPIMAGE: main/makelove-build/appimage/morphi.AppImage
+  ARTIFACT_PATH_WIN64: main/makelove-build/win64/morphi-win64.zip
+  ARTIFACT_PATH_MACOS: main/makelove-build/macos/morphi-macos.zip
+  ARTIFACT_PATH_LOVEJS: main/makelove-build/lovejs/morphi-lovejs.zip
+  ITCH_USER: multivoxmuse
+  ITCH_GAME: morphi
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: main
+        submodules: true
+
+    - name: Update
+      run: sudo apt-get update
+
+    - name: Install Dependencies
+      run: sudo apt-get install --assume-yes wine-stable wine64 python3-pip
+
+    - name: Checkout makelove
+      uses: actions/checkout@v2
+      with:
+        repository: pfirsich/makelove
+        path: makelove
+
+    - name: Install makelove
+      run:
+        pip3 install ./makelove
+
+    - name: Build
+      run: cd main && python3 -m makelove
+
+    - name: list artifacts
+      run: ls -ltraR main
+
+    - name: Upload to Github (love)
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{env.GAME_NAME}} - love
+        path: ${{env.ARTIFACT_PATH_LOVE}}
+
+    - name: Upload to Github (web)
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{env.GAME_NAME}} - web 
+        path: ${{env.ARTIFACT_PATH_LOVEJS}}
+
+    - name: Upload to Github (Linux)
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{env.GAME_NAME}} - linux
+        path: ${{env.ARTIFACT_PATH_APPIMAGE}}
+
+    - name: Upload to Github (Win64)
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{env.GAME_NAME}} - win64
+        path: ${{env.ARTIFACT_PATH_WIN64}}
+
+    - name: Upload to Github (MacOS)
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{env.GAME_NAME}} - macos
+        path: ${{env.ARTIFACT_PATH_MACOS}}
+
+    - name: Publish to Itch.io (Web)
+      uses: yeslayla/butler-publish-itchio-action@v1.0.3
+      env:
+        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+        ITCH_USER: ${{env.ITCH_USER}}
+        ITCH_GAME: ${{env.ITCH_GAME}}
+        CHANNEL: html
+        PACKAGE: ${{env.ARTIFACT_PATH_LOVEJS}}
+
+    - name: Publish to Itch.io (Linux)
+      uses: yeslayla/butler-publish-itchio-action@v1.0.3
+      env:
+        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+        ITCH_USER: ${{env.ITCH_USER}}
+        ITCH_GAME: ${{env.ITCH_GAME}}
+        CHANNEL: linux 
+        PACKAGE: ${{env.ARTIFACT_PATH_APPIMAGE}}
+
+    - name: Publish to Itch.io (Win64)
+      uses: yeslayla/butler-publish-itchio-action@v1.0.3
+      env:
+        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+        ITCH_USER: ${{env.ITCH_USER}}
+        ITCH_GAME: ${{env.ITCH_GAME}}
+        CHANNEL: windows
+        PACKAGE: ${{env.ARTIFACT_PATH_WIN64}}
+
+    - name: Publish to Itch.io (MacOS)
+      uses: yeslayla/butler-publish-itchio-action@v1.0.3
+      env:
+        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+        ITCH_USER: ${{env.ITCH_USER}}
+        ITCH_GAME: ${{env.ITCH_GAME}}
+        CHANNEL: osx 
+        PACKAGE: ${{env.ARTIFACT_PATH_MACOS}}
