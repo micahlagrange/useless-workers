@@ -36,7 +36,7 @@ function love.load(args)
     mapgen.GenerateMapObjects('Ground', COLLISION_GROUND, { colliderType = 'static' })
 
     for _, sp in ipairs(spawnPoints) do
-        table.insert(workers, worker.NewWorker(sp:getX(), sp:getY()))
+        table.insert(workers, worker.NewWorker(sp.x, sp.y))
     end
 end
 
@@ -53,6 +53,7 @@ function love.draw(dt)
     GameMap:drawLayer(GameMap.layers[LAYER_BG])
     GameMap:drawLayer(GameMap.layers[LAYER_PLAYER])
 
+    -- World:draw()
     for _, w in ipairs(workers) do
         w:draw(dt)
     end

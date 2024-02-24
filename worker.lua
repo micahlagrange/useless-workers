@@ -17,10 +17,11 @@ function Worker:new(x, y, obj)
     obj.x = x
     obj.y = y
     obj.scaleX = WORKER_SCALE
+    obj.scaleX, obj.scaleY = WORKER_SCALE, WORKER_SCALE
     obj.spritesheet = love.graphics.newImage('spritesheets/blue-worker-walk.png')
     obj.grid = spritesheet.NewAnim8Grid(obj.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     obj.animations = {}
-    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.1)
+    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.3)
     obj.currentAnimation = obj.animations.walk
     obj.collider = World:newBSGRectangleCollider(
         obj.x,
@@ -30,19 +31,24 @@ function Worker:new(x, y, obj)
         5)
     obj.collider:setCollisionClass(COLLISION_WORKER)
     obj.collider:setFixedRotation(true)
+    obj.collider:setObject(obj)
+    obj.task = {}
     return obj
 end
 
 function Worker:update(dt)
     local px = self.collider:getLinearVelocity()
+    World:update(dt)
 
     self:chooseConstantAnimation(px)
     self.currentAnimation:update(dt)
 
-    if self.facing == RIGHT and px < MAX_WORKER_SPEED then
-        self.collider:applyForce(WORKER_SPEED, 0)
-    elseif self.facing == LEFT and px > -MAX_WORKER_SPEED then
-        self.collider:applyForce(-WORKER_SPEED, 0)
+    if self.task.wander then
+        if self.facing == RIGHT and px < MAX_WORKER_SPEED then
+            self.collider:applyForce(WORKER_SPEED, 0)
+        elseif self.facing == LEFT and px > -MAX_WORKER_SPEED then
+            self.collider:applyForce(-WORKER_SPEED, 0)
+        end
     end
 
     -- Update player position based on collider

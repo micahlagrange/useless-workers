@@ -9,8 +9,7 @@ function mapgen.GenerateMapObjects(objType, collisionClass, opts)
   if GameMap.layers[objType] then
     for _, obj in pairs(GameMap.layers[objType].objects) do
       if objType == 'Spawn' then
-        obj.width = TILE_SIZE
-        obj.height = TILE_SIZE
+        return {obj}
       end
 
       local mo = World:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
