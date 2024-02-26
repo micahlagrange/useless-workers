@@ -1,6 +1,6 @@
-Object = require('libs.classic')
+local object = require('libs.classic')
 
-Layer = Object:extend()
+Layer = object:extend()
 
 function Layer:new(layer)
     -- setting up the object using the entity data
