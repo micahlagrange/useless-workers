@@ -11,7 +11,7 @@
 	"iid": "63e65bd0-b0a0-11ee-add6-b5fd6cc7755e",
 	"jsonVersion": "1.5.3",
 	"appBuildId": 473703,
-	"nextUid": 1002,
+	"nextUid": 1007,
 	"identifierStyle": "Capitalize",
 	"toc": [],
 	"worldLayout": "Free",
@@ -754,7 +754,7 @@
 		}
 	], "entities": [
 		{
-			"identifier": "Worker_Spawn",
+			"identifier": "Morphi",
 			"uid": 1000,
 			"tags": [],
 			"exportToToc": false,
@@ -786,7 +786,48 @@
 			"limitBehavior": "MoveLastOne",
 			"pivotX": 0,
 			"pivotY": 0,
-			"fieldDefs": []
+			"fieldDefs": [
+				{
+					"identifier": "idle",
+					"doc": null,
+					"__type": "Bool",
+					"uid": 1002,
+					"type": "F_Bool",
+					"isArray": false,
+					"canBeNull": false,
+					"arrayMinLength": null,
+					"arrayMaxLength": null,
+					"editorDisplayMode": "Hidden",
+					"editorDisplayScale": 1,
+					"editorDisplayPos": "Above",
+					"editorLinkStyle": "StraightArrow",
+					"editorDisplayColor": null,
+					"editorAlwaysShow": false,
+					"editorShowInWorld": true,
+					"editorCutLongValues": true,
+					"editorTextSuffix": null,
+					"editorTextPrefix": null,
+					"useForSmartColor": false,
+					"exportToToc": false,
+					"searchable": false,
+					"min": null,
+					"max": null,
+					"regex": null,
+					"acceptFileTypes": null,
+					"defaultOverride": {
+						"id": "V_Bool",
+						"params": [ true ]
+					},
+					"textLanguageMode": null,
+					"symmetricalRef": false,
+					"autoChainRef": true,
+					"allowOutOfLevelRef": true,
+					"allowedRefs": "OnlySame",
+					"allowedRefsEntityUid": null,
+					"allowedRefTags": [],
+					"tilesetUid": null
+				}
+			]
 		}
 	], "tilesets": [
 		{
@@ -844,14 +885,14 @@
 			"worldDepth": 0,
 			"pxWid": 2280,
 			"pxHei": 640,
-			"__bgColor": "#696A79",
-			"bgColor": null,
+			"__bgColor": "#575CA9",
+			"bgColor": "#575CA9",
 			"useAutoIdentifier": true,
 			"bgRelPath": null,
 			"bgPos": null,
 			"bgPivotX": 0.5,
 			"bgPivotY": 0.5,
-			"__smartColor": "#ADADB5",
+			"__smartColor": "#A3A5D0",
 			"__bgPos": null,
 			"externalRelPath": null,
 			"fieldInstances": [],
@@ -3016,20 +3057,20 @@
 					"gridTiles": [],
 					"entityInstances": [
 						{
-							"__identifier": "Worker_Spawn",
-							"__grid": [85,30],
+							"__identifier": "Morphi",
+							"__grid": [81,5],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": null,
 							"__smartColor": "#8531AB",
-							"iid": "c1bb5b30-b0a0-11ee-919f-3df08465f058",
+							"iid": "98282750-b0a0-11ee-9868-3933d4dbfb68",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1360,480],
-							"fieldInstances": [],
-							"__worldX": 1360,
-							"__worldY": 480
+							"px": [1296,80],
+							"fieldInstances": [{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] }],
+							"__worldX": 1296,
+							"__worldY": 80
 						}
 					]
 				},

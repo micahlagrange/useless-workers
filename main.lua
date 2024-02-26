@@ -4,8 +4,8 @@ Anim8 = require('libs/anim8')
 local hump = require('libs/camera')
 local wf = require('libs/windfield')
 -- resource globals
-Camera = hump()
-Camera:zoomTo(2)
+Camera = hump.new(0, 0, 0, 0, hump.smooth.linear(3))
+Camera:zoomTo(3)
 World = wf.newWorld(0, GRAVITY)
 local inspect = require('libs.inspect')
 -- ldtk
@@ -21,7 +21,7 @@ local gameobjects = {}
 
 function love.load()
     --resizing the screen to 512px width and 512px height
-    love.window.setMode(512, 512)
+    love.window.setMode(800, 640)
 
     --setting up the project for pixelart
     love.graphics.setDefaultFilter('nearest', 'nearest')
@@ -29,16 +29,12 @@ function love.load()
 
     --loading the .ldtk file
     ldtk:load('tilemaps/morphi.ldtk')
+    ldtk:setFlipped(true)
     World:addCollisionClass(COLLISION_WORKER)
     World:addCollisionClass(COLLISION_GROUND)
     World:addCollisionClass(COLLISION_GHOST, { ignore = { COLLISION_GROUND, COLLISION_WORKER } })
+    World:setGravity(0, GRAVITY)
     ldtk:level('Level_0')
-end
-
-function love.update(dt)
-    for _, w in ipairs(gameobjects) do
-        w:update(dt)
-    end
 end
 
 function ldtk.onLayer(layer)
@@ -67,23 +63,30 @@ function ldtk.onEntity(entity)
     table.insert(gameobjects, w)
 end
 
-function love.draw()
-    --scaling the screen up for pixelart
-    --    love.graphics.scale(2, 2)
+function love.update(dt)
+    World:update(dt)
+    for _, w in ipairs(gameobjects) do
+        w:update(dt)
+    end
+end
 
+function love.draw()
     Camera:attach()
+
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
 
-    -- World:draw()
     local morphi
     for _, obj in ipairs(gameobjects) do
-        if obj.entity then
+        if obj.name == 'Morphi' then
             morphi = obj
         end
         obj:draw()
     end
-
     Camera:lookAt(morphi.x, morphi.y)
+
+    -- print(Camera.x, Camera.y, morphi.x, morphi.y)
+    World:draw()
+
     Camera:detach()
 end

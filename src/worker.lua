@@ -28,7 +28,7 @@ function Worker:new(obj)
         self.y,
         self.width,
         self.height,
-        5)
+        0)
     self.collider:setCollisionClass(COLLISION_WORKER)
     self.collider:setFixedRotation(true)
     self.collider:setObject(self)
