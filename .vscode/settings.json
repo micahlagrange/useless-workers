@@ -1,5 +1,16 @@
 {
+  "luaTestAdapter.luaExe": "C:/Program Files (x86)/Lua/5.1/lua.exe",
   "Lua.diagnostics.globals": [
-    "COLLISION_GHOST"
-  ]
+    "love"
+  ],
+  "luaTestAdapter.logfile": "C:/Log/lua/luaunit.log",
+  "luaTestAdapter.logpanel": true,
+  "luaTestAdapter.testGlob": "tst/**/**test.lua",
+  "Lua.workspace.library": [
+    "C:/Users/sixst/AppData/Roaming/Code/User/globalStorage/sumneko.lua/addonManager/addons/luaunit/module/library"
+  ],
+  "Lua.workspace.checkThirdParty": false,
+  "terminal.explorerKind": "integrated",
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "pixelbyte.love2d.debug": true
 }

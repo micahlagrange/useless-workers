@@ -21,8 +21,15 @@ LAYER_BG = 'Background'
 LAYER_PLAYER = 'Player'
 
 
-function PrettyPrint(tabl)
-  for k, v in ipairs(tabl) do
-    print('k ', k ': v', v)
-  end
+function PrettyPrint(o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k,v in pairs(o) do
+         if type(k) ~= 'number' then k = '"'..k..'"' end
+         s = s .. '['..k..'] = ' .. PrettyPrint(v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
 end

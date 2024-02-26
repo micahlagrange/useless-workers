@@ -1,4 +1,4 @@
-require('constants')
+require('src.constants')
 
 -- takes a spritesheet
 local spritesheet = {}

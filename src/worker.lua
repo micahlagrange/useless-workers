@@ -1,39 +1,39 @@
-local spritesheet = require('spritesheet')
+local spritesheet = require('src.drawing.spritesheet')
 
-require('constants')
+require('src.constants')
 
 Worker = {
     height = TILE_SIZE * WORKER_SCALE,
     width = TILE_SIZE * WORKER_SCALE,
     facing = LEFT
 }
-
-local worker = {}
-function Worker:new(x, y, obj)
+function Worker:new(obj)
     obj = obj or {}
     setmetatable(obj, self)
     self.__index = self
 
-    obj.x = x
-    obj.y = y
-    obj.scaleX = WORKER_SCALE
-    obj.scaleX, obj.scaleY = WORKER_SCALE, WORKER_SCALE
-    obj.spritesheet = love.graphics.newImage('spritesheets/blue-worker-walk.png')
-    obj.grid = spritesheet.NewAnim8Grid(obj.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
-    obj.animations = {}
-    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.3)
-    obj.currentAnimation = obj.animations.walk
-    obj.collider = World:newBSGRectangleCollider(
-        obj.x,
-        obj.y,
-        obj.width,
-        obj.height,
+    self.entity = obj
+    self.name = obj.id
+    self.x = obj.x
+    self.y = obj.y
+    self.scaleX = WORKER_SCALE
+    self.scaleX, self.scaleY = WORKER_SCALE, WORKER_SCALE
+    self.spritesheet = love.graphics.newImage('spritesheets/blue-worker-walk.png')
+    self.grid = spritesheet.NewAnim8Grid(self.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
+    self.animations = {}
+    self.animations.walk = Anim8.newAnimation(self.grid('1-3', 1), 0.3)
+    self.currentAnimation = self.animations.walk
+    self.collider = World:newBSGRectangleCollider(
+        self.x,
+        self.y,
+        self.width,
+        self.height,
         5)
-    obj.collider:setCollisionClass(COLLISION_WORKER)
-    obj.collider:setFixedRotation(true)
-    obj.collider:setObject(obj)
-    obj.task = {}
-    return obj
+    self.collider:setCollisionClass(COLLISION_WORKER)
+    self.collider:setFixedRotation(true)
+    self.collider:setObject(self)
+    self.task = {}
+    return self
 end
 
 function Worker:update(dt)
@@ -94,8 +94,4 @@ function Worker:chooseConstantAnimation(velocity)
     end
 end
 
-function worker.NewWorker(x, y)
-    return Worker:new(x, y)
-end
-
-return worker
+return Worker

@@ -1,62 +1,89 @@
-love.graphics.setDefaultFilter("nearest", "nearest")
+-- lib requires
+SFX = require('src.audio')
+Anim8 = require('libs/anim8')
+local hump = require('libs/camera')
+local wf = require('libs/windfield')
+-- resource globals
+Camera = hump()
+Camera:zoomTo(2)
+World = wf.newWorld(0, GRAVITY)
+local inspect = require('libs.inspect')
+-- ldtk
+local ldtk = require('libs.ldtk')
 
-require('constants')
-
--- requires
-local worker = require('worker')
-local mapgen = require('mapgen')
+-- src requires
+local worker = require('src.worker')
+local Layer = require('src.drawing.layer')
+require('src.constants')
 
 -- tilemap objects
-local spawnPoints = {}
-local workers = {}
+local gameobjects = {}
 
-function love.load(args)
-    args.tilemap = args.tilemap or 'spritesheets/swampy.lua'
+function love.load()
+    --resizing the screen to 512px width and 512px height
+    love.window.setMode(512, 512)
 
-    print('args', args, args.tilemap)
-    PrettyPrint(args)
+    --setting up the project for pixelart
+    love.graphics.setDefaultFilter('nearest', 'nearest')
+    love.graphics.setLineStyle('rough')
 
-    local hump = require('libs/camera')
-    local sti = require('libs/sti')
-    local wf = require('libs/windfield')
-    SFX = require('audio')
-    Anim8 = require('libs/anim8')
-
-    -- resource globals
-    GameMap = sti(args.tilemap)
-    Camera = hump()
-    Camera:zoomTo(2)
-    World = wf.newWorld(0, GRAVITY)
-
+    --loading the .ldtk file
+    ldtk:load('tilemaps/morphi.ldtk')
     World:addCollisionClass(COLLISION_WORKER)
     World:addCollisionClass(COLLISION_GROUND)
     World:addCollisionClass(COLLISION_GHOST, { ignore = { COLLISION_GROUND, COLLISION_WORKER } })
-
-    spawnPoints = mapgen.GenerateMapObjects('Spawn', COLLISION_GHOST, { gravityDisabled = true })
-    mapgen.GenerateMapObjects('Ground', COLLISION_GROUND, { colliderType = 'static' })
-
-    for _, sp in ipairs(spawnPoints) do
-        table.insert(workers, worker.NewWorker(sp.x, sp.y))
-    end
+    ldtk:level('Level_0')
 end
 
 function love.update(dt)
-    for _, w in ipairs(workers) do
+    for _, w in ipairs(gameobjects) do
         w:update(dt)
     end
 end
 
-function love.draw(dt)
+function ldtk.onLayer(layer)
+    print(inspect('layer ', layer))
+    -- Here we treated the layer as an object and added it to the table we use to draw.
+    -- Generally, you would create a new object and use that object to draw the layer.
+    table.insert(gameobjects, Layer(layer)) --adding layer to the table we use to draw
+end
+
+function ldtk.onLevelLoaded(level)
+    print(inspect('level ', level))
+
+    --removing all objects so we have a blank level
+    gameobjects = {}
+
+    --changing background color to the one defined in LDtk
+    love.graphics.setBackgroundColor(level.backgroundColor)
+end
+
+function ldtk.onEntity(entity)
+    print(string.format('entity id:%s x:%s y:%s width:%s height:%s props:%s visible:%s',
+        entity.id, entity.x, entity.y, entity.width, entity.height,
+        inspect(entity.props), entity.visible))
+
+    local w = worker:new(entity)
+    table.insert(gameobjects, w)
+end
+
+function love.draw()
+    --scaling the screen up for pixelart
+    --    love.graphics.scale(2, 2)
+
     Camera:attach()
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
-    GameMap:drawLayer(GameMap.layers[LAYER_BG])
-    GameMap:drawLayer(GameMap.layers[LAYER_PLAYER])
 
     -- World:draw()
-    for _, w in ipairs(workers) do
-        w:draw(dt)
+    local morphi
+    for _, obj in ipairs(gameobjects) do
+        if obj.entity then
+            morphi = obj
+        end
+        obj:draw()
     end
-    Camera:lookAt(workers[1].x, workers[1].y)
+
+    Camera:lookAt(morphi.x, morphi.y)
     Camera:detach()
 end
