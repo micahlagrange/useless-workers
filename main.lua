@@ -39,14 +39,15 @@ function love.load()
 end
 
 function ldtk.onLayer(layer)
-    print(inspect('layer ', layer))
+    print('layer ', layer.id)
     -- Here we treated the layer as an object and added it to the table we use to draw.
     -- Generally, you would create a new object and use that object to draw the layer.
     table.insert(gameobjects, Layer(layer)) --adding layer to the table we use to draw
+    print(#gameobjects)
 end
 
 function ldtk.onLevelLoaded(level)
-    print(inspect('level ', level))
+    print('level ', level.id)
 
     --removing all objects so we have a blank level
     gameobjects = {}
@@ -57,6 +58,7 @@ function ldtk.onLevelLoaded(level)
     collision:new()
     collision:loadJSON()
     collision:IntGridToWinfieldRects(collision:findIntGrid51())
+    print(#gameobjects)
 end
 
 function ldtk.onEntity(entity)
@@ -64,8 +66,11 @@ function ldtk.onEntity(entity)
         entity.id, entity.x, entity.y, entity.width, entity.height,
         inspect(entity.props), entity.visible))
 
-    local w = worker:new(entity)
-    table.insert(gameobjects, w)
+    if entity.id == 'Morphi' then
+        local w = worker:new(entity)
+        table.insert(gameobjects, w)
+        print(#gameobjects)
+    end
 end
 
 function love.update(dt)
@@ -81,17 +86,14 @@ function love.draw()
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
 
-    local morphi
     for _, obj in ipairs(gameobjects) do
-        if obj.name == 'Morphi' then
-            morphi = obj
-        end
         obj:draw()
+        if obj.name and obj.name == 'Jammy' then
+            Camera:lookAt(obj.x, obj.y)
+        end
     end
-    Camera:lookAt(morphi.x, morphi.y)
 
-    -- print(Camera.x, Camera.y, morphi.x, morphi.y)
-    World:draw()
+    -- World:draw()
 
     Camera:detach()
 end
