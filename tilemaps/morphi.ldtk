@@ -3058,7 +3058,7 @@
 					"entityInstances": [
 						{
 							"__identifier": "Morphi",
-							"__grid": [81,5],
+							"__grid": [60,24],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": null,
@@ -3067,10 +3067,58 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1296,80],
+							"px": [960,384],
 							"fieldInstances": [{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] }],
-							"__worldX": 1296,
-							"__worldY": 80
+							"__worldX": 960,
+							"__worldY": 384
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [63,22],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "d2b35d90-b0a0-11ee-8b16-d34c8de51676",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1008,352],
+							"fieldInstances": [{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] }],
+							"__worldX": 1008,
+							"__worldY": 352
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [65,25],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "d6966420-b0a0-11ee-8b16-d55fad0281e5",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1040,400],
+							"fieldInstances": [{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] }],
+							"__worldX": 1040,
+							"__worldY": 400
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [68,22],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "d81e63b0-b0a0-11ee-8b16-2fe3e375ac56",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1088,352],
+							"fieldInstances": [{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] }],
+							"__worldX": 1088,
+							"__worldY": 352
 						}
 					]
 				},

@@ -14,6 +14,7 @@ local ldtk = require('libs.ldtk')
 -- src requires
 local worker = require('src.worker')
 local Layer = require('src.drawing.layer')
+local collision = require('src.collision')
 require('src.constants')
 
 -- tilemap objects
@@ -52,6 +53,10 @@ function ldtk.onLevelLoaded(level)
 
     --changing background color to the one defined in LDtk
     love.graphics.setBackgroundColor(level.backgroundColor)
+    --draw a bunch of rectangles
+    collision:new()
+    collision:loadJSON()
+    collision:IntGridToWinfieldRects(collision:findIntGrid51())
 end
 
 function ldtk.onEntity(entity)
