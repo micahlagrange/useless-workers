@@ -4,4 +4,6 @@ set -e
 
 . setup.conf
 
+pwd
+
 luaunit

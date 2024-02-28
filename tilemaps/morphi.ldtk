@@ -3112,6 +3112,82 @@
 							],
 							"__worldX": 1472,
 							"__worldY": 480
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [101,23],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "af2220d0-b0a0-11ee-bc96-3169f29ebb47",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1616,368],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] }
+							],
+							"__worldX": 1616,
+							"__worldY": 368
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [92,22],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "af54f0a0-b0a0-11ee-bc96-6972b3c97d27",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1472,352],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] }
+							],
+							"__worldX": 1472,
+							"__worldY": 352
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [90,27],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "af87c070-b0a0-11ee-bc96-cdbe0f206382",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1440,432],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] }
+							],
+							"__worldX": 1440,
+							"__worldY": 432
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [83,28],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "afbab750-b0a0-11ee-bc96-b552eb685a6d",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1328,448],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] }
+							],
+							"__worldX": 1328,
+							"__worldY": 448
 						}
 					]
 				},

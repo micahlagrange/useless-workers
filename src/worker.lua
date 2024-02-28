@@ -21,10 +21,10 @@ function Worker:new(entity)
     obj.visible = entity.visible
     obj.scaleX = WORKER_SCALE
     obj.scaleX, obj.scaleY = WORKER_SCALE, WORKER_SCALE
-    obj.spritesheet = love.graphics.newImage('spritesheets/blue-worker-walk.png')
+    obj.spritesheet = love.graphics.newImage('spritesheets/crab-worker-walk.png')
     obj.grid = spritesheet.NewAnim8Grid(obj.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     obj.animations = {}
-    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.5)
+    obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.15)
     obj.currentAnimation = obj.animations.walk
     obj.collider = World:newBSGRectangleCollider(
         obj.x,

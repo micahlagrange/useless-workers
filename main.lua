@@ -5,7 +5,7 @@ local hump = require('libs/camera')
 local wf = require('libs/windfield')
 -- resource globals
 Camera = hump.new(0, 0, 0, 0, hump.smooth.linear(3))
-Camera:zoomTo(3)
+Camera:zoomTo(4)
 World = wf.newWorld(0, GRAVITY)
 local inspect = require('libs.inspect')
 -- ldtk
@@ -57,7 +57,7 @@ function ldtk.onLevelLoaded(level)
     --draw a bunch of rectangles
     collision:new()
     collision:loadJSON()
-    collision:IntGridToWinfieldRects(collision:findIntGrid51())
+    collision:IntGridToWinfieldRects(collision:findIntGrid())
     print(#gameobjects)
 end
 
@@ -93,7 +93,7 @@ function love.draw()
         end
     end
 
-    -- World:draw()
+    --World:draw()
 
     Camera:detach()
 end

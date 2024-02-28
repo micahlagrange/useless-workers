@@ -1,3 +1,12 @@
+-- world mocks
+World = {}
+RectCollider = {}
+function RectCollider:setType(x,x,x,x,x)
+end
+function World:newRectangleCollider(x,x,x,x,x,x)
+    return RectCollider
+end
+
 local collision = require('src.collision')
 local inspect = require('libs.inspect')
 local lu = require('libs.luaunit')
