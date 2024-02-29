@@ -2,6 +2,8 @@ local spritesheet = require('src.drawing.spritesheet')
 
 require('src.constants')
 
+LastNewMorphiFrame = 1
+
 Worker = {}
 function Worker:new(entity)
     local obj = {
@@ -27,6 +29,7 @@ function Worker:new(entity)
     obj.animations = {}
     obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.15)
     obj.currentAnimation = obj.animations.walk
+    obj.animations.walk:gotoFrame(self:varyFrame(#obj.animations.walk.frames))
     obj.collider = World:newBSGRectangleCollider(
         obj.x,
         obj.y,
@@ -38,6 +41,13 @@ function Worker:new(entity)
     obj.collider:setObject(obj)
     obj.task = { wander = true, canFlip = true }
     return obj
+end
+
+function Worker:varyFrame(upTo)
+    LastNewMorphiFrame = (LastNewMorphiFrame + 1) % upTo + 1
+    local frame = LastNewMorphiFrame
+    print('frame ', frame)
+    return frame
 end
 
 function Worker:flipFacing()

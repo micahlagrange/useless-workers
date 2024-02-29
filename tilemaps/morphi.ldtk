@@ -621,7 +621,7 @@
 			"type": "Entities",
 			"uid": 34,
 			"doc": "Worker spawn points and that",
-			"uiColor": null,
+			"uiColor": "#6C278B",
 			"gridSize": 16,
 			"guideGridWid": 0,
 			"guideGridHei": 0,
@@ -738,16 +738,16 @@
 			"maxHeight": null,
 			"keepAspectRatio": false,
 			"tileOpacity": 1,
-			"fillOpacity": 1,
-			"lineOpacity": 1,
+			"fillOpacity": 0.08,
+			"lineOpacity": 0,
 			"hollow": false,
 			"color": "#8531AB",
-			"renderMode": "Rectangle",
+			"renderMode": "Tile",
 			"showName": true,
-			"tilesetId": null,
+			"tilesetId": 1001,
 			"tileRenderMode": "FitInside",
-			"tileRect": null,
-			"uiTileRect": { "tilesetUid": 1001, "x": 0, "y": 240, "w": 16, "h": 16 },
+			"tileRect": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
+			"uiTileRect": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 			"nineSliceBorders": [],
 			"maxCount": 0,
 			"limitScope": "PerLevel",
@@ -920,12 +920,12 @@
 			}
 		}
 	], "enums": [{ "identifier": "MorphoType", "uid": 1055, "values": [
-		{ "id": "Blue", "tileRect": null, "color": 4278233 },
-		{ "id": "Cwab", "tileRect": null, "color": 12463919 },
-		{ "id": "Pupper", "tileRect": null, "color": 14120515 },
-		{ "id": "Woofoof", "tileRect": null, "color": 4718580 },
-		{ "id": "Twins", "tileRect": null, "color": 14894079 }
-	], "iconTilesetUid": null, "externalRelPath": null, "externalFileChecksum": null, "tags": [] }], "externalEnums": [], "levelFields": [] },
+		{ "id": "Blue", "tileRect": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 }, "color": 4278233 },
+		{ "id": "Cwab", "tileRect": { "tilesetUid": 1001, "x": 128, "y": 128, "w": 16, "h": 16 }, "color": 12463919 },
+		{ "id": "Pupper", "tileRect": { "tilesetUid": 1001, "x": 176, "y": 416, "w": 16, "h": 16 }, "color": 14120515 },
+		{ "id": "Woofoof", "tileRect": { "tilesetUid": 1001, "x": 224, "y": 800, "w": 16, "h": 16 }, "color": 4718580 },
+		{ "id": "Twins", "tileRect": { "tilesetUid": 1001, "x": 192, "y": 352, "w": 16, "h": 16 }, "color": 14894079 }
+	], "iconTilesetUid": 1001, "externalRelPath": null, "externalFileChecksum": null, "tags": [] }], "externalEnums": [], "levelFields": [] },
 	"levels": [
 		{
 			"identifier": "Level_0",
@@ -936,14 +936,14 @@
 			"worldDepth": 0,
 			"pxWid": 2280,
 			"pxHei": 640,
-			"__bgColor": "#575CA9",
-			"bgColor": "#575CA9",
+			"__bgColor": "#3B77F3",
+			"bgColor": "#3B77F3",
 			"useAutoIdentifier": true,
 			"bgRelPath": null,
 			"bgPos": null,
 			"bgPivotX": 0.5,
 			"bgPivotY": 0.5,
-			"__smartColor": "#A3A5D0",
+			"__smartColor": "#93B4F8",
 			"__bgPos": null,
 			"externalRelPath": null,
 			"fieldInstances": [],
@@ -3060,7 +3060,7 @@
 							"__grid": [99,31],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "98282750-b0a0-11ee-9868-3933d4dbfb68",
 							"width": 16,
@@ -3083,42 +3083,42 @@
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [87,25],
+							"__grid": [91,32],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "d2b35d90-b0a0-11ee-8b16-d34c8de51676",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1392,400],
+							"px": [1456,512],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": "Redd", "__tile": null, "defUid": 1009, "realEditorValues": [{
 									"id": "V_String",
 									"params": ["Redd"]
 								}] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Woofoof", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Cwab"]
+									"params": ["Woofoof"]
 								}] }
 							],
-							"__worldX": 1392,
-							"__worldY": 400
+							"__worldX": 1456,
+							"__worldY": 512
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [99,25],
+							"__grid": [102,28],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "d6966420-b0a0-11ee-8b16-d55fad0281e5",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1584,400],
+							"px": [1632,448],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3127,41 +3127,41 @@
 									"params": ["Cwab"]
 								}] }
 							],
-							"__worldX": 1584,
-							"__worldY": 400
+							"__worldX": 1632,
+							"__worldY": 448
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [94,26],
+							"__grid": [96,29],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "d81e63b0-b0a0-11ee-8b16-2fe3e375ac56",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1504,416],
+							"px": [1536,464],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": "Jammy", "__tile": null, "defUid": 1009, "realEditorValues": [{
 									"id": "V_String",
 									"params": ["Jammy"]
 								}] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Twins", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Pupper", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Twins"]
+									"params": ["Pupper"]
 								}] }
 							],
-							"__worldX": 1504,
-							"__worldY": 416
+							"__worldX": 1536,
+							"__worldY": 464
 						},
 						{
 							"__identifier": "Morphi",
 							"__grid": [92,30],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "c0364440-b0a0-11ee-af04-f58c51443f29",
 							"width": 16,
@@ -3181,39 +3181,39 @@
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [101,23],
+							"__grid": [101,28],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "af2220d0-b0a0-11ee-bc96-3169f29ebb47",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1616,368],
+							"px": [1616,448],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Pupper", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Pupper"]
+									"params": ["Cwab"]
 								}] }
 							],
 							"__worldX": 1616,
-							"__worldY": 368
+							"__worldY": 448
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [92,22],
+							"__grid": [95,29],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "af54f0a0-b0a0-11ee-bc96-6972b3c97d27",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1472,352],
+							"px": [1520,464],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3222,110 +3222,67 @@
 									"params": ["Pupper"]
 								}] }
 							],
-							"__worldX": 1472,
-							"__worldY": 352
+							"__worldX": 1520,
+							"__worldY": 464
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [90,27],
+							"__grid": [94,29],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "af87c070-b0a0-11ee-bc96-cdbe0f206382",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1440,432],
+							"px": [1504,464],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Blue", "__tile": null, "defUid": 1056, "realEditorValues": [] }
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Pupper", "__tile": null, "defUid": 1056, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Pupper"]
+								}] }
 							],
-							"__worldX": 1440,
-							"__worldY": 432
+							"__worldX": 1504,
+							"__worldY": 464
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [83,28],
+							"__grid": [96,31],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "afbab750-b0a0-11ee-bc96-b552eb685a6d",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1328,448],
+							"px": [1536,496],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Blue", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Twins", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Blue"]
+									"params": ["Twins"]
 								}] }
 							],
-							"__worldX": 1328,
-							"__worldY": 448
+							"__worldX": 1536,
+							"__worldY": 496
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [88,22],
+							"__grid": [94,31],
 							"__pivot": [0,0],
 							"__tags": [],
-							"__tile": null,
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
 							"__smartColor": "#8531AB",
 							"iid": "6162a660-b0a0-11ee-9008-25a56845e618",
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1408,352],
-							"fieldInstances": [
-								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
-								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
-									"id": "V_String",
-									"params": ["Cwab"]
-								}] }
-							],
-							"__worldX": 1408,
-							"__worldY": 352
-						},
-						{
-							"__identifier": "Morphi",
-							"__grid": [103,20],
-							"__pivot": [0,0],
-							"__tags": [],
-							"__tile": null,
-							"__smartColor": "#8531AB",
-							"iid": "6c5ff440-b0a0-11ee-9008-47a35322c388",
-							"width": 16,
-							"height": 16,
-							"defUid": 1000,
-							"px": [1648,320],
-							"fieldInstances": [
-								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
-								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
-									"id": "V_String",
-									"params": ["Cwab"]
-								}] }
-							],
-							"__worldX": 1648,
-							"__worldY": 320
-						},
-						{
-							"__identifier": "Morphi",
-							"__grid": [96,24],
-							"__pivot": [0,0],
-							"__tags": [],
-							"__tile": null,
-							"__smartColor": "#8531AB",
-							"iid": "eb1e2f80-b0a0-11ee-a377-a3b652644507",
-							"width": 16,
-							"height": 16,
-							"defUid": 1000,
-							"px": [1536,384],
+							"px": [1504,496],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3334,8 +3291,54 @@
 									"params": ["Woofoof"]
 								}] }
 							],
-							"__worldX": 1536,
-							"__worldY": 384
+							"__worldX": 1504,
+							"__worldY": 496
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [98,29],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
+							"__smartColor": "#8531AB",
+							"iid": "6c5ff440-b0a0-11ee-9008-47a35322c388",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1568,464],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Twins", "__tile": null, "defUid": 1056, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Twins"]
+								}] }
+							],
+							"__worldX": 1568,
+							"__worldY": 464
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [100,28],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
+							"__smartColor": "#8531AB",
+							"iid": "eb1e2f80-b0a0-11ee-a377-a3b652644507",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1600,448],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Cwab"]
+								}] }
+							],
+							"__worldX": 1600,
+							"__worldY": 448
 						}
 					]
 				},
