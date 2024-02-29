@@ -922,7 +922,9 @@
 	], "enums": [{ "identifier": "MorphoType", "uid": 1055, "values": [
 		{ "id": "Blue", "tileRect": null, "color": 4278233 },
 		{ "id": "Cwab", "tileRect": null, "color": 12463919 },
-		{ "id": "Pupper", "tileRect": null, "color": 14120515 }
+		{ "id": "Pupper", "tileRect": null, "color": 14120515 },
+		{ "id": "Woofoof", "tileRect": null, "color": 4718580 },
+		{ "id": "Twins", "tileRect": null, "color": 14894079 }
 	], "iconTilesetUid": null, "externalRelPath": null, "externalFileChecksum": null, "tags": [] }], "externalEnums": [], "levelFields": [] },
 	"levels": [
 		{
@@ -3071,9 +3073,9 @@
 									"id": "V_String",
 									"params": ["Bob"]
 								}] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Cwab", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Twins", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Cwab"]
+									"params": ["Twins"]
 								}] }
 							],
 							"__worldX": 1584,
@@ -3146,9 +3148,9 @@
 									"id": "V_String",
 									"params": ["Jammy"]
 								}] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Blue", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Twins", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Blue"]
+									"params": ["Twins"]
 								}] }
 							],
 							"__worldX": 1504,
@@ -3169,9 +3171,9 @@
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
-								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Pupper", "__tile": null, "defUid": 1056, "realEditorValues": [{
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Woofoof", "__tile": null, "defUid": 1056, "realEditorValues": [{
 									"id": "V_String",
-									"params": ["Pupper"]
+									"params": ["Woofoof"]
 								}] }
 							],
 							"__worldX": 1472,
@@ -3311,6 +3313,29 @@
 							],
 							"__worldX": 1648,
 							"__worldY": 320
+						},
+						{
+							"__identifier": "Morphi",
+							"__grid": [96,24],
+							"__pivot": [0,0],
+							"__tags": [],
+							"__tile": null,
+							"__smartColor": "#8531AB",
+							"iid": "eb1e2f80-b0a0-11ee-a377-a3b652644507",
+							"width": 16,
+							"height": 16,
+							"defUid": 1000,
+							"px": [1536,384],
+							"fieldInstances": [
+								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
+								{ "__identifier": "MorphoType", "__type": "LocalEnum.MorphoType", "__value": "Woofoof", "__tile": null, "defUid": 1056, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Woofoof"]
+								}] }
+							],
+							"__worldX": 1536,
+							"__worldY": 384
 						}
 					]
 				},
