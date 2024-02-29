@@ -93,7 +93,7 @@ function love.draw()
         end
     end
 
-    --World:draw()
+    --World:draw()'/c/Program Files/LOVE/love.exe'
 
     Camera:detach()
 end

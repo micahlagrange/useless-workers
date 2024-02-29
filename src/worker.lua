@@ -16,12 +16,13 @@ function Worker:new(entity)
     obj.entity = entity
     obj.id = entity.id
     obj.name = entity.props['Name'] or entity.id
+    obj.morphoType = entity.props['MorphoType'] or MORPHOTYPE_DEFAULT
     obj.x = entity.x
     obj.y = entity.y
     obj.visible = entity.visible
     obj.scaleX = WORKER_SCALE
     obj.scaleX, obj.scaleY = WORKER_SCALE, WORKER_SCALE
-    obj.spritesheet = love.graphics.newImage('spritesheets/crab-worker-walk.png')
+    obj.spritesheet = love.graphics.newImage('spritesheets/' .. obj.morphoType .. '-worker-walk.png')
     obj.grid = spritesheet.NewAnim8Grid(obj.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     obj.animations = {}
     obj.animations.walk = Anim8.newAnimation(obj.grid('1-3', 1), 0.15)

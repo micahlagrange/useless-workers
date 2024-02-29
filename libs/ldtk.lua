@@ -201,6 +201,13 @@ function ldtk.hex2rgb(color)
     return {r[1] / 255, r[2] / 255, r[3] / 255}
 end
 
+---- lua 5.1 fallback
+function ldtk.hex2rgb51(color)
+    local r = loadString("return {0x" .. color:sub(2, 3) .. ",0x" .. color:sub(4, 5) .. 
+                ",0x" .. color:sub(6, 7) .. "}")()
+    return {r[1] / 255, r[2] / 255, r[3] / 255}
+end
+
 
 --Checks if a table is empty.
 local function is_empty(t)
@@ -358,8 +365,17 @@ function ldtk:goTo(index)
 
 
 
+    -- local success, bgcol = pcall(ldtk.hex2rgb(self.data.levels[index].__bgColor))
+    -- if not success then
+    --     print('warn: ', bgcol)
+    --     success, bgcol = pcall(ldtk.hex2rgb51(self.data.levels[index].__bgColor))
+    --     if not success then
+    --         error(bgcol)
+    --     end
+    -- end
+    local bgcol = ldtk.hex2rgb(self.data.levels[index].__bgColor)
     local levelEntry = {
-        backgroundColor = ldtk.hex2rgb(self.data.levels[index].__bgColor),
+        backgroundColor = bgcol,
         id = self.data.levels[index].identifier,
         worldX  = self.data.levels[index].worldX,
         worldY = self.data.levels[index].worldY,
