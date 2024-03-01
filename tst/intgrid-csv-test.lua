@@ -1,9 +1,10 @@
 -- world mocks
 World = {}
 RectCollider = {}
-function RectCollider:setType(x,x,x,x,x)
+function RectCollider:setType(x, x, x, x, x)
 end
-function World:newRectangleCollider(x,x,x,x,x,x)
+
+function World:newRectangleCollider(x, x, x, x, x, x)
     return RectCollider
 end
 

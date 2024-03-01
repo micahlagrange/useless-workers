@@ -12,10 +12,11 @@ local inspect = require('libs.inspect')
 local ldtk = require('libs.ldtk')
 
 -- src requires
-local worker = require('src.worker')
+local Worker = require('src.worker')
 local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
 require('src.constants')
+local Timer = require('src.system.timer')
 
 -- tilemap objects
 local gameobjects = {}
@@ -66,13 +67,14 @@ function ldtk.onEntity(entity)
         inspect(entity.props), tostring(entity.visible)))
 
     if entity.id == 'Morphi' then
-        local w = worker:new(entity)
+        local w = Worker(entity)
         table.insert(gameobjects, w)
         print(#gameobjects)
     end
 end
 
 function love.update(dt)
+    Timer:update(dt)
     World:update(dt)
     for _, w in ipairs(gameobjects) do
         w:update(dt)

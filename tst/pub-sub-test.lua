@@ -2,8 +2,7 @@ local lu = require('libs.luaunit')
 
 
 -- PubSub tests
-local pubsub = require('src.system.pub-sub')
-local ps = pubsub:new()
+local ps = require('src.system.pub-sub')
 
 local testTable = {}
 local testEvent = 'testEvent'
