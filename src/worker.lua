@@ -39,12 +39,11 @@ function Worker:new(entity)
         wander = true,
         canFlip = true,
         timer = Timer:add('flip.' .. self.id, 5, function(nym)
-            if nym == 'flip.' .. self.id then -- we have to check the payload to see if this signal is for this instances timer expiration...?
-                print('timer expired: ' .. nym)
-                self.task.canFlip = true
-                self:flipFacing()
-            end
-        end)
+                if nym == 'flip.' .. self.id then -- we have to check the payload to see if this signal is for this instances timer expiration...?
+                    self:flipFacing()
+                end
+            end,
+            true)
     }
 end
 
