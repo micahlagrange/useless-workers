@@ -7,3 +7,4 @@ set -e
 pwd
 
 luaunit
+

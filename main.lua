@@ -26,7 +26,6 @@ function love.load()
 
     --setting up the project for pixelart
     love.graphics.setDefaultFilter('nearest', 'nearest')
-    love.graphics.setLineStyle('rough')
 
     --loading the .ldtk file
     ldtk:load('tilemaps/morphi.ldtk')
@@ -64,7 +63,7 @@ end
 function ldtk.onEntity(entity)
     print(string.format('entity id:%s x:%s y:%s width:%s height:%s props:%s visible:%s',
         entity.id, entity.x, entity.y, entity.width, entity.height,
-        inspect(entity.props), entity.visible))
+        inspect(entity.props), tostring(entity.visible)))
 
     if entity.id == 'Morphi' then
         local w = worker:new(entity)

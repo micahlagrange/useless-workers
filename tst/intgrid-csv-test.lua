@@ -11,6 +11,10 @@ local collision = require('src.collision')
 local inspect = require('libs.inspect')
 local lu = require('libs.luaunit')
 
+function LDtkParser:readFile(path)
+    return ReadFile(path)
+end
+
 collision:new()
 collision:loadJSON()
 local intGrid = collision:findIntGrid()

@@ -203,7 +203,7 @@ end
 
 ---- lua 5.1 fallback
 function ldtk.hex2rgb51(color)
-    local r = loadString("return {0x" .. color:sub(2, 3) .. ",0x" .. color:sub(4, 5) .. 
+    local r = loadstring("return {0x" .. color:sub(2, 3) .. ",0x" .. color:sub(4, 5) .. 
                 ",0x" .. color:sub(6, 7) .. "}")()
     return {r[1] / 255, r[2] / 255, r[3] / 255}
 end
@@ -365,15 +365,15 @@ function ldtk:goTo(index)
 
 
 
-    -- local success, bgcol = pcall(ldtk.hex2rgb(self.data.levels[index].__bgColor))
+    -- local success, bgcol = pcall(ldtk.hex2rgb51(self.data.levels[index].__bgColor))
     -- if not success then
     --     print('warn: ', bgcol)
-    --     success, bgcol = pcall(ldtk.hex2rgb51(self.data.levels[index].__bgColor))
+    --     success, bgcol = pcall(ldtk.hex2rgb(self.data.levels[index].__bgColor))
     --     if not success then
     --         error(bgcol)
     --     end
     -- end
-    local bgcol = ldtk.hex2rgb(self.data.levels[index].__bgColor)
+    local bgcol = ldtk.hex2rgb51(self.data.levels[index].__bgColor)
     local levelEntry = {
         backgroundColor = bgcol,
         id = self.data.levels[index].identifier,

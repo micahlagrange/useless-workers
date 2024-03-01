@@ -4,7 +4,13 @@ local json    = require('libs.json')
 local object  = require('libs.classic')
 
 
-print(_VERSION)
+function ReadFile(path)
+    local file = open(path, "rb")  -- r read mode and b binary mode
+    if not file then return nil end
+    local content = file:read "*a" -- *a or *all reads the whole file
+    file:close()
+    return content
+end
 
 -- class
 LDtkParser = object:extend()
@@ -12,9 +18,13 @@ function LDtkParser:new(ldtkpath, level, intgridLayerName)
     self.path = ldtkpath or 'tilemaps/morphi.ldtk'
     self.level = level
     self.intgridLayerName = intgridLayerName or 'IntGrid'
+
+    assert(self.path)
+    assert(self.intgridLayerName)
 end
 
 function LDtkParser:loadJSON()
+    -- local content = self:readFile(self.path)
     local content = self:readFile(self.path)
     self.ldtkJson = json.decode(content)
 end
@@ -50,11 +60,7 @@ function LDtkParser:findIntGrid()
 end
 
 function LDtkParser:readFile(path)
-    local file = open(path, "rb")  -- r read mode and b binary mode
-    if not file then return nil end
-    local content = file:read "*a" -- *a or *all reads the whole file
-    file:close()
-    return content
+    return love.filesystem.read(self.path or path)
 end
 
 function LDtkParser:IntGridToWinfieldRects(intGrid)
