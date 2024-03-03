@@ -1,3 +1,12 @@
+local pubsub = require('src.system.pub-sub')
+
+EVENTS = { Jobs = {}, Timer = {} }
+
+EVENTS.Jobs.ADDED_JOB = 'ADDED_JOB'
+EVENTS.Timer.TIMER_EXPIRED = 'TIMER_EXPIRED'
+
+pubsub:register_events(EVENTS.Timer)
+pubsub:register_events(EVENTS.Jobs)
 
 LEFT = 0
 RIGHT = 1
@@ -21,13 +30,12 @@ OBJECT_LAYER_PLATFORMS = 'Platform'
 LAYER_BG = 'Background'
 LAYER_PLAYER = 'Player'
 
-
 function PrettyPrint(o)
    if type(o) == 'table' then
       local s = '{ '
-      for k,v in pairs(o) do
-         if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. PrettyPrint(v) .. ','
+      for k, v in pairs(o) do
+         if type(k) ~= 'number' then k = '"' .. k .. '"' end
+         s = s .. '[' .. k .. '] = ' .. PrettyPrint(v) .. ','
       end
       return s .. '} '
    else

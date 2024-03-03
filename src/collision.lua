@@ -1,5 +1,4 @@
 local open    = io.open
-local inspect = require('libs.inspect')
 local json    = require('libs.json')
 local object  = require('libs.classic')
 

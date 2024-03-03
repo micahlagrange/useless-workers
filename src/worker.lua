@@ -1,8 +1,10 @@
+local inspect = require('libs.inspect')
 local spritesheet = require('src.drawing.spritesheet')
 local object = require('libs.classic')
+local pubsub = require('src.system.pub-sub')
 
 require('src.constants')
-Timer = require('src.system.timer')
+local JobQueue = require('src.behavior.task')
 
 LastNewMorphiFrame = 1
 
@@ -20,6 +22,7 @@ function Worker:new(entity)
     self.visible = entity.visible
     self.scaleX = WORKER_SCALE
     self.scaleX, self.scaleY = WORKER_SCALE, WORKER_SCALE
+    self.jobIcon = love.graphics.newImage('icons/job-indicator-icon.png')
     self.spritesheet = love.graphics.newImage('spritesheets/' .. self.morphoType .. '-worker-walk.png')
     self.grid = spritesheet.NewAnim8Grid(self.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     self.animations = {}
@@ -35,22 +38,26 @@ function Worker:new(entity)
     self.collider:setCollisionClass(COLLISION_WORKER)
     self.collider:setFixedRotation(true)
     self.collider:setObject(self)
-    self.task = {
-        wander = true,
-        canFlip = true,
-        timer = Timer:add('flip.' .. self.id, 5, function(nym)
-                if nym == 'flip.' .. self.id then -- we have to check the payload to see if this signal is for this instances timer expiration...?
-                    self:flipFacing()
-                end
-            end,
-            true)
-    }
+    self.task = { finished = true }
+    pubsub:subscribe(EVENTS.Jobs.ADDED_JOB, function() self:takeJob() end)
 end
 
 function Worker:varyFrame(upTo)
     LastNewMorphiFrame = (LastNewMorphiFrame + 1) % upTo + 1
     local frame = LastNewMorphiFrame
     return frame
+end
+
+function Worker:takeJob()
+    if self.task == nil or self.task.finished then
+        local success, task = pcall(JobQueue.popleft, JobQueue)
+        if not success then return end
+        self.task           = task
+        -- fake shit:
+        local takeWanderJob = require('src.behavior.jobs')
+        takeWanderJob(self)
+        print(self.morphoType, ' took a task! ', self.task.name)
+    end
 end
 
 function Worker:flipFacing()
@@ -67,11 +74,11 @@ function Worker:update(dt)
     self:chooseConstantAnimation(px)
     self.currentAnimation:update(dt)
 
-    if self.task.wander then
+    if self.task.name == 'wander' then
         if px == 0 and self.task.canFlip then
-            self:flipFacing()
             self.task.canFlip = false
-        elseif math.abs(px) > 5 and self.task.canFlip == false then
+            self:flipFacing()
+        elseif math.abs(px) > 5 then
             self.task.canFlip = true
         end
 
@@ -84,6 +91,16 @@ function Worker:update(dt)
 
     -- Update worker position based on collider
     self.x, self.y = self.collider:getX(), self.collider:getY()
+end
+
+function Worker:drawJobIndicator()
+    local scale = .7
+    if self.task ~= nil and not self.task.finished then
+        love.graphics.draw(self.jobIcon,
+            self.x - self.jobIcon:getWidth() / 2 * scale,
+            self.y - self.height,
+            0, scale, scale)
+    end
 end
 
 function Worker:draw()
@@ -108,6 +125,7 @@ function Worker:draw()
         0,
         scaleX,
         self.scaleY)
+    self:drawJobIndicator()
 end
 
 function Worker:resetAnim()

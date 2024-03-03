@@ -3057,7 +3057,7 @@
 					"entityInstances": [
 						{
 							"__identifier": "Morphi",
-							"__grid": [99,31],
+							"__grid": [95,29],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3066,7 +3066,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1584,496],
+							"px": [1520,464],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": "Bob", "__tile": null, "defUid": 1009, "realEditorValues": [{
@@ -3078,12 +3078,12 @@
 									"params": ["Twins"]
 								}] }
 							],
-							"__worldX": 1584,
-							"__worldY": 496
+							"__worldX": 1520,
+							"__worldY": 464
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [91,32],
+							"__grid": [100,28],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3092,7 +3092,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1456,512],
+							"px": [1600,448],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": "Redd", "__tile": null, "defUid": 1009, "realEditorValues": [{
@@ -3104,12 +3104,12 @@
 									"params": ["Woofoof"]
 								}] }
 							],
-							"__worldX": 1456,
-							"__worldY": 512
+							"__worldX": 1600,
+							"__worldY": 448
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [102,28],
+							"__grid": [100,32],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3118,7 +3118,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1632,448],
+							"px": [1600,512],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3127,12 +3127,12 @@
 									"params": ["Cwab"]
 								}] }
 							],
-							"__worldX": 1632,
-							"__worldY": 448
+							"__worldX": 1600,
+							"__worldY": 512
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [96,29],
+							"__grid": [96,32],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3141,7 +3141,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1536,464],
+							"px": [1536,512],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": "Jammy", "__tile": null, "defUid": 1009, "realEditorValues": [{
@@ -3154,11 +3154,11 @@
 								}] }
 							],
 							"__worldX": 1536,
-							"__worldY": 464
+							"__worldY": 512
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [92,30],
+							"__grid": [96,29],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3167,7 +3167,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1472,480],
+							"px": [1536,464],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3176,8 +3176,8 @@
 									"params": ["Woofoof"]
 								}] }
 							],
-							"__worldX": 1472,
-							"__worldY": 480
+							"__worldX": 1536,
+							"__worldY": 464
 						},
 						{
 							"__identifier": "Morphi",
@@ -3204,7 +3204,7 @@
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [95,29],
+							"__grid": [90,31],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3213,7 +3213,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1520,464],
+							"px": [1440,496],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3222,8 +3222,8 @@
 									"params": ["Pupper"]
 								}] }
 							],
-							"__worldX": 1520,
-							"__worldY": 464
+							"__worldX": 1440,
+							"__worldY": 496
 						},
 						{
 							"__identifier": "Morphi",
@@ -3250,7 +3250,7 @@
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [96,31],
+							"__grid": [102,28],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3259,7 +3259,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1536,496],
+							"px": [1632,448],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3268,8 +3268,8 @@
 									"params": ["Twins"]
 								}] }
 							],
-							"__worldX": 1536,
-							"__worldY": 496
+							"__worldX": 1632,
+							"__worldY": 448
 						},
 						{
 							"__identifier": "Morphi",
@@ -3319,7 +3319,7 @@
 						},
 						{
 							"__identifier": "Morphi",
-							"__grid": [100,28],
+							"__grid": [92,32],
 							"__pivot": [0,0],
 							"__tags": [],
 							"__tile": { "tilesetUid": 1001, "x": 48, "y": 0, "w": 16, "h": 16 },
@@ -3328,7 +3328,7 @@
 							"width": 16,
 							"height": 16,
 							"defUid": 1000,
-							"px": [1600,448],
+							"px": [1472,512],
 							"fieldInstances": [
 								{ "__identifier": "idle", "__type": "Bool", "__value": true, "__tile": null, "defUid": 1002, "realEditorValues": [] },
 								{ "__identifier": "Name", "__type": "String", "__value": null, "__tile": null, "defUid": 1009, "realEditorValues": [] },
@@ -3337,8 +3337,8 @@
 									"params": ["Cwab"]
 								}] }
 							],
-							"__worldX": 1600,
-							"__worldY": 448
+							"__worldX": 1472,
+							"__worldY": 512
 						}
 					]
 				},

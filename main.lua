@@ -1,3 +1,5 @@
+require('src.constants')
+
 -- lib requires
 SFX = require('src.audio')
 Anim8 = require('libs/anim8')
@@ -5,7 +7,7 @@ local hump = require('libs/camera')
 local wf = require('libs/windfield')
 -- resource globals
 Camera = hump.new(0, 0, 0, 0, hump.smooth.linear(3))
-Camera:zoomTo(4)
+Camera:zoomTo(3)
 World = wf.newWorld(0, GRAVITY)
 local inspect = require('libs.inspect')
 -- ldtk
@@ -15,8 +17,8 @@ local ldtk = require('libs.ldtk')
 local Worker = require('src.worker')
 local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
-require('src.constants')
-local Timer = require('src.system.timer')
+local Timers = require('src.system.timer')
+local JobQueue = require('src.behavior.task')
 
 -- tilemap objects
 local gameobjects = {}
@@ -74,7 +76,7 @@ function ldtk.onEntity(entity)
 end
 
 function love.update(dt)
-    Timer:update(dt)
+    Timers.update(dt)
     World:update(dt)
     for _, w in ipairs(gameobjects) do
         w:update(dt)
@@ -86,11 +88,11 @@ function love.draw()
 
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
-
+    local _, windowHeight, _ = love.window.getMode()
     for _, obj in ipairs(gameobjects) do
         obj:draw()
         if obj.name and obj.name == 'Jammy' then
-            Camera:lookAt(obj.x, obj.y)
+            Camera:lookAt(obj.x, obj.y - (windowHeight / 11))
         end
     end
 
@@ -98,3 +100,10 @@ function love.draw()
 
     Camera:detach()
 end
+
+local function addRandomJob()
+    print('ADD TO JOB QUEUE')
+    JobQueue:pushright({ name = 'wander' })
+end
+
+Timers.add('addRandomJob', 6, addRandomJob, true)
