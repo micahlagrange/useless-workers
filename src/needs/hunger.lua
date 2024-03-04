@@ -7,7 +7,7 @@ local identifier = 1
 function hunger:new(morphi, val)
     -- default to 75 hp, meaning 15 minutes to lose all hunger points with a loss of 1
     self.value = val or 75
-    self.interval = 2 -- every n seconds remove hunger
+    self.interval = 20 -- every n seconds remove hunger
     self.loss = 1      -- n * 1 hunger point removed per interval
     self.timer = Timers.add(
         EVENTS.Hunger.HUNGER_DEGRADED,

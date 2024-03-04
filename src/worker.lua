@@ -27,7 +27,8 @@ function Worker:new(entity)
     self.grid = spritesheet.NewAnim8Grid(self.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
     self.animations = {}
     self.animations.walk = Anim8.newAnimation(self.grid('1-3', 1), 0.15)
-    self.currentAnimation = self.animations.walk
+    self.animations.idle = Anim8.newAnimation(self.grid('2-3', 1), 1)
+    self.currentAnimation = self.animations.idle
     self.animations.walk:gotoFrame(self:varyFrame(#self.animations.walk.frames))
     self.collider = World:newBSGRectangleCollider(
         self.x,
@@ -51,7 +52,9 @@ end
 function Worker:takeJob()
     if self.task == nil or self.task.finished then
         local success, task = pcall(JobQueue.popleft, JobQueue)
-        if not success then return end
+        if not success then
+            print(task); return
+        end
         self.task           = task
         -- fake shit:
         local takeWanderJob = require('src.behavior.jobs')

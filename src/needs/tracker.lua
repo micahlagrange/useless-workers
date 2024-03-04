@@ -13,7 +13,7 @@ function needTracker.new(need, morphi)
     if need == 'hunger' then
         table.insert(
             needs.hunger,
-            hunger(morphi, 1))
+            hunger(morphi))
     end
 end
 

@@ -18,7 +18,6 @@ local Worker = require('src.worker')
 local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
 local Timers = require('src.system.timer')
-local JobQueue = require('src.behavior.task')
 local needTracker = require('src.needs.tracker')
 
 -- tilemap objects
@@ -44,15 +43,12 @@ function love.load()
 end
 
 function ldtk.onLayer(layer)
-    print('layer ', layer.id)
     -- Here we treated the layer as an object and added it to the table we use to draw.
     -- Generally, you would create a new object and use that object to draw the layer.
     table.insert(gameobjects, Layer(layer)) --adding layer to the table we use to draw
-    print(#gameobjects)
 end
 
 function ldtk.onLevelLoaded(level)
-    print('level ', level.id)
 
     --removing all objects so we have a blank level
     gameobjects = {}
@@ -63,7 +59,6 @@ function ldtk.onLevelLoaded(level)
     collision:new(level)
     collision:loadJSON()
     collision:IntGridToWinfieldRects(collision:findIntGrid())
-    print(#gameobjects)
 
     levelWidth = level.width
     levelHeight = level.height
@@ -77,7 +72,6 @@ function ldtk.onEntity(entity)
     if entity.id == 'Morphi' then
         local w = Worker(entity)
         table.insert(gameobjects, w)
-        print(#gameobjects)
 
         needTracker.new('hunger', w)
     end

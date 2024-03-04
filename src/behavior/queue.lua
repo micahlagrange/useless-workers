@@ -13,7 +13,6 @@ end
 -- end
 
 function List:pushright(value)
-    print('pushed ', value)
     local last = self.list.last + 1
     self.list.last = last
     self.list[last] = value

@@ -32,7 +32,6 @@ function LDtkParser:findIntGrid()
     local layers
     if self.level then
         for _, level in ipairs(self.ldtkData.levels) do
-            print(level.identifier, self.level.id)
             if level.identifier == self.level.id then
                 layers = level.layerInstances
             end
