@@ -1,9 +1,15 @@
 local pubsub = require('src.system.pub-sub')
 
-EVENTS = { Jobs = {}, Timer = {} }
+EVENTS = {
+   Jobs = {},
+   Timer = {},
+   Hunger = {}
+}
 
 EVENTS.Jobs.ADDED_JOB = 'ADDED_JOB'
 EVENTS.Timer.TIMER_EXPIRED = 'TIMER_EXPIRED'
+EVENTS.Hunger.HUNGER_DEGRADED = 'HUNGER_DEGRADED'
+EVENTS.Hunger.MORPHI_HUNGRY = 'MORPHI_HUNGRY'
 
 pubsub:register_events(EVENTS.Timer)
 pubsub:register_events(EVENTS.Jobs)

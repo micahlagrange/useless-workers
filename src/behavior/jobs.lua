@@ -4,7 +4,7 @@ local function takeWanderJob(worker)
     local longRunning = true
     Timers.add(
         'flip_' .. worker.id,
-        6,
+        30,
         function() worker:flipFacing() end,
         longRunning)
     return {

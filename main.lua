@@ -7,7 +7,7 @@ local hump = require('libs/camera')
 local wf = require('libs/windfield')
 -- resource globals
 Camera = hump.new(0, 0, 0, 0, hump.smooth.linear(3))
-Camera:zoomTo(3)
+Camera:zoomTo(5)
 World = wf.newWorld(0, GRAVITY)
 local inspect = require('libs.inspect')
 -- ldtk
@@ -19,9 +19,12 @@ local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
 local Timers = require('src.system.timer')
 local JobQueue = require('src.behavior.task')
+local needTracker = require('src.needs.tracker')
 
 -- tilemap objects
 local gameobjects = {}
+local levelHeight
+local levelWidth
 
 function love.load()
     --resizing the screen to 512px width and 512px height
@@ -37,7 +40,7 @@ function love.load()
     World:addCollisionClass(COLLISION_GROUND)
     World:addCollisionClass(COLLISION_GHOST, { ignore = { COLLISION_GROUND, COLLISION_WORKER } })
     World:setGravity(0, GRAVITY)
-    ldtk:level('Level_0')
+    ldtk:level('Level_1')
 end
 
 function ldtk.onLayer(layer)
@@ -57,10 +60,13 @@ function ldtk.onLevelLoaded(level)
     --changing background color to the one defined in LDtk
     love.graphics.setBackgroundColor(level.backgroundColor)
     --draw a bunch of rectangles
-    collision:new()
+    collision:new(level)
     collision:loadJSON()
     collision:IntGridToWinfieldRects(collision:findIntGrid())
     print(#gameobjects)
+
+    levelWidth = level.width
+    levelHeight = level.height
 end
 
 function ldtk.onEntity(entity)
@@ -72,6 +78,8 @@ function ldtk.onEntity(entity)
         local w = Worker(entity)
         table.insert(gameobjects, w)
         print(#gameobjects)
+
+        needTracker.new('hunger', w)
     end
 end
 
@@ -88,22 +96,21 @@ function love.draw()
 
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
-    local _, windowHeight, _ = love.window.getMode()
+
     for _, obj in ipairs(gameobjects) do
         obj:draw()
-        if obj.name and obj.name == 'Jammy' then
-            Camera:lookAt(obj.x, obj.y - (windowHeight / 11))
-        end
     end
 
+    needTracker.draw()
+    Camera:lookAt(levelWidth / 2, levelHeight / 2)
     --World:draw()'/c/Program Files/LOVE/love.exe'
 
     Camera:detach()
 end
 
-local function addRandomJob()
-    print('ADD TO JOB QUEUE')
-    JobQueue:pushright({ name = 'wander' })
-end
+-- local function addRandomJob()
+--     print('ADD TO JOB QUEUE')
+--     JobQueue:pushright({ name = 'wander' })
+-- end
 
-Timers.add('addRandomJob', 6, addRandomJob, true)
+-- Timers.add('addRandomJob', 6, addRandomJob, true)

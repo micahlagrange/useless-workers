@@ -1,6 +1,6 @@
-local open    = io.open
-local json    = require('libs.json')
-local object  = require('libs.classic')
+local open   = io.open
+local json   = require('libs.json')
+local object = require('libs.classic')
 
 
 function ReadFile(path)
@@ -13,9 +13,9 @@ end
 
 -- class
 LDtkParser = object:extend()
-function LDtkParser:new(ldtkpath, level, intgridLayerName)
-    self.path = ldtkpath or 'tilemaps/morphi.ldtk'
+function LDtkParser:new(level, intgridLayerName, ldtkpath)
     self.level = level
+    self.path = ldtkpath or 'tilemaps/morphi.ldtk'
     self.intgridLayerName = intgridLayerName or 'IntGrid'
 
     assert(self.path)
@@ -25,21 +25,22 @@ end
 function LDtkParser:loadJSON()
     -- local content = self:readFile(self.path)
     local content = self:readFile(self.path)
-    self.ldtkJson = json.decode(content)
+    self.ldtkData = json.decode(content)
 end
 
 function LDtkParser:findIntGrid()
     local layers
     if self.level then
-        for _, level in ipairs(self.ldtkJson) do
-            if level.id == self.level then
+        for _, level in ipairs(self.ldtkData.levels) do
+            print(level.identifier, self.level.id)
+            if level.identifier == self.level.id then
                 layers = level.layerInstances
             end
         end
     else
-        layers = self.ldtkJson.levels[1].layerInstances
+        layers = self.ldtkData.levels[1].layerInstances
     end
-
+    assert(layers ~= nil, "level is nil!")
     for _, layer in ipairs(layers) do
         if layer.__identifier == self.intgridLayerName then
             -- use width of map to construct a 2d array instead of a single array
