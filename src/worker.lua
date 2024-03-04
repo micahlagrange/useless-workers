@@ -36,7 +36,7 @@ function Worker:new(entity)
         self.width,
         self.height,
         2)
-    self.collider:setCollisionClass(COLLISION_WORKER)
+    self.collider:setCollisionClass(CollisionClasses.WORKER)
     self.collider:setFixedRotation(true)
     self.collider:setObject(self)
     self.task = { finished = true }
@@ -55,8 +55,8 @@ function Worker:takeJob()
         if not success then
             print(task); return
         end
-        self.task           = task
         -- fake shit:
+        self.task           = task
         local takeWanderJob = require('src.behavior.jobs')
         takeWanderJob(self)
         print(self.morphoType, ' took a task! ', self.task.name)

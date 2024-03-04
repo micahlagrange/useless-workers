@@ -3705,22 +3705,6 @@
 							],
 							"__worldX": 2360,
 							"__worldY": 32
-						},
-						{
-							"__identifier": "Food",
-							"__grid": [3,4],
-							"__pivot": [0,0],
-							"__tags": [],
-							"__tile": { "tilesetUid": 1001, "x": 128, "y": 320, "w": 16, "h": 16 },
-							"__smartColor": "#BE4A2F",
-							"iid": "d04c3fb0-d7b0-11ee-aa68-f90c734e832e",
-							"width": 16,
-							"height": 16,
-							"defUid": 1058,
-							"px": [48,64],
-							"fieldInstances": [],
-							"__worldX": 2328,
-							"__worldY": 64
 						}
 					]
 				},

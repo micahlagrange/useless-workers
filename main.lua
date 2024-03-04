@@ -1,4 +1,6 @@
 require('src.constants')
+require('src.constants')
+local consumable = require('src.system.consumable')
 
 -- lib requires
 SFX = require('src.audio')
@@ -19,6 +21,7 @@ local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
 local Timers = require('src.system.timer')
 local needTracker = require('src.needs.tracker')
+local food = require('src.needs.food')
 
 -- tilemap objects
 local gameobjects = {}
@@ -35,9 +38,10 @@ function love.load()
     --loading the .ldtk file
     ldtk:load('tilemaps/morphi.ldtk')
     ldtk:setFlipped(true)
-    World:addCollisionClass(COLLISION_WORKER)
-    World:addCollisionClass(COLLISION_GROUND)
-    World:addCollisionClass(COLLISION_GHOST, { ignore = { COLLISION_GROUND, COLLISION_WORKER } })
+    World:addCollisionClass(CollisionClasses.WORKER)
+    World:addCollisionClass(CollisionClasses.CONSUMABLE)
+    World:addCollisionClass(CollisionClasses.GROUND)
+    World:addCollisionClass(CollisionClasses.GHOST, { ignore = { CollisionClasses.GROUND, CollisionClasses.WORKER } })
     World:setGravity(0, GRAVITY)
     ldtk:level('Level_1')
 end
@@ -49,7 +53,6 @@ function ldtk.onLayer(layer)
 end
 
 function ldtk.onLevelLoaded(level)
-
     --removing all objects so we have a blank level
     gameobjects = {}
 
@@ -96,15 +99,24 @@ function love.draw()
     end
 
     needTracker.draw()
+
     Camera:lookAt(levelWidth / 2, levelHeight / 2)
-    --World:draw()'/c/Program Files/LOVE/love.exe'
+
+    -- World:draw()
 
     Camera:detach()
 end
 
--- local function addRandomJob()
---     print('ADD TO JOB QUEUE')
---     JobQueue:pushright({ name = 'wander' })
--- end
+-- test functions
+local function addRandomJob()
+    print('ADD TO JOB QUEUE')
+    JobQueue:pushright({ name = 'wander' })
+end
 
+local function addRandomFood()
+    print("ADD FOOD")
+    table.insert(gameobjects, food())
+end
+
+-- Timers.add('addRandomFood', 1, addRandomFood, true)
 -- Timers.add('addRandomJob', 6, addRandomJob, true)

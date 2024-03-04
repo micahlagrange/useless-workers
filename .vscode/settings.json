@@ -9,5 +9,7 @@
   "terminal.explorerKind": "integrated",
   "terminal.integrated.defaultProfile.windows": "Git Bash",
   "pixelbyte.love2d.debug": true,
-  "pixelbyte.love2d.revealStatus": true
+  "pixelbyte.love2d.revealStatus": true,
+  "files.autoSave": "afterDelay",
+  "editor.formatOnSave": true,
 }

@@ -26,15 +26,19 @@ MAX_WORKER_SPEED = 20
 WORKER_SCALE = .9
 MORPHOTYPE_DEFAULT = 'blue'
 
-COLLISION_WORKER = 'Worker'
-COLLISION_GROUND = 'Ground'
-COLLISION_GHOST = 'Ghost'
+CollisionClasses = {}
+CollisionClasses.WORKER = 'Worker'
+CollisionClasses.GROUND = 'Ground'
+CollisionClasses.CONSUMABLE = 'Consumable'
+CollisionClasses.GHOST = 'Ghost'
 
 OBJECT_LAYER_WALLS = 'Wall'
 OBJECT_LAYER_PLATFORMS = 'Platform'
 
 LAYER_BG = 'Background'
 LAYER_PLAYER = 'Player'
+
+WASTE_LAND = -9999
 
 function PrettyPrint(o)
    if type(o) == 'table' then
