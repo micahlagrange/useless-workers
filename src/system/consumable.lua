@@ -6,28 +6,14 @@ local consumable = object:extend()
 local consumables = {}
 local Consumables = {} -- module
 
-local function findIndexForConsumableID(name)
+local function findIndexForConsumableID(conguid)
     --return 0 if none found
     for idx, p in ipairs(consumables) do
-        if p.pkguid == name then
+        if p.conguid == conguid then
             return idx
         end
     end
     return 0
-end
-
-local function deleteConsumable(consum, name)
-    local idx = findIndexForConsumableID(name)
-    if idx > 0 then table.remove(consumables, idx) end
-
-    consum.x = WASTE_LAND
-    consum.y = WASTE_LAND
-    pcall(function()
-        consum.collider:setGravityScale(0)
-        consum.collider:setCollisionClass('Ghost')
-        consum.collider:setX(WASTE_LAND)
-        consum.collider:setY(WASTE_LAND)
-    end)
 end
 
 local function cleanUpConsumables()
@@ -45,9 +31,10 @@ local function getUniqueID()
     return counter
 end
 
-function consumable:new(x, y, scale)
+function consumable:new(consuminstance, scale)
+    self.consuminstance = consuminstance
     self.conguid = getUniqueID()
-    self.x, self.y = x, y
+    self.x, self.y = consuminstance.x, consuminstance.y
     self.collider = World:newBSGRectangleCollider(
         self.x,
         self.y,
@@ -63,14 +50,31 @@ function consumable:new(x, y, scale)
 end
 
 function consumable:update()
+    if self.trash then return end
     self.x, self.y = self.collider:getX(), self.collider:getY()
     self.angle = self.collider:getAngle()
 end
 
-function consumable:consum(collider)
-    local pickup = collider:getObject()
-    print('pickup ', pickup.pkguid)
-    deleteConsumable(pickup, pickup.pkguid)
+function consumable:delete()
+    self.trash = true
+
+    local idx = findIndexForConsumableID(self.conguid)
+
+    self.x, self.y = WASTE_LAND, WASTE_LAND
+
+    pcall(function()
+        self.collider:setGravityScale(0)
+        self.collider:setCollisionClass('Ghost')
+        self.collider:setX(WASTE_LAND)
+        self.collider:setY(WASTE_LAND)
+    end)
+
+    if idx > 0 then table.remove(consumables, idx) end
+end
+
+function consumable:consum()
+    print('consum ', self.conguid)
+    self:delete()
 end
 
 function Consumables.New(x, y, scale)

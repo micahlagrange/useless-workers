@@ -11,9 +11,9 @@ needs.hunger = {}
 
 function needTracker.new(need, morphi)
     if need == 'hunger' then
-        table.insert(
-            needs.hunger,
-            hunger(morphi))
+        local hungerNeed = hunger(morphi)
+        table.insert(needs.hunger, hungerNeed)
+        morphi.hunger = hungerNeed
     end
 end
 

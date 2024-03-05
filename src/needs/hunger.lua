@@ -29,4 +29,9 @@ function hunger:degrade()
     end
 end
 
+function hunger:remediate(val)
+    self.value = self.value + val
+    print(self.morphi.name, ' hunger remediation to ', self.value)
+end
+
 return hunger

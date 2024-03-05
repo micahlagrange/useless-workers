@@ -13,12 +13,14 @@ function food:new()
     print(fx, fy)
     self.quad = love.graphics.newQuad(fx, fy, 16, 16, foodsheet)
     -- self.x = windowWidth / 2
-    self.x = 48 + love.math.random(5, 11)
-    self.y = 16
+    self.x = 88
+    self.y = 25
     self.width = TILE_SIZE * scale
     self.height = TILE_SIZE * scale
     self.scale = .5
-    self.consumable = Consumables.New(self.x, self.y, scale)
+    self.consumable = Consumables.New(self, scale)
+    self.eaten = false
+    self.value = 1
 end
 
 function food:update()
@@ -35,6 +37,12 @@ function food:draw()
         self.scale, self.scale,
         self.height, self.width
     )
+end
+
+function food:eat()
+    self.consumable:consum()
+    self.eaten = true
+    return self.value
 end
 
 return food

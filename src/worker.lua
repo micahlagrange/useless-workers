@@ -77,6 +77,12 @@ function Worker:update(dt)
     self:chooseConstantAnimation(px)
     self.currentAnimation:update(dt)
 
+    if self.collider:enter(CollisionClasses.CONSUMABLE) then
+        local collided = self.collider:getEnterCollisionData(CollisionClasses.CONSUMABLE)
+        local food = collided.collider:getObject().consuminstance
+        self.hunger:remediate(food:eat())
+    end
+
     if self.task.name == 'wander' then
         if px == 0 and self.task.canFlip then
             self.task.canFlip = false

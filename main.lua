@@ -113,10 +113,24 @@ local function addRandomJob()
     JobQueue:pushright({ name = 'wander' })
 end
 
+local function cleanEatenFood()
+    local toClean = {}
+    for i, food in ipairs(gameobjects) do
+        if type(food) == "food" and food.eaten then
+            table.insert(toClean, i)
+        end
+    end
+
+    for idx, _ in ipairs(toClean) do
+        table.remove(gameobjects, idx)
+    end
+end
+
 local function addRandomFood()
     print("ADD FOOD")
     table.insert(gameobjects, food())
+    cleanEatenFood()
 end
 
--- Timers.add('addRandomFood', 1, addRandomFood, true)
+Timers.add('addRandomFood', 3, addRandomFood, true)
 -- Timers.add('addRandomJob', 6, addRandomJob, true)
