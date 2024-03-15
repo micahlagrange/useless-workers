@@ -1,5 +1,4 @@
 require('src.constants')
-require('src.constants')
 local consumable = require('src.system.consumable')
 
 -- lib requires
@@ -9,7 +8,7 @@ local hump = require('libs/camera')
 local wf = require('libs/windfield')
 -- resource globals
 Camera = hump.new(0, 0, 0, 0, hump.smooth.linear(3))
-Camera:zoomTo(5)
+Camera:zoomTo(CAMERA_ZOOM_LEVEL)
 World = wf.newWorld(0, GRAVITY)
 local inspect = require('libs.inspect')
 -- ldtk
@@ -24,7 +23,7 @@ local needTracker = require('src.needs.tracker')
 local food = require('src.needs.food')
 
 -- tilemap objects
-local gameobjects = {}
+local GameObjects = require('src.system.gameobjects')
 local levelHeight
 local levelWidth
 
@@ -41,20 +40,23 @@ function love.load()
     World:addCollisionClass(CollisionClasses.WORKER)
     World:addCollisionClass(CollisionClasses.CONSUMABLE)
     World:addCollisionClass(CollisionClasses.GROUND)
-    World:addCollisionClass(CollisionClasses.GHOST, { ignore = { CollisionClasses.GROUND, CollisionClasses.WORKER } })
+    World:addCollisionClass(CollisionClasses.GHOST,
+        { ignore = { CollisionClasses.GROUND, CollisionClasses.WORKER, CollisionClasses.MOUSE_POINTER, CollisionClasses.CONSUMABLE } })
     World:setGravity(0, GRAVITY)
     ldtk:level('Level_1')
+
+    require('src.system.input.mouse')
 end
 
 function ldtk.onLayer(layer)
     -- Here we treated the layer as an object and added it to the table we use to draw.
     -- Generally, you would create a new object and use that object to draw the layer.
-    table.insert(gameobjects, Layer(layer)) --adding layer to the table we use to draw
+    GameObjects.add(Layer(layer)) --adding layer to the table we use to draw
 end
 
 function ldtk.onLevelLoaded(level)
     --removing all objects so we have a blank level
-    gameobjects = {}
+    GameObjects.reset()
 
     --changing background color to the one defined in LDtk
     love.graphics.setBackgroundColor(level.backgroundColor)
@@ -74,8 +76,7 @@ function ldtk.onEntity(entity)
 
     if entity.id == 'Morphi' then
         local w = Worker(entity)
-        table.insert(gameobjects, w)
-
+        GameObjects.add(w)
         needTracker.new('hunger', w)
     end
 end
@@ -83,9 +84,7 @@ end
 function love.update(dt)
     Timers.update(dt)
     World:update(dt)
-    for _, w in ipairs(gameobjects) do
-        w:update(dt)
-    end
+    GameObjects.update_all(dt)
 end
 
 function love.draw()
@@ -94,10 +93,7 @@ function love.draw()
     -- reset color, Draw the tilemap
     love.graphics.setColor(1, 1, 1)
 
-    for _, obj in ipairs(gameobjects) do
-        obj:draw()
-    end
-
+    GameObjects.draw_all()
     needTracker.draw()
 
     Camera:lookAt(levelWidth / 2, levelHeight / 2)
@@ -112,25 +108,5 @@ local function addRandomJob()
     print('ADD TO JOB QUEUE')
     JobQueue:pushright({ name = 'wander' })
 end
-
-local function cleanEatenFood()
-    local toClean = {}
-    for i, food in ipairs(gameobjects) do
-        if type(food) == "food" and food.eaten then
-            table.insert(toClean, i)
-        end
-    end
-
-    for idx, _ in ipairs(toClean) do
-        table.remove(gameobjects, idx)
-    end
-end
-
-local function addRandomFood()
-    print("ADD FOOD")
-    table.insert(gameobjects, food())
-    cleanEatenFood()
-end
-
-Timers.add('addRandomFood', 3, addRandomFood, true)
+-- Timers.add('addRandomFood', 3, addRandomFood, true)
 -- Timers.add('addRandomJob', 6, addRandomJob, true)

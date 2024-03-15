@@ -1,4 +1,4 @@
--- taken from https://github.com/michaeljosephpurdy/do-you-even-bocce/blob/main/src/mixins/pub-sub.lua
+-- adapted from https://github.com/michaeljosephpurdy/do-you-even-bocce/blob/main/src/mixins/pub-sub.lua
 
 local object = require('libs.classic')
 local pubsub = object:extend()

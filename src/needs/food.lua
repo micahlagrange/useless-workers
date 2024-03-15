@@ -4,7 +4,7 @@ local food = object:extend()
 
 local foodsheet = love.graphics.newImage('spritesheets/yummy_prizes2.png')
 
-function food:new()
+function food:new(x, y)
     local scale = .5
     local windowWidth, windowHeight = love.window.getMode()
     local quadImageHeight = 16
@@ -13,8 +13,8 @@ function food:new()
     print(fx, fy)
     self.quad = love.graphics.newQuad(fx, fy, 16, 16, foodsheet)
     -- self.x = windowWidth / 2
-    self.x = 88
-    self.y = 25
+    self.x = x or 88
+    self.y = y or 25
     self.width = TILE_SIZE * scale
     self.height = TILE_SIZE * scale
     self.scale = .5
