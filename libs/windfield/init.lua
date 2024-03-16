@@ -262,6 +262,7 @@ function World:doesType1IgnoreType2(type1, type2)
         end
     end
     for _, ignored_type in ipairs(ignored_types) do
+        print('debugIgnore ' .. ignored_type .. ' and ' .. type2)
         if ignored_type == type2 then return true end
     end
 end

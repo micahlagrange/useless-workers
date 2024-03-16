@@ -16,40 +16,41 @@ EVENTS.Hunger.MORPHI_HUNGRY = 'MORPHI_HUNGRY'
 pubsub:register_events(EVENTS.Timer)
 pubsub:register_events(EVENTS.Jobs)
 
-LEFT                           = 0
-RIGHT                          = 1
-GRAVITY                        = 99
-TILE_SIZE                      = 16
+LEFT                     = 0
+RIGHT                    = 1
+GRAVITY                  = 99
+TILE_SIZE                = 16
 
-WORKER_WIDTH                   = 16
-WORKER_HEIGHT                  = 16
-WORKER_SPEED                   = 100
-MAX_WORKER_SPEED               = 20
-WORKER_SCALE                   = .9
-MORPHOTYPE_DEFAULT             = 'blue'
+MORPHI_WIDTH             = 16
+MORPHI_HEIGHT            = 16
+MORPHI_SPEED             = 100
+MAX_WORKER_SPEED         = 20
+MORPHI_SCALE             = .9
+MORPHOTYPE_DEFAULT       = 'blue'
 
-CollisionClasses               = {}
-CollisionClasses.WORKER        = 'Worker'
-CollisionClasses.GROUND        = 'Ground'
-CollisionClasses.MOUSE_POINTER = 'MousePointer'
-CollisionClasses.CONSUMABLE    = 'Consumable'
-CollisionClasses.GHOST         = 'Ghost'
+Colliders                = {}
+Colliders.MORPHI         = 'MORPHI'
+Colliders.GROUND         = 'Ground'
+Colliders.MOUSE_POINTER  = 'MousePointer'
+Colliders.CONSUMABLE     = 'Consumable'
+Colliders.GHOST          = 'Ghost'
+Colliders.UI_ELEMENT     = 'UiElement'
 
-OBJECT_LAYER_WALLS             = 'Wall'
-OBJECT_LAYER_PLATFORMS         = 'Platform'
+OBJECT_LAYER_WALLS       = 'Wall'
+OBJECT_LAYER_PLATFORMS   = 'Platform'
 
-LAYER_BG                       = 'Background'
-LAYER_PLAYER                   = 'Player'
+LAYER_BG                 = 'Background'
+LAYER_PLAYER             = 'Player'
 
-WASTE_LAND                     = -9999
+WASTE_LAND               = -9999
 
-INPUT                          = {}
-INPUT.Mouse                    = {}
-INPUT.Mouse.LMB                = 1
-INPUT.Mouse.RMB                = 2
-INPUT.Mouse.MIDDLE_CLICK       = 3
-INPUT.Mouse.ARROW_DOWN         = 4
-INPUT.Mouse.ARROW_UP           = 5
+INPUT                    = {}
+INPUT.Mouse              = {}
+INPUT.Mouse.LMB          = 1
+INPUT.Mouse.RMB          = 2
+INPUT.Mouse.MIDDLE_CLICK = 3
+INPUT.Mouse.ARROW_DOWN   = 4
+INPUT.Mouse.ARROW_UP     = 5
 
 
 function PrettyPrint(o)

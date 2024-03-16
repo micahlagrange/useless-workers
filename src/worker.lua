@@ -10,8 +10,8 @@ LastNewMorphiFrame = 1
 
 Worker = object:extend()
 function Worker:new(entity)
-    self.height = TILE_SIZE * WORKER_SCALE
-    self.width = TILE_SIZE * WORKER_SCALE
+    self.height = TILE_SIZE * MORPHI_SCALE
+    self.width = TILE_SIZE * MORPHI_SCALE
     self.facing = LEFT
     self.entity = entity
     self.id = entity.iid
@@ -20,11 +20,10 @@ function Worker:new(entity)
     self.x = entity.x
     self.y = entity.y
     self.visible = entity.visible
-    self.scaleX = WORKER_SCALE
-    self.scaleX, self.scaleY = WORKER_SCALE, WORKER_SCALE
+    self.scaleX, self.scaleY = MORPHI_SCALE, MORPHI_SCALE
     self.jobIcon = love.graphics.newImage('icons/job-indicator-icon.png')
     self.spritesheet = love.graphics.newImage('spritesheets/' .. self.morphoType .. '-worker-walk.png')
-    self.grid = spritesheet.NewAnim8Grid(self.spritesheet, WORKER_WIDTH, WORKER_HEIGHT)
+    self.grid = spritesheet.NewAnim8Grid(self.spritesheet, MORPHI_WIDTH, MORPHI_HEIGHT)
     self.animations = {}
     self.animations.walk = Anim8.newAnimation(self.grid('1-3', 1), 0.15)
     self.animations.idle = Anim8.newAnimation(self.grid('2-3', 1), 1)
@@ -36,7 +35,7 @@ function Worker:new(entity)
         self.width,
         self.height,
         2)
-    self.collider:setCollisionClass(CollisionClasses.WORKER)
+    self.collider:setCollisionClass(Colliders.MORPHI)
     self.collider:setFixedRotation(true)
     self.collider:setObject(self)
     self.task = { finished = true }
@@ -77,8 +76,8 @@ function Worker:update(dt)
     self:chooseConstantAnimation(px)
     self.currentAnimation:update(dt)
 
-    if self.collider:enter(CollisionClasses.CONSUMABLE) then
-        local collided = self.collider:getEnterCollisionData(CollisionClasses.CONSUMABLE)
+    if self.collider:enter(Colliders.CONSUMABLE) then
+        local collided = self.collider:getEnterCollisionData(Colliders.CONSUMABLE)
         local food = collided.collider:getObject().consuminstance
         self.hunger:remediate(food:eat())
     end
@@ -92,9 +91,9 @@ function Worker:update(dt)
         end
 
         if self.facing == RIGHT and px < MAX_WORKER_SPEED then
-            self.collider:applyForce(WORKER_SPEED, 0)
+            self.collider:applyForce(MORPHI_SPEED, 0)
         elseif self.facing == LEFT and px > -MAX_WORKER_SPEED then
-            self.collider:applyForce(-WORKER_SPEED, 0)
+            self.collider:applyForce(-MORPHI_SPEED, 0)
         end
     end
 

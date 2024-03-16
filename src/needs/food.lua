@@ -6,7 +6,6 @@ local foodsheet = love.graphics.newImage('spritesheets/yummy_prizes2.png')
 
 function food:new(x, y)
     local scale = .5
-    local windowWidth, windowHeight = love.window.getMode()
     local quadImageHeight = 16
     local fx = love.math.random(0, 4) * quadImageHeight
     local fy = love.math.random(0, 15) * quadImageHeight

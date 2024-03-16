@@ -42,7 +42,7 @@ function consumable:new(consuminstance, scale)
         TILE_SIZE * scale,
         2.5
     )
-    self.collider:setCollisionClass(CollisionClasses.CONSUMABLE)
+    self.collider:setCollisionClass(Colliders.CONSUMABLE)
     self.collider:setObject(self)
 
     print('  -- new consumable ', self.conguid, ' x, y: ', x, y)

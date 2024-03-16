@@ -37,11 +37,36 @@ function love.load()
     --loading the .ldtk file
     ldtk:load('tilemaps/morphi.ldtk')
     ldtk:setFlipped(true)
-    World:addCollisionClass(CollisionClasses.WORKER)
-    World:addCollisionClass(CollisionClasses.CONSUMABLE)
-    World:addCollisionClass(CollisionClasses.GROUND)
-    World:addCollisionClass(CollisionClasses.GHOST,
-        { ignore = { CollisionClasses.GROUND, CollisionClasses.WORKER, CollisionClasses.MOUSE_POINTER, CollisionClasses.CONSUMABLE } })
+    World:addCollisionClass(Colliders.MORPHI)
+    World:addCollisionClass(Colliders.CONSUMABLE)
+    World:addCollisionClass(Colliders.GROUND)
+    World:addCollisionClass(Colliders.UI_ELEMENT,
+        {
+            ignores = {
+                Colliders.GROUND,
+                Colliders.MORPHI,
+                Colliders.CONSUMABLE,
+            }
+        })
+    World:addCollisionClass(Colliders.MOUSE_POINTER,
+        {
+            ignoress = {
+                Colliders.GROUND,
+                Colliders.MORPHI,
+                Colliders.CONSUMABLE,
+                Colliders.UI_ELEMENT }
+        })
+    World:addCollisionClass(Colliders.GHOST,
+        {
+            ignores = {
+                Colliders.GROUND,
+                Colliders.MORPHI,
+                Colliders.MOUSE_POINTER,
+                Colliders.CONSUMABLE,
+                Colliders.UI_ELEMENT,
+            }
+        })
+
     World:setGravity(0, GRAVITY)
     ldtk:level('Level_1')
 
@@ -98,9 +123,12 @@ function love.draw()
 
     Camera:lookAt(levelWidth / 2, levelHeight / 2)
 
-    -- World:draw()
+    -- uncomment to debug collisions
+    World:draw()
 
     Camera:detach()
+
+    UI.draw_all_ui_elements()
 end
 
 -- test functions
