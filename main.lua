@@ -1,5 +1,6 @@
+DEBUG = false
+
 require('src.constants')
-local consumable = require('src.system.consumable')
 
 -- lib requires
 SFX = require('src.audio')
@@ -21,6 +22,8 @@ local collision = require('src.collision')
 local Timers = require('src.system.timer')
 local needTracker = require('src.needs.tracker')
 local food = require('src.needs.food')
+local Mouse = require('src.system.input.mouse')
+local UI = require('src.system.ui')
 
 -- tilemap objects
 local GameObjects = require('src.system.gameobjects')
@@ -124,11 +127,14 @@ function love.draw()
     Camera:lookAt(levelWidth / 2, levelHeight / 2)
 
     -- uncomment to debug collisions
-    World:draw()
+    if DEBUG then
+        World:draw()
+    end
 
     Camera:detach()
 
-    UI.draw_all_ui_elements()
+    Mouse.debug()
+    UI.draw_all_ui_elements(DEBUG)
 end
 
 -- test functions

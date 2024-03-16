@@ -29,7 +29,7 @@ MORPHI_SCALE             = .9
 MORPHOTYPE_DEFAULT       = 'blue'
 
 Colliders                = {}
-Colliders.MORPHI         = 'MORPHI'
+Colliders.MORPHI         = 'Morphi'
 Colliders.GROUND         = 'Ground'
 Colliders.MOUSE_POINTER  = 'MousePointer'
 Colliders.CONSUMABLE     = 'Consumable'
