@@ -1,6 +1,6 @@
 name = "human-resources"
 love_version = "11.4"
-default_targets = ["macos", "appimage", "win64", "lovejs"]
+default_targets = ["lovejs", "win64", "macos", "appimage"]
 build_directory = "makelove-build"
 
 love_files = [

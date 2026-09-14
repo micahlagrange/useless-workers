@@ -34,7 +34,10 @@ jobs:
       run: sudo apt-get update
 
     - name: Install Dependencies
-      run: sudo apt-get install --assume-yes wine wine64
+      # wine for the win64 exe metadata, libfuse2 so appimagetool can run
+      run: |
+        sudo apt-get install --assume-yes wine wine64
+        sudo apt-get install --assume-yes libfuse2t64 || sudo apt-get install --assume-yes libfuse2
 
     - name: Checkout makelove
       uses: actions/checkout@v4
@@ -46,14 +49,16 @@ jobs:
       run: pip install ./makelove
 
     - name: Build
-      run: cd main && python3 -m makelove | tee build_output.log
+      run: |
+        set -o pipefail
+        cd main && python3 -m makelove 2>&1 | tee build_output.log
 
     - name: Print build output
       if: failure()
       run: cat main/build_output.log
 
     - name: list artifacts
-      run: ls -ltraR main/makelove-build
+      run: find main/makelove-build -maxdepth 2 -type f -exec ls -l {} \;
 
     - name: Upload to Github (love)
       uses: actions/upload-artifact@v4
@@ -95,15 +100,17 @@ jobs:
           || curl -fsSL -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
         mkdir -p butler-bin
         unzip -o butler.zip -d butler-bin
-        chmod +x butler-bin/butler
-        ./butler-bin/butler -V
+        BUTLER=$(find butler-bin -type f -name butler | head -1)
+        chmod +x "$BUTLER"
+        "$BUTLER" -V
+        echo "BUTLER=$BUTLER" >> "$GITHUB_ENV"
 
     - name: Publish to Itch.io
       env:
         BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
       run: |
         set -e
-        B=./butler-bin/butler
+        B="$BUTLER"
         $B push "$ARTIFACT_PATH_LOVEJS"   "$ITCH_USER/$ITCH_GAME:html"
         $B push "$ARTIFACT_PATH_APPIMAGE" "$ITCH_USER/$ITCH_GAME:linux"
         $B push "$ARTIFACT_PATH_WIN64"    "$ITCH_USER/$ITCH_GAME:windows"
