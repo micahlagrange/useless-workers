@@ -55,19 +55,19 @@ Moment to moment, the player is scanning for a complaint bubble, finding the til
 **Source:** `top-down-minecraft/src/noise.lua`, `worley.lua`, `tilecolorbynoise.lua`; `control-the-environment/src/world.lua`.
 
 - Fixed-size map for the jam: 96 by 64 tiles at 16 px. Infinite chunk streaming from top-down-minecraft is **Cut**; a bounded grid keeps A* cheap and the report meaningful.
-- Altitude from layered simplex noise (10 octaves, scale .02 as already tuned). Altitude bands reuse the existing thresholds:
+- Altitude from seeded value noise (3 octaves, pure Lua so the browser and desktop builds agree on a seed). Instead of fixed thresholds the generator sorts every altitude and cuts the map by fraction: 12% water, 55% grass, 30% stone, 3% snow. The table below shows the roles:
 
 | Tile | Altitude | Passable | Player can change it |
 |---|---|---|---|
-| Water | 0.00 to 0.06 | No | Line tool builds a bridge |
-| Grass | 0.06 to 0.60 | Yes | Fruit trees grow here |
+| Water | lowest 12% | No | Line tool builds a bridge |
+| Grass | next 55% | Yes | Fruit trees grow here |
 | Dirt | Grass tiles that have been dug or walked heavily | Yes | Cosmetic |
-| Stone | 0.60 to 0.97 | No | Dig (one tile) or Explode (3 by 3) turns it to dirt |
-| Snow | 0.97 to 1.00 | No | Explode only |
+| Stone | next 30% | No | Dig (one tile) or Explode (3 by 3) turns it to dirt |
+| Snow | top 3% | No | Explode only |
 
 - Colors come straight from `control-the-environment/src/constants.lua` (GRASS_COLORS, DIRT_COLORS, WALL_COLORS) with a small random brightness jitter per tile, the trick from the Jan 2026 commit.
 - **Break room:** one 2 by 2 depot placed on the largest grass region near map center at generation time. Fruit delivered here is the score. Fruit eaten on the spot feeds the worker but scores nothing.
-- **Fruit trees:** spawn on grass at a fixed percentage per quarter (FRUIT_PERCENTAGE style), capped at MAX_FRUIT. A tree ripens every 20 seconds and posts a harvest job. Roughly a third of trees should generate on grass pockets that are walled in by stone or water, so the player always has something to fix.
+- **Fruit trees:** 12 at the start, 3 more each quarter, capped at 24. A tree ripens 20 seconds after it was last picked and posts a harvest job. Roughly a third of trees generate on grass pockets that are walled in by stone or water, so the player always has something to fix.
 
 ## 5. Workers
 
@@ -75,8 +75,8 @@ Moment to moment, the player is scanning for a complaint bubble, finding the til
 
 Each worker is a `classic` object with:
 
-- **Hunger** 0 to 100, drains at 1.5 per second on Manager difficulty. Eating a fruit restores 40. At 0 the worker quits: stops working, walks toward the map edge, and is removed. Quits count on the report.
-- **Patience** (from CTE `secondsWithoutTarget` and `giveUpOnTarget`): if a path fails or takes longer than 8 seconds, the worker complains, drops the job back on the queue, and idles for 3 seconds. Every complaint counts on the report.
+- **Hunger** 0 to 100, drains at 1.2 per second on Manager difficulty. Eating a fruit restores 55. At 0 the worker quits: stops working, walks toward the map edge, and is removed. Quits count on the report. A worker under 30 hunger eats the fruit it just picked instead of carrying it, and a carrier under 12 eats the delivery rather than starve.
+- **Patience** (from CTE `secondsWithoutTarget` and `giveUpOnTarget`): if a tree is walled off or the walk takes longer than 24 seconds, the worker complains, drops the job back on the queue, and sulks for 3 seconds. Every complaint counts on the report. A tree that was just complained about gets a 40 second cooldown before anyone complains about it again, so the alert repeats without spamming.
 - **Icks** (already in CTE): a tile that caused a give-up is remembered as an ick for 30 seconds so the same worker does not immediately re-pick it.
 - **States:** `idle`, `walking`, `harvesting`, `carrying`, `eating`, `complaining`, `quitting`. State drives the anim8 animation and the speech bubble.
 
@@ -89,6 +89,8 @@ Each worker is a `classic` object with:
 **Job queue** (`useless-workers/src/behavior/queue.lua`): a plain FIFO of `{type, x, y, postedAt}`. Job types for the jam: `harvest` (go to tree, pick, carry to break room) and `clear` (Should: walk to a rubble tile after an explosion and tidy it, purely for the animation). One worker per job.
 
 **Headcount:** start with 4 workers on Manager. Each Quarterly Report hires `floor(output / 5)` new workers, minimum 1 if nobody quit. Cap at 12 to protect pathfinding.
+
+**Baseline from the simulation test:** with nobody helping, a Manager quarter on the default seed delivers 9 to 16 fruit with 8 to 10 complaints and no quits. The player's tools are what turn that C into an S.
 
 ## 6. Player tools
 
@@ -123,10 +125,10 @@ Final score after four quarters is the sum of output, minus 3 per quit, times a 
 
 | Name | Hunger drain / s | Starting workers | Multiplier |
 |---|---|---|---|
-| Intern | 1.0 | 5 | 0.5 |
-| Manager | 1.5 | 4 | 1.0 |
-| Director | 2.0 | 3 | 1.5 |
-| Unlimited PTO | 2.5 | 2 | 2.0 |
+| Intern | 0.9 | 5 | 0.5 |
+| Manager | 1.2 | 4 | 1.0 |
+| Director | 1.6 | 3 | 1.5 |
+| Unlimited PTO | 2.0 | 2 | 2.0 |
 
 ## 8. Win and lose
 

@@ -1,4 +1,5 @@
-name = "morphi"
+name = "human-resources"
+love_version = "11.4"
 default_targets = ["macos", "appimage", "win64", "lovejs"]
 build_directory = "makelove-build"
 
@@ -8,10 +9,12 @@ love_files = [
     "-*/dist*",
     "*/libs*",
     "-*/tst*",
+    "-*/legacy*",
+    "-*/docs*",
 ]
 
 [lovejs]
-title = "Morphi"
+title = "Human Resources"
 memory = "200000000"  # starting memory of the webpage (default is 20 MB)
 
 [macos]
@@ -19,16 +22,16 @@ memory = "200000000"  # starting memory of the webpage (default is 20 MB)
 #icon_file = "macIcon.png"  # or macIcon.icns
 
 [macos.app_metadata]
-CFBundleName = "Morphi"
-CFBundleIdentifier = "dev.micahturner.morphi"
-NSHumanReadableCopyright = "Copyright © 2024 Micah Turner"
-CFBundleShortVersionString = "0.0.1"
+CFBundleName = "Human Resources"
+CFBundleIdentifier = "dev.micahturner.human-resources"
+NSHumanReadableCopyright = "Copyright © 2026 Micah Turner"
+CFBundleShortVersionString = "0.1.0"
 
 [windows.exe_metadata]
-FileDescription = "{name} - {version}" # "LÖVE {löve version}"
-FileVersion = "{version}" # "{löve version}"
-CompanyName = "Micah Turner" # "LÖVE World Domination Inc."
-LegalCopyright = "Copyright © 2024 Micah Turner"
-ProductName = "{name}" # "LÖVE"
+FileDescription = "{name} - {version}"
+FileVersion = "{version}"
+CompanyName = "Micah Turner"
+LegalCopyright = "Copyright © 2026 Micah Turner"
+ProductName = "{name}"
 ProductVersion = "{version}"
-OriginalFilename = "morphi.exe" # "love.exe"
+OriginalFilename = "human-resources.exe"

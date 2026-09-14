@@ -1,73 +1,86 @@
 name: continuous-integration
 on: [push]
 env:
-  GAME_NAME: morphi
+  GAME_NAME: human-resources
   # unfortunately we need to also hardcode game name here in env since definitions in env can't reference eachother
-  ARTIFACT_PATH_LOVE: main/makelove-build/love/morphi.love
-  ARTIFACT_PATH_APPIMAGE: main/makelove-build/appimage/morphi.AppImage
-  ARTIFACT_PATH_WIN64: main/makelove-build/win64/morphi-win64.zip
-  ARTIFACT_PATH_MACOS: main/makelove-build/macos/morphi-macos.zip
-  ARTIFACT_PATH_LOVEJS: main/makelove-build/lovejs/morphi-lovejs.zip
+  ARTIFACT_PATH_LOVE: main/makelove-build/love/human-resources.love
+  ARTIFACT_PATH_APPIMAGE: main/makelove-build/appimage/human-resources.AppImage
+  ARTIFACT_PATH_WIN64: main/makelove-build/win64/human-resources-win64.zip
+  ARTIFACT_PATH_MACOS: main/makelove-build/macos/human-resources-macos.zip
+  ARTIFACT_PATH_LOVEJS: main/makelove-build/lovejs/human-resources-lovejs.zip
   ITCH_USER: multivoxmuse
+  # The itch page this repo has always published to. Create a new page and change
+  # this value when Human Resources gets its own page.
   ITCH_GAME: morphi
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         path: main
-        submodules: true
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Run unit tests
+      run: |
+        pip install lupa
+        cd main && python3 tst/run.py
 
     - name: Update
       run: sudo apt-get update
 
     - name: Install Dependencies
-      run: sudo apt-get install --assume-yes wine-stable wine64 python3-pip
+      run: sudo apt-get install --assume-yes wine wine64
 
     - name: Checkout makelove
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         repository: pfirsich/makelove
         path: makelove
 
     - name: Install makelove
-      run:
-        pip3 install ./makelove
+      run: pip install ./makelove
 
     - name: Build
-      run: cd main && python3 -m makelove
+      run: cd main && python3 -m makelove | tee build_output.log
+
+    - name: Print build output
+      if: failure()
+      run: cat main/build_output.log
 
     - name: list artifacts
-      run: ls -ltraR main
+      run: ls -ltraR main/makelove-build
 
     - name: Upload to Github (love)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ${{env.GAME_NAME}} - love
         path: ${{env.ARTIFACT_PATH_LOVE}}
 
     - name: Upload to Github (web)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
-        name: ${{env.GAME_NAME}} - web 
+        name: ${{env.GAME_NAME}} - web
         path: ${{env.ARTIFACT_PATH_LOVEJS}}
 
     - name: Upload to Github (Linux)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ${{env.GAME_NAME}} - linux
         path: ${{env.ARTIFACT_PATH_APPIMAGE}}
 
     - name: Upload to Github (Win64)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ${{env.GAME_NAME}} - win64
         path: ${{env.ARTIFACT_PATH_WIN64}}
 
     - name: Upload to Github (MacOS)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ${{env.GAME_NAME}} - macos
         path: ${{env.ARTIFACT_PATH_MACOS}}
@@ -87,7 +100,7 @@ jobs:
         BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
         ITCH_USER: ${{env.ITCH_USER}}
         ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: linux 
+        CHANNEL: linux
         PACKAGE: ${{env.ARTIFACT_PATH_APPIMAGE}}
 
     - name: Publish to Itch.io (Win64)
@@ -105,5 +118,5 @@ jobs:
         BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
         ITCH_USER: ${{env.ITCH_USER}}
         ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: osx 
+        CHANNEL: osx
         PACKAGE: ${{env.ARTIFACT_PATH_MACOS}}
