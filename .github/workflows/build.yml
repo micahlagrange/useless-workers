@@ -85,38 +85,26 @@ jobs:
         name: ${{env.GAME_NAME}} - macos
         path: ${{env.ARTIFACT_PATH_MACOS}}
 
-    - name: Publish to Itch.io (Web)
-      uses: yeslayla/butler-publish-itchio-action@v1.0.3
-      env:
-        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-        ITCH_USER: ${{env.ITCH_USER}}
-        ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: html
-        PACKAGE: ${{env.ARTIFACT_PATH_LOVEJS}}
+    # butler is fetched directly instead of through a Docker action: the action's
+    # image build pulls from broth.itch.ovh at job start and took the whole job
+    # down when that host failed to resolve.
+    - name: Install butler
+      run: |
+        set -e
+        curl -fsSL -o butler.zip https://github.com/itchio/butler/releases/latest/download/butler-linux-amd64.zip \
+          || curl -fsSL -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+        mkdir -p butler-bin
+        unzip -o butler.zip -d butler-bin
+        chmod +x butler-bin/butler
+        ./butler-bin/butler -V
 
-    - name: Publish to Itch.io (Linux)
-      uses: yeslayla/butler-publish-itchio-action@v1.0.3
+    - name: Publish to Itch.io
       env:
-        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-        ITCH_USER: ${{env.ITCH_USER}}
-        ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: linux
-        PACKAGE: ${{env.ARTIFACT_PATH_APPIMAGE}}
-
-    - name: Publish to Itch.io (Win64)
-      uses: yeslayla/butler-publish-itchio-action@v1.0.3
-      env:
-        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-        ITCH_USER: ${{env.ITCH_USER}}
-        ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: windows
-        PACKAGE: ${{env.ARTIFACT_PATH_WIN64}}
-
-    - name: Publish to Itch.io (MacOS)
-      uses: yeslayla/butler-publish-itchio-action@v1.0.3
-      env:
-        BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-        ITCH_USER: ${{env.ITCH_USER}}
-        ITCH_GAME: ${{env.ITCH_GAME}}
-        CHANNEL: osx
-        PACKAGE: ${{env.ARTIFACT_PATH_MACOS}}
+        BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+      run: |
+        set -e
+        B=./butler-bin/butler
+        $B push "$ARTIFACT_PATH_LOVEJS"   "$ITCH_USER/$ITCH_GAME:html"
+        $B push "$ARTIFACT_PATH_APPIMAGE" "$ITCH_USER/$ITCH_GAME:linux"
+        $B push "$ARTIFACT_PATH_WIN64"    "$ITCH_USER/$ITCH_GAME:windows"
+        $B push "$ARTIFACT_PATH_MACOS"    "$ITCH_USER/$ITCH_GAME:osx"
