@@ -135,6 +135,7 @@ local function newGame(seedString, difficultyIndex)
     game.camera.scale = 2
     game.camera:centerOn(game.world.breakroom.cx, game.world.breakroom.cy)
     game.selectedWorker = nil
+    game.follow = false
     game.lineStart = nil
     game.dragging = false
     game.report = nil
@@ -251,7 +252,16 @@ local function updatePlaying(dt)
     if love.keyboard.isDown('a') or love.keyboard.isDown('left') then dx = dx - 1 end
     if love.keyboard.isDown('d') or love.keyboard.isDown('right') then dx = dx + 1 end
     if dx ~= 0 or dy ~= 0 then
+        game.follow = false
         game.camera:pan(dx * PAN_SPEED * dt, dy * PAN_SPEED * dt)
+    end
+    if game.follow then
+        local w = game.selectedWorker
+        if w and w.alive then
+            game.camera:centerOn(w.x, w.y)
+        else
+            game.follow = false
+        end
     end
     Effects.update(dt)
 end
@@ -434,6 +444,7 @@ end
 
 function love.mousemoved(x, y, dx, dy)
     if state == 'playing' and game.dragging then
+        game.follow = false
         game.camera:pan(-dx, -dy)
     end
 end
@@ -474,6 +485,13 @@ function love.keypressed(key)
         if n and ABILITY_ORDER[n] then
             game.abilities:select(ABILITY_ORDER[n])
             Audio.playSFX('click')
+        elseif key == 'f' then
+            if game.selectedWorker and game.selectedWorker.alive then
+                game.follow = not game.follow
+                ui:toast(game.follow and ('Following ' .. game.selectedWorker.name) or 'Camera free')
+            else
+                ui:toast('Select a morphi first (SELECT tool, then click one)')
+            end
         elseif key == 'escape' then
             state = 'confirmquit'
             love.mouse.setVisible(true)

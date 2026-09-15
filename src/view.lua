@@ -322,11 +322,19 @@ function View:drawWorker(w, clock, selected)
         love.graphics.setColor(1, 1, 1, 0.8)
         love.graphics.print('z', w.x + 6, w.y - 14)
     end
-    if w:isWorking() and w.hunger < 40 then
-        local width = 12 * (w.hunger / HUNGER_MAX)
+    -- hunger bar, always shown so it never pops in: green, then amber, then red
+    if w:isWorking() then
+        local frac = w.hunger / HUNGER_MAX
+        local width = 12 * frac
         love.graphics.setColor(0, 0, 0, 0.5)
         love.graphics.rectangle('fill', w.x - 6, feetY + 3, 12, 2)
-        love.graphics.setColor(0.9, 0.25, 0.2)
+        if frac > 0.6 then
+            love.graphics.setColor(0.45, 0.8, 0.4)
+        elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then
+            love.graphics.setColor(0.95, 0.75, 0.3)
+        else
+            love.graphics.setColor(0.9, 0.25, 0.2)
+        end
         love.graphics.rectangle('fill', w.x - 6, feetY + 3, width, 2)
     end
     if w.bubble then
