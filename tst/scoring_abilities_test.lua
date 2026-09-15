@@ -82,14 +82,20 @@ function TestAbilities:testMineDesignationPostsJobsAndIsFree()
     lu.assertFalse((self.abilities:use(1, 1)))              -- grass
     lu.assertTrue((self.abilities:designateMine(3, 1, 5, 3)))  -- the ring around the bush
     lu.assertEquals(#self.world:sitesOfKind(SITE_MINE), 8)
-    lu.assertEquals(self.jobs:count('mine'), 8)
+    lu.assertEquals(self.jobs:count('mine'), 1)                 -- one job for the whole drag
+    lu.assertEquals(#self.world.areas, 1)
+    lu.assertEquals(#self.world.areas[1].sites, 8)
     lu.assertEquals(self.world.stock.logs, 4)
     lu.assertEquals(self.effects[1], 'mine')
     -- dragging from a marked tile clears marks
     lu.assertTrue((self.abilities:designateMine(3, 1, 3, 3)))
     lu.assertEquals(#self.world:sitesOfKind(SITE_MINE), 5)
-    lu.assertEquals(self.jobs:count('mine'), 5)
+    lu.assertEquals(#self.world.areas[1].sites, 5)
     lu.assertNil(self.world:get(3, 2).site)
+    -- clearing everything removes the area and its job
+    lu.assertTrue((self.abilities:designateMine(4, 1, 5, 3)))
+    lu.assertEquals(#self.world.areas, 0)
+    lu.assertNil(self.jobs:take('mine'))
 end
 function TestAbilities:testStorageSiteCostsLogs()
     self.abilities:select(ABILITY_STORAGE)

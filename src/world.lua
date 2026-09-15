@@ -20,6 +20,8 @@ function World.new(w, h, rng)
     self.nextItemId = 1
     self.sites = {}
     self.nextSiteId = 1
+    self.areas = {}
+    self.nextAreaId = 1
     self.storageList = {}
     self.stock = { logs = 0, gold = 0 }
     self.version = 0
@@ -679,7 +681,48 @@ end
 -- becomes a storage tile; a bridge site turns water into bridge. Any idle
 -- morphi builds. Sites post jobs when placed and vanish when done.
 
-function World:addSite(kind, x, y)
+-- A mine area is one drag's worth of marks. A miner claims the whole area
+-- and works through it tile by tile, so it never idles between tiles.
+function World:newArea()
+    local area = { id = self.nextAreaId, sites = {}, claimedBy = nil }
+    self.nextAreaId = self.nextAreaId + 1
+    self.areas[#self.areas + 1] = area
+    return area
+end
+
+function World:removeArea(area)
+    area.claimedBy = nil
+    for i = #self.areas, 1, -1 do
+        if self.areas[i] == area then table.remove(self.areas, i) end
+    end
+end
+
+function World:areaRemaining(area)
+    return #area.sites
+end
+
+-- Any tile of the area a miner could stand next to right now.
+function World:areaReachable(area)
+    for _, site in ipairs(area.sites) do
+        if self:siteApproachTile(site) then return true end
+    end
+    return false
+end
+
+-- The reachable site in the area closest to (x, y), with the tile to stand on.
+function World:nextSiteInArea(area, x, y)
+    local best, bestSpot, bestD = nil, nil, math.huge
+    for _, site in ipairs(area.sites) do
+        local spot = self:siteApproachTile(site)
+        if spot then
+            local d = Util.manhattan(x, y, spot.x, spot.y)
+            if d < bestD then best, bestSpot, bestD = site, spot, d end
+        end
+    end
+    return best, bestSpot
+end
+
+function World:addSite(kind, x, y, area)
     local t = self:get(x, y)
     if not t or t.site then return nil, 'already marked' end
     if kind == SITE_MINE then
@@ -689,10 +732,11 @@ function World:addSite(kind, x, y)
     elseif kind == SITE_BRIDGE then
         if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
     end
-    local site = { id = self.nextSiteId, kind = kind, x = x, y = y, claimedBy = nil, done = false }
+    local site = { id = self.nextSiteId, kind = kind, x = x, y = y, claimedBy = nil, done = false, area = area }
     self.nextSiteId = self.nextSiteId + 1
     self.sites[#self.sites + 1] = site
     t.site = site
+    if area then area.sites[#area.sites + 1] = site end
     return site
 end
 
@@ -704,6 +748,13 @@ function World:removeSite(site)
     end
     local t = self:get(site.x, site.y)
     if t and t.site == site then t.site = nil end
+    local area = site.area
+    if area then
+        for i = #area.sites, 1, -1 do
+            if area.sites[i] == site then table.remove(area.sites, i) end
+        end
+        if #area.sites == 0 then self:removeArea(area) end
+    end
 end
 
 -- Where a morphi stands to work a site: on it for storage, next to it for

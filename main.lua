@@ -266,6 +266,7 @@ function love.update(dt)
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
     end
+    -- 'confirmquit' is a pause: nothing updates
 end
 
 local function drawWorld()
@@ -333,6 +334,8 @@ function love.draw()
         ui:drawGameOver(game.scoring, game.highScore, game.isNewHigh)
     elseif state == 'annual' then
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
+    elseif state == 'confirmquit' then
+        ui:drawConfirmQuit()
     elseif state == 'playing' then
         local mx, my = love.mouse.getPosition()
         if game.lineStart and game.lineCost and game.abilities.selected == ABILITY_BRIDGE then
@@ -369,6 +372,10 @@ function love.mousepressed(x, y, button)
             state = 'playing'
             love.mouse.setVisible(false)
         end
+        return
+    elseif state == 'confirmquit' then
+        state = 'playing'
+        love.mouse.setVisible(false)
         return
     end
     -- playing
@@ -468,7 +475,15 @@ function love.keypressed(key)
             game.abilities:select(ABILITY_ORDER[n])
             Audio.playSFX('click')
         elseif key == 'escape' then
+            state = 'confirmquit'
+            love.mouse.setVisible(true)
+        end
+    elseif state == 'confirmquit' then
+        if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
+        else
+            state = 'playing'
+            love.mouse.setVisible(false)
         end
     elseif state == 'report' then
         if key == 'return' or key == 'kpenter' or key == 'space' then

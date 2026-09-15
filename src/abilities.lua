@@ -68,7 +68,7 @@ function Abilities:use(tx, ty)
         end
         for _, site in ipairs(self.world.sites) do
             if math.abs(site.x - tx) <= MEMO_RADIUS and math.abs(site.y - ty) <= MEMO_RADIUS then
-                self.jobs:prioritize(site)
+                self.jobs:prioritize(site.area or site)
                 touched = touched + 1
             end
         end
@@ -89,19 +89,18 @@ function Abilities:designateMine(x1, y1, x2, y2)
     local lx, hx = math.min(x1, x2), math.max(x1, x2)
     local ly, hy = math.min(y1, y2), math.max(y1, y2)
     local count = 0
+    local area = nil
     for x = lx, hx do
         for y = ly, hy do
             local t = world:get(x, y)
             if clearing then
-                if t and t.site and t.site.kind == SITE_MINE and t.site.claimedBy == nil then
-                    self.jobs:removeSite(t.site)
+                if t and t.site and t.site.kind == SITE_MINE and not t.site.working then
                     world:removeSite(t.site)
                     count = count + 1
                 end
             elseif stoneOrSnow(t) and not t.site and count < MINE_MAX_TILES then
-                local site = world:addSite(SITE_MINE, x, y)
-                if site then
-                    self.jobs:postSite(site)
+                area = area or world:newArea()
+                if world:addSite(SITE_MINE, x, y, area) then
                     count = count + 1
                 end
             end
@@ -110,6 +109,7 @@ function Abilities:designateMine(x1, y1, x2, y2)
     if count == 0 then
         return false, clearing and nil or 'Drag over stone to mark it for mining'
     end
+    if area then self.jobs:postArea(area) end
     self:effect(clearing and 'unmark' or 'mine', { count = count, clearing = clearing })
     return true
 end

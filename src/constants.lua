@@ -97,6 +97,7 @@ BUILD_SECONDS   = 3.0
 MEMO_RADIUS     = 5
 LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
+MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
 
 SITE_MINE, SITE_STORAGE, SITE_BRIDGE = 'mine', 'storage', 'bridge'
 

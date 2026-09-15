@@ -126,21 +126,86 @@ function TestWorker:testForagerWaitsWhenThereIsNoStorage()
     lu.assertNotNil(world:get(3, 4).item)
 end
 
-function TestWorker:testMinerDigsDesignatedStoneWhenReachable()
+function TestWorker:testMinerWorksAWholeAreaWithoutIdling()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
-    -- the pocket wall: (4,7) touches open ground, (4,8) is grass inside, (5,7) too
-    local outer = self.world:addSite(SITE_MINE, 4, 7)
-    local inner = self.world:addSite(SITE_MINE, 6, 7)
-    self.jobs:postSite(inner)
-    self.jobs:postSite(outer)
-    run({ w }, self.world, self.jobs, 12)
+    -- the whole bottom wall of the pocket, one drag: only the ends touch open ground at first
+    local area = self.world:newArea()
+    for x = 3, 7 do self.world:addSite(SITE_MINE, x, 9, area) end
+    self.world:addSite(SITE_MINE, 4, 7, area)   -- a wall tile of the pocket itself
+    lu.assertEquals(#area.sites, 6)
+    self.jobs:postArea(area)
+    local idleBetween, mined, sawWorking = 0, 0, false
+    for _ = 1, 1200 do
+        run({ w }, self.world, self.jobs, 0.05)
+        if w.state == 'working' then sawWorking = true end
+        if sawWorking and #area.sites > 0 and #area.sites < 6 and w.state == 'idle' then idleBetween = idleBetween + 1 end
+        if #area.sites == 0 then break end
+    end
+    lu.assertEquals(#area.sites, 0, 'area not finished')
+    lu.assertEquals(idleBetween, 0, 'went idle between tiles')
+    for x = 3, 7 do lu.assertEquals(self.world:get(x, 9).type, TILE_DIRT) end
     lu.assertEquals(self.world:get(4, 7).type, TILE_DIRT)
-    lu.assertEquals(self.events[1], 'mined:mine')
+    lu.assertEquals(#self.world.areas, 0)
+    lu.assertNil(w.targetArea)
+    lu.assertNil(self.jobs:take('mine'))
+    lu.assertTrue(self.world:isReachable(5, 8))  -- the pocket is open now
     lu.assertEquals(#self.complaints, 0)
-    run({ w }, self.world, self.jobs, 12)
-    lu.assertEquals(self.world:get(6, 7).type, TILE_DIRT)
-    lu.assertEquals(#self.world.sites, 0)
-    lu.assertEquals(self.scoring.delivered.gold, 0)  -- plain stone, nothing to carry
+end
+
+function TestWorker:testMinerHaulsGoldThenReturnsToTheArea()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    local area = self.world:newArea()
+    self.world:addSite(SITE_MINE, 3, 6, area)   -- the ore tile
+    self.world:addSite(SITE_MINE, 3, 7, area)   -- plain stone behind it
+    self.world:addSite(SITE_MINE, 4, 7, area)
+    self.jobs:postArea(area)
+    run({ w }, self.world, self.jobs, 30)
+    lu.assertEquals(self.scoring.delivered.gold, 1)
+    lu.assertEquals(self.world.stock.gold, 1)
+    lu.assertEquals(#area.sites, 0)
+    lu.assertEquals(self.world:get(4, 7).type, TILE_DIRT)
+end
+
+function TestWorker:testHungryMinerEatsBetweenTilesThenComesBack()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    self.world:storeItem(ITEM_FOOD, 7, 4, 3)
+    local area = self.world:newArea()
+    self.world:addSite(SITE_MINE, 4, 7, area)
+    self.world:addSite(SITE_MINE, 5, 7, area)
+    self.world:addSite(SITE_MINE, 6, 7, area)
+    self.jobs:postArea(area)
+    run({ w }, self.world, self.jobs, 3)
+    lu.assertEquals(w.targetArea, area)
+    w.hunger = HUNGER_EAT_THRESHOLD - 1
+    run({ w }, self.world, self.jobs, 40)
+    lu.assertEquals(#area.sites, 0)
+    lu.assertTrue(w.hunger > 40, 'did not eat, hunger ' .. w.hunger)
+    -- the meal happened between the first and the last tile, never mid-tile
+    local firstMined, lastMined, eat
+    for i, e in ipairs(self.events) do
+        if e == 'mined:mine' then firstMined = firstMined or i; lastMined = i end
+        if e == 'eat' then eat = eat or i end
+    end
+    lu.assertNotNil(eat)
+    lu.assertTrue(firstMined < eat and eat < lastMined, table.concat(self.events, ','))
+end
+
+function TestWorker:testMinerStopsAfterItsTileLimitAndComesBack()
+    local opts = self.opts(ROLE_MINER)
+    opts.mineLimit = 2
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), opts)
+    local area = self.world:newArea()
+    for x = 3, 7 do self.world:addSite(SITE_MINE, x, 9, area) end
+    self.jobs:postArea(area)
+    local released = false
+    for _ = 1, 600 do
+        run({ w }, self.world, self.jobs, 0.05)
+        if #area.sites == 3 and w.targetArea == nil then released = true end
+        if #area.sites == 0 then break end
+    end
+    lu.assertTrue(released, 'never let go of the area after two tiles')
+    lu.assertEquals(#area.sites, 0)   -- but came back and finished it
+    lu.assertEquals(w.areaTilesDone <= 2, true)
 end
 
 function TestWorker:testLogsAndGoldGoToTheStockpile()

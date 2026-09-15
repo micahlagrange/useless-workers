@@ -213,7 +213,7 @@ function UI:drawBottomBar(game)
         setColor(C.dim)
         love.graphics.print('WASD or right-drag: pan   wheel: zoom   1-5: tools   MINE: drag over stone', px, py + 6)
         love.graphics.print('SELECT then click a morphi to see who is whining', px, py + 24)
-        love.graphics.print('ESC: quit to title', px, py + 42)
+        love.graphics.print('ESC: quit to title (asks first)', px, py + 42)
     end
     if self.toastText then
         love.graphics.setFont(self.fonts.hud)
@@ -304,6 +304,13 @@ function UI:drawTitle(title, highScore)
     self:centered('LEFT / RIGHT: difficulty     M: mute', 620, self.fonts.small, C.dim)
     self:centered('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine and build storage from logs.', 660, self.fonts.small, C.dim)
     self:centered('You never control a morphi. That is the whole problem. Gold is worth 3, logs 2, food 1.', 680, self.fonts.small, C.dim)
+end
+
+function UI:drawConfirmQuit()
+    local x, y = self:panel(560, 200)
+    self:centered('Quit to the title screen?', y + 40, self.fonts.big, C.warn)
+    self:centered('This game will be lost.', y + 90, self.fonts.hud, C.dim)
+    self:centered('Y or ENTER: quit     any other key or click: keep playing', y + 140, self.fonts.hud)
 end
 
 function UI:drawGameOver(scoring, highScore, isNew)

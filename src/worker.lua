@@ -35,6 +35,9 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.job = nil
     self.targetNode = nil
     self.targetSite = nil
+    self.targetArea = nil
+    self.areaTilesDone = 0
+    self.mineLimit = opts.mineLimit or MINE_TILES_PER_TRIP
     self.targetItem = nil
     self.targetTile = nil
     self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
@@ -128,6 +131,15 @@ function Worker:releaseSite()
     self.targetSite = nil
 end
 
+-- Let go of a mine area; whatever is left goes back on the queue.
+function Worker:releaseArea()
+    local area = self.targetArea
+    if not area then return end
+    if area.claimedBy == self then area.claimedBy = nil end
+    self.targetArea = nil
+    if #area.sites > 0 then self.jobs:postArea(area) end
+end
+
 function Worker:releaseItem()
     if self.targetItem and self.targetItem.claimedBy == self then
         self.targetItem.claimedBy = nil
@@ -151,6 +163,7 @@ function Worker:dropJob()
     end
     self:releaseNode()
     self:releaseSite()
+    self:releaseArea()
     self:releaseItem()
     self:releaseTile()
     self.path = nil
@@ -357,10 +370,21 @@ function Worker:decide()
             if self:recentlyReported(j.node) and not self.world:nodeReachable(j.node) then return false end
             return true
         end
+        if j.area then
+            return j.area.claimedBy == nil and #j.area.sites > 0 and self.world:areaReachable(j.area)
+        end
         return not j.site.done and j.site.claimedBy == nil and self.world:siteReachable(j.site)
     end
     local job = canDoMine and self.jobs:take(self.roleInfo.jobType, usable) or nil
     if not job then job = self.jobs:take('build', usable) end
+    if job and job.area then
+        self.job = nil -- the area is the job; it is reposted if anything is left
+        job.area.claimedBy = self
+        self.targetArea = job.area
+        self.areaTilesDone = 0
+        if not self:continueArea() then self:releaseArea(); self.state = 'idle' end
+        return
+    end
     if job then
         self.job = job
         local target = job.node or job.site
@@ -398,6 +422,41 @@ function Worker:decide()
         end
     end
     self.decideTimer = DECIDE_INTERVAL * 2
+end
+
+-- Next tile of the claimed mine area. Returns false when nothing reachable
+-- is left or when the morphi should stop for food or a break.
+function Worker:continueArea()
+    local area = self.targetArea
+    if not area then return false end
+    if #area.sites == 0 then
+        self:releaseArea()
+        return false
+    end
+    if self.hunger < HUNGER_EAT_THRESHOLD or self.workTime >= BREAK_AFTER_SECONDS then
+        self:releaseArea()
+        return false
+    end
+    if self.areaTilesDone >= self.mineLimit then
+        -- enough for one trip; the rest goes back on the queue for whoever is free
+        self:releaseArea()
+        return false
+    end
+    local t = self:tile()
+    local site, spot = self.world:nextSiteInArea(area, t.x, t.y)
+    if not site then
+        self:releaseArea()
+        return false
+    end
+    local path = self:pathTo(spot.x, spot.y)
+    if not path then
+        self:releaseArea()
+        return false
+    end
+    site.claimedBy = self
+    self.targetSite = site
+    self:setPath(path, 'work')
+    return true
 end
 
 function Worker:followPath(dt)
@@ -507,6 +566,7 @@ function Worker:deliverHere()
     self.goal = nil
     self.state = 'idle'
     self.decideTimer = 0
+    if self.targetArea and self:continueArea() then return end
     if cargo.kind == CARGO_FOOD then self:stepOff() end
 end
 
@@ -540,6 +600,7 @@ function Worker:arrive()
         self:say('break', 2)
     elseif self.goal == 'work' then
         self.state = 'working'
+        if self.targetSite then self.targetSite.working = true end
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then
             self.stateTimer = BUILD_SECONDS
         else
@@ -570,6 +631,7 @@ function Worker:finishAction()
             local site = self.targetSite
             local kind = self.world:completeSite(site)
             if kind then cargo = { kind = kind, fruit = 1 } end
+            if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
             self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
         elseif self.targetNode and self.targetNode.ready then
             local node = self.targetNode
@@ -585,8 +647,10 @@ function Worker:finishAction()
             if self:goDeliver() then return end
             self.slots[SLOT_WORK] = nil
         end
+        if self.targetArea and self:continueArea() then return end
         self.goal = nil
         self.state = 'idle'
+        self.decideTimer = 0
     end
 end
 
