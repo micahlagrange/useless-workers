@@ -57,6 +57,8 @@ local function onWorkerEvent(worker, name, data)
     if name == 'eat' then Audio.playSFX('eat')
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
+    elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
     elseif name == 'quit' then
@@ -93,14 +95,13 @@ local function onReady(node)
 end
 
 local function onEffect(name, data)
-    if name == 'dig' then
-        Audio.playSFX('dig')
-    elseif name == 'explode' then
-        Audio.playSFX('explode')
-        Effects.shake(0.35, 5)
-        local c = Util.tileCenter(data.x, data.y)
-        Effects.explosion(c.x, c.y, TILE_SIZE * (data.radius * 2 + 1.5))
-    elseif name == 'line' then
+    if name == 'mine' then
+        Audio.playSFX('click')
+        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for mining')
+    elseif name == 'unmark' then
+        Audio.playSFX('click')
+        ui:toast(data.count .. ' mark' .. (data.count == 1 and '' or 's') .. ' cleared')
+    elseif name == 'site' then
         Audio.playSFX('line')
     elseif name == 'memo' then
         Audio.playSFX('memo')
@@ -116,6 +117,7 @@ local function newGame(seedString, difficultyIndex)
     game.scoring = Scoring.new(difficultyIndex)
     game.world = World.generate(game.seedNumber, game.rng)
     game.jobs = Jobs.new()
+    game.world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold }
     game.world:spawnAllNodes(NODES_INITIAL)
     -- everything standing at the start is already workable
     for _, node in ipairs(game.world.nodes) do
@@ -127,7 +129,7 @@ local function newGame(seedString, difficultyIndex)
     game.clock = 0
     game.staffCount = 0
     game.averageHunger = 100
-    game.abilities = Abilities.new(game.world, game.scoring, game.jobs, onEffect)
+    game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
     game.camera = Camera.new(game.world.w, game.world.h, WINDOW_WIDTH, WINDOW_HEIGHT)
     game.camera.scale = 2
@@ -141,7 +143,7 @@ local function newGame(seedString, difficultyIndex)
     Effects.clear()
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
-    ui:alert('Pupper forages, Twins chops, Cwab mines. Dig, blast and bridge so they can reach their work.')
+    ui:alert('Build STORAGE (2 logs) so foragers have somewhere to put food. Drag MINE over stone and Cwab digs it out.')
     state = 'playing'
     love.mouse.setVisible(false)
 end
@@ -273,8 +275,10 @@ local function drawWorld()
     Effects.applyShake()
     game.view:drawWorld()
     game.view:drawBreakroom()
+    game.view:drawStorage()
     game.view:drawNodes(game.clock)
     game.view:drawItems(game.clock)
+    game.view:drawSites(game.clock)
     -- tiles the alerts are pointing at
     local pulse = 0.4 + 0.4 * math.abs(math.sin(game.clock * 6))
     for _, t in ipairs(ui:alertTiles()) do
@@ -286,10 +290,17 @@ local function drawWorld()
         if not ui:isOverBars(mx, my) then
             local tile = cam:toTile(mx, my)
             local tool = game.abilities.selected
-            if tool == ABILITY_EXPLODE then
-                local r = game.abilities.explodeRadius
-                game.view:drawTileOutline(tile.x - r, tile.y - r, { 1, 0.6, 0.2, 0.9 }, r * 2 + 1)
-            elseif tool == ABILITY_LINE and game.lineStart then
+            if tool == ABILITY_MINE and game.lineStart then
+                local lx, hx = math.min(game.lineStart.x, tile.x), math.max(game.lineStart.x, tile.x)
+                local ly, hy = math.min(game.lineStart.y, tile.y), math.max(game.lineStart.y, tile.y)
+                for x = lx, hx do
+                    for y = ly, hy do
+                        local t = game.world:get(x, y)
+                        local minable = t and (t.type == TILE_STONE or t.type == TILE_SNOW)
+                        game.view:drawTileFill(x, y, minable and { 1, 0.6, 0.2, 0.45 } or { 1, 1, 1, 0.12 })
+                    end
+                end
+            elseif tool == ABILITY_BRIDGE and game.lineStart then
                 local tiles, cost = game.abilities:lineQuote(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
                 for _, p in ipairs(tiles) do
                     local t = game.world:get(p.x, p.y)
@@ -324,10 +335,10 @@ function love.draw()
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
     elseif state == 'playing' then
         local mx, my = love.mouse.getPosition()
-        if game.lineStart and game.lineCost then
+        if game.lineStart and game.lineCost and game.abilities.selected == ABILITY_BRIDGE then
             love.graphics.setFont(ui.fonts.small)
             love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.print('bridge cost ' .. game.lineCost, mx + 18, my + 18)
+            love.graphics.print('bridge: ' .. game.lineCost .. ' logs', mx + 18, my + 18)
         end
         ui:drawCursor(game.abilities.selected, mx, my)
     end
@@ -385,7 +396,7 @@ function love.mousepressed(x, y, button)
     end
     if tool == ABILITY_SELECT then
         game.selectedWorker = workerAt(tile)
-    elseif tool == ABILITY_LINE then
+    elseif tool == ABILITY_BRIDGE or tool == ABILITY_MINE then
         game.lineStart = tile
         game.lineCost = nil
     else
@@ -401,7 +412,12 @@ function love.mousereleased(x, y, button)
     elseif button == 1 and game.lineStart then
         if not ui:isOverBars(x, y) then
             local tile = game.camera:toTile(x, y)
-            local ok, why = game.abilities:useLine(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+            local ok, why
+            if game.abilities.selected == ABILITY_MINE then
+                ok, why = game.abilities:designateMine(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+            else
+                ok, why = game.abilities:useLine(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+            end
             if not ok and why then ui:toast(why) end
         end
         game.lineStart = nil

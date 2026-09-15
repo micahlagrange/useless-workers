@@ -25,8 +25,8 @@ local GRID = {
     '..........',
     '.b......T.',
     '..........',
-    '....BB....',
-    '....BB....',
+    '...SBBS...',
+    '...SBBS...',
     '..G.......',
     '..#####...',
     '..#.b.#...',
@@ -63,9 +63,8 @@ function TestWorker:testForagerPicksAndStocksThePantry()
     lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
     local item = self.world.items[1]
     lu.assertEquals(item.kind, ITEM_FOOD)
-    -- stored on the closest free tile to the break room, not on the furniture
-    lu.assertNotEquals(self.world:get(item.x, item.y).type, TILE_BREAKROOM)
-    lu.assertTrue(math.abs(item.x - 5.5) <= 1.5 and math.abs(item.y - 4.5) <= 1.5, 'stored at ' .. item.x .. ',' .. item.y)
+    -- stored on a built storage tile
+    lu.assertTrue(self.world:get(item.x, item.y).storage)
     lu.assertFalse(self.bush.ready)
     lu.assertNil(w:carrying())
     lu.assertEquals(self.events[1], 'work:bush')
@@ -86,6 +85,7 @@ function TestWorker:testOneFoodPerTileClosestFirst()
     run({ w }, self.world, self.jobs, 45)
     local count = self.world:storedCount(ITEM_FOOD)
     lu.assertTrue(count >= 3, 'stored only ' .. count) -- bushes ripen again, so possibly more
+    lu.assertTrue(count <= self.world:storageCapacity())
     local seen = {}
     local ring = self.world:storageTiles()
     for _, item in ipairs(self.world.items) do
@@ -97,6 +97,62 @@ function TestWorker:testOneFoodPerTileClosestFirst()
         for i, st in ipairs(ring) do if st.x == item.x and st.y == item.y then rank = i end end
         lu.assertTrue(rank ~= nil and rank <= count, 'item at rank ' .. tostring(rank) .. ' of ' .. count)
     end
+end
+
+function TestWorker:testForagerWaitsWhenThereIsNoStorage()
+    local world = World.fromGrid({
+        '..........',
+        '.b........',
+        '..........',
+        '....BB....',
+        '....BB....',
+        '..........',
+    }, Rng.new(1))
+    local w = Worker.new(world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    self.jobs:postNode(world:get(2, 2).node)
+    run({ w }, world, self.jobs, 10)
+    lu.assertEquals(self.scoring.output, 0)
+    lu.assertTrue(world:get(2, 2).node.ready)        -- left it on the bush
+    lu.assertEquals(self.jobs:count('forage'), 1)     -- job still waiting
+    -- a storage site goes up: the idle forager builds it, then forages
+    world.stock.logs = 2
+    local site = world:addSite(SITE_STORAGE, 3, 4)
+    self.jobs:postSite(site)
+    run({ w }, world, self.jobs, 8)
+    lu.assertTrue(world:get(3, 4).storage, 'storage not built')
+    lu.assertEquals(self.events[1], 'built:storage')
+    run({ w }, world, self.jobs, 14)
+    lu.assertEquals(self.scoring.delivered.food, 1)
+    lu.assertNotNil(world:get(3, 4).item)
+end
+
+function TestWorker:testMinerDigsDesignatedStoneWhenReachable()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    -- the pocket wall: (4,7) touches open ground, (4,8) is grass inside, (5,7) too
+    local outer = self.world:addSite(SITE_MINE, 4, 7)
+    local inner = self.world:addSite(SITE_MINE, 6, 7)
+    self.jobs:postSite(inner)
+    self.jobs:postSite(outer)
+    run({ w }, self.world, self.jobs, 12)
+    lu.assertEquals(self.world:get(4, 7).type, TILE_DIRT)
+    lu.assertEquals(self.events[1], 'mined:mine')
+    lu.assertEquals(#self.complaints, 0)
+    run({ w }, self.world, self.jobs, 12)
+    lu.assertEquals(self.world:get(6, 7).type, TILE_DIRT)
+    lu.assertEquals(#self.world.sites, 0)
+    lu.assertEquals(self.scoring.delivered.gold, 0)  -- plain stone, nothing to carry
+end
+
+function TestWorker:testLogsAndGoldGoToTheStockpile()
+    local l = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 6, 5))
+    local m = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_MINER, 5, 5))
+    self.jobs:postNode(self.tree)
+    self.jobs:postNode(self.ore)
+    run({ l, m }, self.world, self.jobs, 16)
+    lu.assertEquals(self.world.stock.logs, 1)
+    lu.assertEquals(self.world.stock.gold, 1)
+    lu.assertEquals(self.scoring.delivered.logs, 1)
+    lu.assertEquals(self.scoring.delivered.gold, 1)
 end
 
 function TestWorker:testLumberjackChopsTreeIntoStump()
@@ -120,6 +176,7 @@ function TestWorker:testMinerWorksOreFromNextDoorAndOpensTheTile()
     lu.assertEquals(self.world:get(3, 6).type, TILE_DIRT)
     lu.assertNil(self.world:get(3, 6).node)
     lu.assertEquals(#self.world:nodesOfKind(NODE_ORE), 0)
+    lu.assertEquals(self.world.stock.gold, 1)
 end
 
 function TestWorker:testHungryMorphiFetchesFromStorageIntoSlot2()
@@ -256,11 +313,21 @@ local function simulateQuarter(difficultyIndex)
     local seed = Rng.seedToNumber(DEFAULT_SEED)
     local rng = Rng.new(seed)
     local world = World.generate(seed, rng)
+    world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold }
     world:spawnAllNodes(NODES_INITIAL)
     local jobs = Jobs.new()
     for _, node in ipairs(world.nodes) do
         if node.ready then jobs:postNode(node) end
     end
+    -- what a player does first: two storage sites next to the break room
+    local placed = 0
+    for _, s in ipairs(world:spawnTiles(2)) do
+        if placed < 2 and world:get(s.x, s.y).type ~= TILE_BREAKROOM and world:spend(COSTS.storage) then
+            local site = world:addSite(SITE_STORAGE, s.x, s.y)
+            if site then jobs:postSite(site); placed = placed + 1 end
+        end
+    end
+    lu.assertEquals(placed, 2)
     local scoring = Scoring.new(difficultyIndex)
     local workers = {}
     local spots = world:spawnTiles(3)
@@ -292,11 +359,13 @@ local function simulateQuarter(difficultyIndex)
     lu.assertTrue(ended)
     lu.assertTrue(elapsed < 20, 'quarter simulation took ' .. elapsed .. 's')
     local report = scoring:closeQuarter(#workers)
+    lu.assertEquals(world:storageCapacity(), 2, 'storage sites were not built')
     local rs = ''
     for k, v in pairs(reasons) do rs = rs .. k .. '=' .. v .. ' ' end
     print(string.format('  %-14s Q1 unaided seed %s: food %d logs %d gold %d, complaints %d (%s), quits %d, fed %d%%, stored %d, grade %s (%.2fs)',
         DIFFICULTIES[difficultyIndex].name, DEFAULT_SEED, report.food, report.logs, report.gold, report.complaints, rs,
         report.attrition, report.fedPct, world:storedCount(ITEM_FOOD), report.grade, elapsed))
+    print(string.format('    stockpile: logs %d gold %d', world.stock.logs, world.stock.gold))
     return report
 end
 function TestSimulation:testFullQuarterOnGeneratedWorld()

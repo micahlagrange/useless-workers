@@ -97,9 +97,9 @@ local grid = {
     '..#...#...',
     '..#.b.#...',
     '..#####...',
-    '.BB....G..',
-    '.BB..~~~..',
-    '.....~~~..',
+    '.BBS...G..',
+    '.BBS.~~~..',
+    '....S~~~..',
 }
 function TestWorldTools:setUp()
     self.world = World.fromGrid(grid, Rng.new(1))
@@ -154,28 +154,31 @@ function TestWorldTools:testLineAndBridge()
     lu.assertEquals(#vertical, 8) -- clipped to the map
     lu.assertEquals(vertical[2].y, 2)
 end
-function TestWorldTools:testStorageTilesRingTheBreakroom()
+function TestWorldTools:testStorageIsOnlyBuiltTiles()
     local ring = self.world:storageTiles()
-    lu.assertTrue(#ring > 8)
+    lu.assertEquals(#ring, 3)
+    lu.assertEquals(self.world:storageCapacity(), 3)
     for i, st in ipairs(ring) do
-        lu.assertNotEquals(self.world:get(st.x, st.y).type, TILE_BREAKROOM)
-        lu.assertTrue(self.world:isReachable(st.x, st.y))
+        lu.assertTrue(self.world:get(st.x, st.y).storage)
         if i > 1 then lu.assertTrue(ring[i - 1].d <= st.d) end
     end
     local first = self.world:nearestFreeStorageTile()
-    lu.assertEquals(first, { x = ring[1].x, y = ring[1].y })
+    lu.assertEquals(first, { x = 4, y = 6 })
     lu.assertNotNil(self.world:storeItem(ITEM_FOOD, first.x, first.y, 1))
-    lu.assertNil(self.world:storeItem(ITEM_FOOD, first.x, first.y, 1)) -- one per tile
-    local second = self.world:nearestFreeStorageTile()
-    lu.assertNotEquals(second, first)
-    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
+    lu.assertNil(self.world:storeItem(ITEM_FOOD, first.x, first.y, 1))  -- one per tile
+    lu.assertNil(self.world:storeItem(ITEM_FOOD, 6, 1, 1))              -- not a storage tile
+    lu.assertEquals(self.world:nearestFreeStorageTile(), { x = 4, y = 7 })
+    self.world:storeItem(ITEM_FOOD, 4, 7, 1)
+    self.world:storeItem(ITEM_FOOD, 5, 8, 1)
+    lu.assertNil(self.world:nearestFreeStorageTile())                  -- full
+    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 3)
     local item = self.world:takeItem(first.x, first.y)
     lu.assertEquals(item.kind, ITEM_FOOD)
-    lu.assertEquals(self.world:storedCount(), 0)
+    lu.assertEquals(self.world:storedCount(), 2)
     -- reservations hold a tile for one carrier
     local me, other = {}, {}
     self.world:reserveTile(first.x, first.y, me)
-    lu.assertNotEquals(self.world:nearestFreeStorageTile(other), first)
+    lu.assertNil(self.world:nearestFreeStorageTile(other))
     lu.assertEquals(self.world:nearestFreeStorageTile(me), first)
     self.world:releaseReservations(me)
     lu.assertEquals(self.world:nearestFreeStorageTile(other), first)
@@ -184,6 +187,40 @@ function TestWorldTools:testStorageTilesRingTheBreakroom()
     local spot = self.world:freeNeighbour(first.x, first.y)
     lu.assertNotNil(spot)
     lu.assertNil(self.world:get(spot.x, spot.y).item)
+end
+function TestWorldTools:testSitesAndStockpile()
+    lu.assertTrue(self.world:canAfford({ logs = 0 }))
+    self.world:addStock('logs', 3)
+    lu.assertTrue(self.world:spend({ logs = 2 }))
+    lu.assertFalse(self.world:spend({ logs = 2 }))
+    lu.assertEquals(self.world.stock.logs, 1)
+    -- mine site next to open ground is reachable, one deep in the wall is not yet
+    local outer = self.world:addSite(SITE_MINE, 4, 5)
+    local inner = self.world:addSite(SITE_MINE, 4, 4)   -- grass inside the pocket: not stone
+    lu.assertNil(inner)
+    inner = self.world:addSite(SITE_MINE, 5, 5)
+    lu.assertTrue(self.world:siteReachable(outer))
+    lu.assertTrue(self.world:siteReachable(inner))     -- also touches open ground below
+    local deep = self.world:addSite(SITE_MINE, 4, 2)
+    lu.assertTrue(self.world:siteReachable(deep))      -- row 1 is open
+    lu.assertNil(self.world:completeSite(outer))
+    lu.assertEquals(self.world:get(4, 5).type, TILE_DIRT)
+    lu.assertTrue(self.world:isReachable(5, 4))
+    lu.assertNil(self.world:get(4, 5).site)
+    lu.assertTrue(outer.done)
+    -- mining an ore tile yields gold
+    local ore = self.world:get(8, 6).node
+    local oreSite = self.world:addSite(SITE_MINE, 8, 6)
+    lu.assertEquals(self.world:completeSite(oreSite), CARGO_GOLD)
+    lu.assertNil(self.world:get(8, 6).node)
+    lu.assertFalse(ore.ready)
+    -- storage site becomes a storage tile
+    local st = self.world:addSite(SITE_STORAGE, 6, 1)
+    lu.assertNotNil(st)
+    lu.assertNil(self.world:addSite(SITE_STORAGE, 4, 6))  -- already storage
+    self.world:completeSite(st)
+    lu.assertTrue(self.world:get(6, 1).storage)
+    lu.assertEquals(self.world:storageCapacity(), 4)
 end
 function TestWorldTools:testSpawnTilesNearBreakroom()
     local spots = self.world:spawnTiles(2)

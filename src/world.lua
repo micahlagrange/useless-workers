@@ -6,7 +6,7 @@ local World = {}
 World.__index = World
 
 local function newTile(kind, altitude)
-    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, reservedBy = nil, colorSeed = 0.5 }
+    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, site = nil, storage = false, reservedBy = nil, colorSeed = 0.5 }
 end
 
 function World.new(w, h, rng)
@@ -18,6 +18,10 @@ function World.new(w, h, rng)
     self.nextNodeId = 1
     self.items = {}
     self.nextItemId = 1
+    self.sites = {}
+    self.nextSiteId = 1
+    self.storageList = {}
+    self.stock = { logs = 0, gold = 0 }
     self.version = 0
     self.breakroom = nil
     self.reachCache = nil
@@ -80,13 +84,14 @@ function World.generate(seedNumber, rng, w, h)
 end
 
 -- Hand built worlds for tests.
--- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)
+-- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' built storage tile
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
     local self = World.new(w, h, rng)
     local breakroomTiles = {}
     local nodeTiles = {}
+    local storageTiles = {}
     for y = 1, h do
         for x = 1, w do
             local ch = rows[y]:sub(x, x)
@@ -102,6 +107,7 @@ function World.fromGrid(rows, rng)
             local t = self.tiles[x][y]
             t.type = kind
             t.passable = PASSABLE[kind] or false
+            if ch == 'S' then storageTiles[#storageTiles + 1] = { x = x, y = y } end
         end
     end
     if #breakroomTiles > 0 then
@@ -114,6 +120,7 @@ function World.fromGrid(rows, rng)
         local node = self:addNode(n.kind, n.x, n.y)
         node.ready = true
     end
+    for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y) end
     self.version = self.version + 1
     return self
 end
@@ -155,7 +162,7 @@ function World:dig(x, y)
 end
 
 function World:explode(x, y, radius)
-    radius = radius or EXPLODE_RADIUS
+    radius = radius or 1
     local count = 0
     for dx = -radius, radius do
         for dy = -radius, radius do
@@ -533,6 +540,7 @@ function World:harvestNode(node)
         return CARGO_LOGS
     else
         self:removeNode(node)
+        node.ready = false
         self:setType(node.x, node.y, TILE_DIRT)
         return CARGO_GOLD
     end
@@ -546,43 +554,64 @@ function World:readyNodeCount(kind)
     return n
 end
 
+-- Stockpile ------------------------------------------------------------
+-- Logs and gold delivered to the break room. Building spends them.
+
+function World:addStock(kind, n)
+    self.stock[kind] = (self.stock[kind] or 0) + (n or 1)
+end
+
+function World:canAfford(cost)
+    for kind, n in pairs(cost) do
+        if (self.stock[kind] or 0) < n then return false end
+    end
+    return true
+end
+
+function World:spend(cost)
+    if not self:canAfford(cost) then return false end
+    for kind, n in pairs(cost) do
+        self.stock[kind] = self.stock[kind] - n
+    end
+    return true
+end
+
 -- Storage --------------------------------------------------------------
--- Food is stored as an item on a tile: the closest free reachable tile to
--- the break room that is not break room furniture. One item per tile.
--- Morphis walk over items freely; they just try not to idle on them.
+-- Food is stored as an item on a built storage tile, one item per tile,
+-- closest to the break room first. Without storage tiles food has nowhere
+-- to go. Morphis walk over items freely; they just try not to idle on them.
+
+function World:markStorage(x, y)
+    local t = self:get(x, y)
+    if not t or t.storage then return false end
+    t.storage = true
+    local d = 0
+    if self.breakroom then
+        d = (x - (self.breakroom.x + 0.5)) ^ 2 + (y - (self.breakroom.y + 0.5)) ^ 2
+    end
+    self.storageList[#self.storageList + 1] = { x = x, y = y, d = d }
+    table.sort(self.storageList, function(a, b)
+        if a.d ~= b.d then return a.d < b.d end
+        if a.y ~= b.y then return a.y < b.y end
+        return a.x < b.x
+    end)
+    return true
+end
 
 function World:storageTiles()
-    if self.storageCache and self.storageCacheVersion == self.version then
-        return self.storageCache
-    end
-    local out = {}
-    if self.breakroom then
-        local reach = self:reachableFromBreakroom()
-        local bx, by = self.breakroom.x + 0.5, self.breakroom.y + 0.5
-        for x = self.breakroom.x - STORAGE_RADIUS, self.breakroom.x + 1 + STORAGE_RADIUS do
-            for y = self.breakroom.y - STORAGE_RADIUS, self.breakroom.y + 1 + STORAGE_RADIUS do
-                if self:inBounds(x, y) and reach[x][y] and self.tiles[x][y].type ~= TILE_BREAKROOM then
-                    out[#out + 1] = { x = x, y = y, d = (x - bx) ^ 2 + (y - by) ^ 2 }
-                end
-            end
-        end
-        table.sort(out, function(a, b)
-            if a.d ~= b.d then return a.d < b.d end
-            if a.y ~= b.y then return a.y < b.y end
-            return a.x < b.x
-        end)
-    end
-    self.storageCache = out
-    self.storageCacheVersion = self.version
-    return out
+    return self.storageList
+end
+
+function World:storageCapacity()
+    return #self.storageList
 end
 
 -- Closest free storage tile to the break room. `reservedBy` lets a carrier
 -- hold a tile so two foragers do not race for the same one.
 function World:nearestFreeStorageTile(reservedBy)
-    for _, s in ipairs(self:storageTiles()) do
+    for _, s in ipairs(self.storageList) do
         local t = self.tiles[s.x][s.y]
-        if not t.item and not t.node and (t.reservedBy == nil or t.reservedBy == reservedBy) then
+        if t.passable and not t.item and (t.reservedBy == nil or t.reservedBy == reservedBy) then
             return { x = s.x, y = s.y }
         end
     end
@@ -603,7 +632,7 @@ end
 
 function World:storeItem(kind, x, y, fruit)
     local t = self:get(x, y)
-    if not t or t.item or not t.passable then return nil end
+    if not t or t.item or not t.passable or not t.storage then return nil end
     local item = { id = self.nextItemId, kind = kind, x = x, y = y, fruit = fruit or 1, claimedBy = nil }
     self.nextItemId = self.nextItemId + 1
     self.items[#self.items + 1] = item
@@ -642,6 +671,88 @@ function World:nearestStoredItem(kind, fromX, fromY)
         end
     end
     return best
+end
+
+-- Designations ---------------------------------------------------------
+-- The player marks tiles; morphis do the work. A mine site is stone or snow
+-- a miner digs out when it can reach the tile next to it. A storage site
+-- becomes a storage tile; a bridge site turns water into bridge. Any idle
+-- morphi builds. Sites post jobs when placed and vanish when done.
+
+function World:addSite(kind, x, y)
+    local t = self:get(x, y)
+    if not t or t.site then return nil, 'already marked' end
+    if kind == SITE_MINE then
+        if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
+    elseif kind == SITE_STORAGE then
+        if not t.passable or t.type == TILE_BREAKROOM or t.item or t.node or t.storage then return nil, 'needs open ground' end
+    elseif kind == SITE_BRIDGE then
+        if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
+    end
+    local site = { id = self.nextSiteId, kind = kind, x = x, y = y, claimedBy = nil, done = false }
+    self.nextSiteId = self.nextSiteId + 1
+    self.sites[#self.sites + 1] = site
+    t.site = site
+    return site
+end
+
+function World:removeSite(site)
+    site.done = true
+    site.claimedBy = nil
+    for i = #self.sites, 1, -1 do
+        if self.sites[i] == site then table.remove(self.sites, i) end
+    end
+    local t = self:get(site.x, site.y)
+    if t and t.site == site then t.site = nil end
+end
+
+-- Where a morphi stands to work a site: on it for storage, next to it for
+-- mine and bridge sites. nil while nothing reachable touches it.
+function World:siteApproachTile(site)
+    if site.kind == SITE_STORAGE then
+        if self:isReachable(site.x, site.y) then return { x = site.x, y = site.y } end
+        return nil
+    end
+    local reach = self:reachableFromBreakroom()
+    for _, c in ipairs({ { site.x + 1, site.y }, { site.x - 1, site.y }, { site.x, site.y + 1 }, { site.x, site.y - 1 } }) do
+        if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
+            return { x = c[1], y = c[2] }
+        end
+    end
+    return nil
+end
+
+function World:siteReachable(site)
+    return self:siteApproachTile(site) ~= nil
+end
+
+-- Finish a site. Returns the cargo kind it yields, if any.
+function World:completeSite(site)
+    local t = self:get(site.x, site.y)
+    local cargo = nil
+    if site.kind == SITE_MINE then
+        local node = t.node
+        if node and node.kind == NODE_ORE then
+            self:removeNode(node)
+            node.ready = false
+            cargo = CARGO_GOLD
+        end
+        self:setType(site.x, site.y, TILE_DIRT)
+    elseif site.kind == SITE_STORAGE then
+        self:markStorage(site.x, site.y)
+    elseif site.kind == SITE_BRIDGE then
+        self:setType(site.x, site.y, TILE_BRIDGE)
+    end
+    self:removeSite(site)
+    return cargo
+end
+
+function World:sitesOfKind(kind)
+    local out = {}
+    for _, site in ipairs(self.sites) do
+        if site.kind == kind then out[#out + 1] = site end
+    end
+    return out
 end
 
 function World:countTypes()

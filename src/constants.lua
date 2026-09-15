@@ -39,9 +39,8 @@ TREE_REGROW_SECONDS = 45
 CARGO_FOOD, CARGO_LOGS, CARGO_GOLD = 'food', 'logs', 'gold'
 CARGO_VALUE = { food = 1, logs = 2, gold = 3 }   -- weight in the final score
 
--- Storage: delivered food is a real item on a tile near the break room,
--- one per tile, closest free tile first. Logs and gold are counted on delivery.
-STORAGE_RADIUS   = 8
+-- Storage: delivered food is a real item on a built storage tile, one per
+-- tile, closest to the break room first. Logs and gold go to the stockpile.
 ITEM_FOOD        = 'food'
 
 -- Inventory: slot 1 carries the work item (a pick, a log, a nugget),
@@ -79,24 +78,31 @@ EAT_SECONDS            = 1.0
 WANDER_RADIUS          = 3
 MAX_WORKERS            = 12
 
--- Player tools (section 6)
+-- Player tools (section 6). The player designates work; morphis do it.
 ABILITY_SELECT  = 'select'
-ABILITY_DIG     = 'dig'
-ABILITY_EXPLODE = 'explode'
-ABILITY_LINE    = 'line'
+ABILITY_MINE    = 'mine'      -- drag a rectangle over stone, miners dig it when they can reach it
+ABILITY_STORAGE = 'storage'   -- place a storage tile site, any idle morphi builds it
+ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
 ABILITY_MEMO    = 'memo'
-ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_DIG, ABILITY_EXPLODE, ABILITY_LINE, ABILITY_MEMO }
-ABILITY_COST    = { select = 0, dig = 1, explode = 4, line = 1, memo = 2 }
-ABILITY_LABEL   = { select = 'SELECT', dig = 'DIG', explode = 'EXPLODE', line = 'BRIDGE', memo = 'MEMO' }
-EXPLODE_RADIUS  = 1             -- 1 means a 3 by 3 blast
+ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BRIDGE, ABILITY_MEMO }
+ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'STORAGE', bridge = 'BRIDGE', memo = 'MEMO' }
+-- Building consumes the stockpile at the break room. Mining costs only time.
+COSTS = {
+    storage = { logs = 2 },
+    bridge  = { logs = 1 },   -- per water tile
+    memo    = { gold = 1 },
+}
+STARTING_STOCK  = { logs = 4, gold = 0 }
+BUILD_SECONDS   = 3.0
 MEMO_RADIUS     = 5
 LINE_MAX_LENGTH = 12
+MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
+
+SITE_MINE, SITE_STORAGE, SITE_BRIDGE = 'mine', 'storage', 'bridge'
 
 -- Economy and scoring (section 7)
 QUARTER_SECONDS     = 90
 QUARTERS_PER_GAME   = 4
-BUDGET_PER_QUARTER  = 10
-BUDGET_START        = 10
 HIRE_OUTPUT_DIVISOR = 5
 QUIT_PENALTY        = 3
 FED_SAMPLE_SECONDS  = 1

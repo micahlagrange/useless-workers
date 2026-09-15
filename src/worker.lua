@@ -34,6 +34,7 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.goal = nil
     self.job = nil
     self.targetNode = nil
+    self.targetSite = nil
     self.targetItem = nil
     self.targetTile = nil
     self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
@@ -120,6 +121,13 @@ function Worker:releaseNode()
     self.targetNode = nil
 end
 
+function Worker:releaseSite()
+    if self.targetSite and self.targetSite.claimedBy == self then
+        self.targetSite.claimedBy = nil
+    end
+    self.targetSite = nil
+end
+
 function Worker:releaseItem()
     if self.targetItem and self.targetItem.claimedBy == self then
         self.targetItem.claimedBy = nil
@@ -139,9 +147,10 @@ function Worker:dropJob()
     if self.job then
         local job = self.job
         self.job = nil
-        if job.node.ready then self.jobs:post(job) end
+        if (job.node and job.node.ready) or (job.site and not job.site.done) then self.jobs:post(job) end
     end
     self:releaseNode()
+    self:releaseSite()
     self:releaseItem()
     self:releaseTile()
     self.path = nil
@@ -328,26 +337,51 @@ function Worker:decide()
     if self.workTime >= BREAK_AFTER_SECONDS or self.wantsBreak then
         if self:startBreak() then return end
     end
-    -- 3. Oldest job of my type
-    local job = self.jobs:take(self.roleInfo.jobType, function(j)
-        if not j.node.ready or j.node.claimedBy ~= nil or self:isIcked(j.x, j.y) then return false end
-        if self:recentlyReported(j.node) and not self.world:nodeReachable(j.node) then return false end
-        return true
-    end)
+    -- 3. Still holding something? Get it home first.
+    if self:carrying() then
+        if self:goDeliver() then return end
+        if self:carrying().kind == CARGO_FOOD and self.hunger < HUNGER_EAT_THRESHOLD then
+            self.slots[SLOT_WORK].kind = ITEM_FOOD
+            self:snack(SLOT_WORK)
+            return
+        end
+        self.decideTimer = DECIDE_INTERVAL * 4
+        return
+    end
+    -- 4. Oldest job of my type, then any build job. Foragers only pick when
+    --    there is a storage tile to bring the food to.
+    local canDoMine = self.role ~= ROLE_FORAGER or self.world:nearestFreeStorageTile(self) ~= nil
+    local function usable(j)
+        if j.node then
+            if not j.node.ready or j.node.claimedBy ~= nil or self:isIcked(j.x, j.y) then return false end
+            if self:recentlyReported(j.node) and not self.world:nodeReachable(j.node) then return false end
+            return true
+        end
+        return not j.site.done and j.site.claimedBy == nil and self.world:siteReachable(j.site)
+    end
+    local job = canDoMine and self.jobs:take(self.roleInfo.jobType, usable) or nil
+    if not job then job = self.jobs:take('build', usable) end
     if job then
         self.job = job
-        local spot = self.world:approachTile(job.node)
+        local target = job.node or job.site
+        local spot
+        if job.node then
+            spot = self.world:approachTile(job.node)
+        else
+            spot = self.world:siteApproachTile(job.site)
+        end
         if not spot then
-            self:complain('blocked', job.node)
+            if job.node then self:complain('blocked', job.node) else self:dropJob(); self.state = 'idle' end
             return
         end
         local path = self:pathTo(spot.x, spot.y)
         if path then
-            job.node.claimedBy = self
+            target.claimedBy = self
             self.targetNode = job.node
+            self.targetSite = job.site
             self:setPath(path, 'work')
         else
-            self:complain('blocked', job.node)
+            if job.node then self:complain('blocked', job.node) else self:dropJob() end
         end
         return
     end
@@ -375,6 +409,14 @@ function Worker:followPath(dt)
         self.state = 'idle'
         return
     end
+    if self.goal == 'work' and self.targetSite and (self.targetSite.done or self.targetSite.claimedBy ~= self) then
+        self:releaseSite()
+        self.job = nil
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        return
+    end
     if self.goal == 'fetch' and self.targetItem and self.world:get(self.targetItem.x, self.targetItem.y).item ~= self.targetItem then
         self:releaseItem()
         self.path = nil
@@ -385,7 +427,12 @@ function Worker:followPath(dt)
     end
     self.walkTime = self.walkTime + dt
     if self.walkTime > WORKER_PATIENCE and (self.goal == 'work' or self.goal == 'eat') then
-        self:complain('slow', self.targetNode)
+        if self.targetNode then
+            self:complain('slow', self.targetNode)
+        else
+            self:dropJob()
+            self.state = 'idle'
+        end
         return
     end
     local node = self.path and self.path[self.pathIndex]
@@ -418,7 +465,7 @@ function Worker:goDeliver()
     if cargo.kind == CARGO_FOOD then
         local spot = self.world:nearestFreeStorageTile(self)
         if not spot then
-            self:say('no room!')
+            self:say('no storage', 1.5)
             return false
         end
         self.world:reserveTile(spot.x, spot.y, self)
@@ -449,6 +496,9 @@ function Worker:deliverHere()
         end
         self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.fruit)
         self:releaseTile()
+    end
+    if cargo.kind ~= CARGO_FOOD then
+        self.world:addStock(cargo.kind, 1)
     end
     self.slots[SLOT_WORK] = nil
     self.scoring:addDelivery(cargo.kind)
@@ -490,7 +540,11 @@ function Worker:arrive()
         self:say('break', 2)
     elseif self.goal == 'work' then
         self.state = 'working'
-        self.stateTimer = self.roleInfo.actionSeconds
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then
+            self.stateTimer = BUILD_SECONDS
+        else
+            self.stateTimer = self.roleInfo.actionSeconds
+        end
     elseif self.goal == 'deliver' then
         self:deliverHere()
     else
@@ -512,13 +566,19 @@ function Worker:finishAction()
         self:stepOff()
     elseif self.state == 'working' then
         local cargo = nil
-        if self.targetNode and self.targetNode.ready then
+        if self.targetSite and not self.targetSite.done then
+            local site = self.targetSite
+            local kind = self.world:completeSite(site)
+            if kind then cargo = { kind = kind, fruit = 1 } end
+            self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
+        elseif self.targetNode and self.targetNode.ready then
             local node = self.targetNode
             local kind = self.world:harvestNode(node)
             cargo = { kind = kind, fruit = node.fruit }
             self:emit('work', node.kind)
         end
         self:releaseNode()
+        self:releaseSite()
         self.job = nil
         if cargo then
             self.slots[SLOT_WORK] = cargo
@@ -584,7 +644,10 @@ function Worker:describeState()
     if self.state == 'sulking' then return 'Complaining' end
     if self.state == 'eating' then return 'Eating' end
     if self.state == 'breaking' then return 'On a break' end
-    if self.state == 'working' then return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2) end
+    if self.state == 'working' then
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
+        return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
+    end
     if self.state == 'walking' then
         if self.goal == 'deliver' then
             local c = self:carrying()
@@ -593,7 +656,10 @@ function Worker:describeState()
         if self.goal == 'eat' then return 'Going to eat' end
         if self.goal == 'fetch' then return 'Fetching a snack from storage' end
         if self.goal == 'break' then return 'Heading to the break room' end
-        if self.goal == 'work' then return 'Going ' .. self.roleInfo.verb end
+        if self.goal == 'work' then
+            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind end
+            return 'Going ' .. self.roleInfo.verb
+        end
         return 'Wandering'
     end
     return 'Idle'

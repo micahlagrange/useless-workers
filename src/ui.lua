@@ -31,16 +31,16 @@ function UI.new()
     }
     self.icons = {
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
-        dig = love.graphics.newImage('assets/images/ui/dig_icon.png'),
-        explode = love.graphics.newImage('assets/images/ui/explod_btn.png'),
-        line = love.graphics.newImage('assets/images/ui/line_btn.png'),
+        mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
+        storage = love.graphics.newImage('assets/images/ui/reload_button.png'),
+        bridge = love.graphics.newImage('assets/images/ui/line_btn.png'),
         memo = love.graphics.newImage('assets/images/ui/seed_button.png'),
     }
     self.cursors = {
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
-        dig = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
-        explode = love.graphics.newImage('assets/images/ui/explod_cursor.png'),
-        line = love.graphics.newImage('assets/images/ui/line_cursor.png'),
+        mine = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
+        storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
+        bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
         memo = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
     }
     self.alerts = {}
@@ -133,10 +133,11 @@ function UI:drawTopBar(game)
     local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
     item('FED', fed .. '%', fed < 35 and C.warn or C.text)
     item('OUTPUT', tostring(s.output))
-    local stored = game.world:storedCount(ITEM_FOOD)
-    item('STORED FOOD', tostring(stored), stored == 0 and C.warn or C.text)
+    local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
+    item('FOOD', stored .. '/' .. cap, cap == 0 and C.warn or C.text)
+    item('LOGS', tostring(game.world.stock.logs), C.good)
+    item('GOLD', tostring(game.world.stock.gold), C.good)
     item('COMPLAINTS', tostring(s.complaints), s.complaints > 0 and C.warn or C.text)
-    item('BUDGET', tostring(s.budget), s.budget == 0 and C.warn or C.good)
     local right = 'SEED ' .. tostring(game.seedString) .. '   M mute'
     setColor(C.dim)
     love.graphics.print(right, WINDOW_WIDTH - self.fonts.hud:getWidth(right) - 16, 12)
@@ -181,9 +182,7 @@ function UI:drawBottomBar(game)
         love.graphics.print(ABILITY_LABEL[b.tool], b.x + 62, b.y + 8)
         love.graphics.setFont(self.fonts.small)
         setColor(C.dim)
-        local cost = abilities:cost(b.tool)
-        local costText = cost == 0 and 'free' or ('cost ' .. cost .. (b.tool == ABILITY_LINE and '/tile' or ''))
-        love.graphics.print(costText, b.x + 62, b.y + 30)
+        love.graphics.print(abilities:costText(b.tool), b.x + 62, b.y + 30)
         love.graphics.print('[' .. b.key .. ']', b.x + 62, b.y + 44)
     end
     -- right side: selected worker or hints
@@ -212,7 +211,7 @@ function UI:drawBottomBar(game)
     else
         love.graphics.setFont(self.fonts.small)
         setColor(C.dim)
-        love.graphics.print('WASD or right-drag: pan   wheel: zoom   1-5: tools', px, py + 6)
+        love.graphics.print('WASD or right-drag: pan   wheel: zoom   1-5: tools   MINE: drag over stone', px, py + 6)
         love.graphics.print('SELECT then click a morphi to see who is whining', px, py + 24)
         love.graphics.print('ESC: quit to title', px, py + 42)
     end
@@ -255,7 +254,7 @@ function UI:panel(w, h)
 end
 
 function UI:drawReport(report, scoring)
-    local x, y = self:panel(640, 420)
+    local x, y = self:panel(640, 400)
     self:centered('QUARTERLY REPORT  Q' .. report.quarter, y + 24, self.fonts.big)
     love.graphics.setFont(self.fonts.hud)
     local rows = {
@@ -264,7 +263,6 @@ function UI:drawReport(report, scoring)
         { 'Complaints', tostring(report.complaints) },
         { 'Attrition', tostring(report.attrition) },
         { 'Hires next quarter', '+' .. report.hires },
-        { 'Budget added', '+' .. report.budgetAdded },
     }
     local ry = y + 90
     for _, row in ipairs(rows) do
@@ -304,7 +302,7 @@ function UI:drawTitle(title, highScore)
     self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), 500, self.fonts.hud)
     self:centered('ENTER or click to start', 570, self.fonts.big, C.good)
     self:centered('LEFT / RIGHT: difficulty     M: mute', 620, self.fonts.small, C.dim)
-    self:centered('Pupper forages food, Twins chops logs, Cwab mines gold. Dig, blast and bridge so they can reach their work.', 660, self.fonts.small, C.dim)
+    self:centered('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine and build storage from logs.', 660, self.fonts.small, C.dim)
     self:centered('You never control a morphi. That is the whole problem. Gold is worth 3, logs 2, food 1.', 680, self.fonts.small, C.dim)
 end
 

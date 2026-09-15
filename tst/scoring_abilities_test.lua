@@ -32,7 +32,6 @@ function TestScoring:testQuarterCloseAndHires()
     lu.assertEquals(r.complaints, 1)
     lu.assertEquals(r.grade, 'A')
     lu.assertEquals(r.hires, 2)
-    lu.assertEquals(s.budget, BUDGET_START + BUDGET_PER_QUARTER + 12)
     lu.assertEquals(s.quarter, 2)
     lu.assertEquals(s.output, 0)
     -- nobody quit and no output still hires one
@@ -73,47 +72,64 @@ function TestAbilities:setUp()
         'BB.~~..........',
         'BB.~~..........',
     }, Rng.new(1))
-    self.scoring = Scoring.new(2)
+    self.world.stock = { logs = 4, gold = 2 }
     self.jobs = Jobs.new()
     self.effects = {}
-    self.abilities = Abilities.new(self.world, self.scoring, self.jobs, function(name) self.effects[#self.effects + 1] = name end)
+    self.abilities = Abilities.new(self.world, self.jobs, function(name) self.effects[#self.effects + 1] = name end)
 end
-function TestAbilities:testDigCostsBudget()
-    self.abilities:select(ABILITY_DIG)
-    lu.assertFalse((self.abilities:use(1, 1)))   -- grass
-    lu.assertTrue((self.abilities:use(3, 2)))
-    lu.assertEquals(self.scoring.budget, BUDGET_START - 1)
-    lu.assertEquals(self.effects[1], 'dig')
-    self.scoring.budget = 0
-    local ok, why = self.abilities:use(3, 3)
+function TestAbilities:testMineDesignationPostsJobsAndIsFree()
+    self.abilities:select(ABILITY_MINE)
+    lu.assertFalse((self.abilities:use(1, 1)))              -- grass
+    lu.assertTrue((self.abilities:designateMine(3, 1, 5, 3)))  -- the ring around the bush
+    lu.assertEquals(#self.world:sitesOfKind(SITE_MINE), 8)
+    lu.assertEquals(self.jobs:count('mine'), 8)
+    lu.assertEquals(self.world.stock.logs, 4)
+    lu.assertEquals(self.effects[1], 'mine')
+    -- dragging from a marked tile clears marks
+    lu.assertTrue((self.abilities:designateMine(3, 1, 3, 3)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_MINE), 5)
+    lu.assertEquals(self.jobs:count('mine'), 5)
+    lu.assertNil(self.world:get(3, 2).site)
+end
+function TestAbilities:testStorageSiteCostsLogs()
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals(self.world.stock.logs, 2)
+    lu.assertEquals(self.jobs:count('build'), 1)
+    lu.assertEquals(self.world:get(3, 4).site.kind, SITE_STORAGE)
+    local ok, why = self.abilities:use(3, 4)                 -- already marked
     lu.assertFalse(ok)
-    lu.assertStrContains(why, 'budget')
+    lu.assertTrue((self.abilities:use(6, 1)))
+    lu.assertEquals(self.world.stock.logs, 0)
+    ok, why = self.abilities:use(7, 1)
+    lu.assertFalse(ok)
+    lu.assertStrContains(why, 'logs')
+    ok, why = self.abilities:use(1, 4)                       -- break room furniture
+    lu.assertFalse(ok)
 end
-function TestAbilities:testExplodeOpensPocket()
-    self.abilities:select(ABILITY_EXPLODE)
-    lu.assertFalse(self.world:isReachable(4, 2))
-    lu.assertTrue((self.abilities:use(4, 2)))
-    lu.assertEquals(self.scoring.budget, BUDGET_START - 4)
-    lu.assertTrue(self.world:isReachable(4, 2))
-    lu.assertEquals(self.world:get(4, 2).type, TILE_GRASS) -- the bush tile itself was grass
-end
-function TestAbilities:testBridgeAllOrNothing()
-    self.abilities:select(ABILITY_LINE)
+function TestAbilities:testBridgeSitesAllOrNothing()
+    self.abilities:select(ABILITY_BRIDGE)
     local ok, why = self.abilities:useLine(1, 1, 3, 1)
     lu.assertFalse(ok)
     lu.assertStrContains(why, 'water')
-    self.scoring.budget = 1
+    self.world.stock.logs = 1
     ok = self.abilities:useLine(3, 4, 6, 4)
     lu.assertFalse(ok)
-    lu.assertEquals(self.world:get(4, 4).type, TILE_WATER)
-    self.scoring.budget = 2
+    lu.assertNil(self.world:get(4, 4).site)
+    self.world.stock.logs = 2
     lu.assertTrue((self.abilities:useLine(3, 4, 6, 4)))
-    lu.assertEquals(self.scoring.budget, 0)
-    lu.assertEquals(self.world:get(4, 4).type, TILE_BRIDGE)
+    lu.assertEquals(self.world.stock.logs, 0)
+    lu.assertEquals(self.world:get(4, 4).site.kind, SITE_BRIDGE)
+    lu.assertEquals(self.world:get(5, 4).site.kind, SITE_BRIDGE)
+    lu.assertEquals(self.jobs:count('build'), 2)
+    -- completing the sites lays the bridge
+    self.world:completeSite(self.world:get(4, 4).site)
+    self.world:completeSite(self.world:get(5, 4).site)
     lu.assertEquals(self.world:get(5, 4).type, TILE_BRIDGE)
     lu.assertTrue(self.world:isReachable(6, 4))
+    lu.assertEquals(#self.world.sites, 0)
 end
-function TestAbilities:testMemoPrioritizes()
+function TestAbilities:testMemoCostsGoldAndPrioritizes()
     local bush = self.world.nodes[1]
     local other = self.world:addNode(NODE_BUSH, 15, 1); other.ready = true -- outside the memo radius
     self.jobs:postNode(other)
@@ -121,7 +137,7 @@ function TestAbilities:testMemoPrioritizes()
     self.abilities:select(ABILITY_MEMO)
     lu.assertTrue((self.abilities:use(4, 2)))
     lu.assertEquals(self.jobs:take('forage').node, bush)
-    lu.assertEquals(self.scoring.budget, BUDGET_START - 2)
+    lu.assertEquals(self.world.stock.gold, 1)
 end
 
 TestHighscore = {}

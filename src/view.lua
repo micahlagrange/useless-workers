@@ -188,6 +188,41 @@ function View:drawNodes(clock)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Built storage tiles: a wooden pallet on the ground.
+function View:drawStorage()
+    for _, st in ipairs(self.world:storageTiles()) do
+        local px, py = (st.x - 1) * TILE_SIZE, (st.y - 1) * TILE_SIZE
+        love.graphics.setColor(0.55, 0.42, 0.24)
+        love.graphics.rectangle('fill', px + 2, py + 3, 12, 10)
+        love.graphics.setColor(0.72, 0.56, 0.32)
+        love.graphics.rectangle('fill', px + 3, py + 4, 10, 2)
+        love.graphics.rectangle('fill', px + 3, py + 8, 10, 2)
+        love.graphics.setColor(0.35, 0.26, 0.14)
+        love.graphics.rectangle('line', px + 2.5, py + 3.5, 11, 9)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- Designations: orange marks on stone to mine, dashed frames on build sites.
+function View:drawSites(clock)
+    local pulse = 0.55 + 0.25 * math.sin((clock or 0) * 4)
+    love.graphics.setLineWidth(1)
+    for _, site in ipairs(self.world.sites) do
+        local px, py = (site.x - 1) * TILE_SIZE, (site.y - 1) * TILE_SIZE
+        if site.kind == SITE_MINE then
+            love.graphics.setColor(1, 0.6, 0.2, site.claimedBy and 0.9 or pulse)
+            love.graphics.rectangle('line', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
+            love.graphics.line(px + 4, py + 4, px + 12, py + 12)
+            love.graphics.line(px + 12, py + 4, px + 4, py + 12)
+        else
+            love.graphics.setColor(0.95, 0.9, 0.5, site.claimedBy and 0.95 or pulse)
+            love.graphics.rectangle('line', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
+            love.graphics.rectangle('fill', px + 6, py + 6, 4, 4)
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 -- Stored food sits on the ground near the break room, one item per tile.
 function View:drawItems(clock)
     for _, item in ipairs(self.world.items) do

@@ -18,7 +18,6 @@ function Scoring.new(difficultyIndex)
     self.fedSum = 0
     self.fedCount = 0
     self.fedTimer = 0
-    self.budget = BUDGET_START
     self.lifetimeOutput = 0
     self.totalComplaints = 0
     self.totalQuits = 0
@@ -55,16 +54,6 @@ end
 function Scoring:addQuit()
     self.quits = self.quits + 1
     self.totalQuits = self.totalQuits + 1
-end
-
-function Scoring:canAfford(cost)
-    return self.budget >= cost
-end
-
-function Scoring:spend(cost)
-    if not self:canAfford(cost) then return false end
-    self.budget = self.budget - cost
-    return true
 end
 
 -- Call once per second with the average hunger of working staff.
@@ -118,10 +107,8 @@ function Scoring:closeQuarter(workerCount)
         attrition = self.quits,
         grade = Scoring.grade(self.output, self.complaints, self.quits),
         hires = self:hiresFor(self.output, self.quits, workerCount),
-        budgetAdded = BUDGET_PER_QUARTER + self.output,
     }
     self.reports[#self.reports + 1] = report
-    self.budget = self.budget + report.budgetAdded
     self.output = 0
     self.delivered = { food = 0, logs = 0, gold = 0 }
     self.complaints = 0
