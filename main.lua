@@ -61,9 +61,15 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
+    elseif name == 'lowmorale' then
+        ui:alert(worker.name .. ' is fed up and close to quitting.')
     elseif name == 'quit' then
         Audio.playSFX('quit')
-        ui:alert(worker.name .. ' quit. Starved on the job.')
+        if data == 'morale' then
+            ui:alert(worker.name .. ' quit. Too many complaints, too little care.')
+        else
+            ui:alert(worker.name .. ' quit. Starved on the job.')
+        end
     end
 end
 
@@ -269,7 +275,7 @@ end
 function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
-    if state == 'playing' then
+    if state == 'playing' or state == 'units' then
         updatePlaying(dt)
         ui:update(dt)
     elseif state == 'report' then
@@ -287,6 +293,7 @@ local function drawWorld()
     game.view:drawWorld()
     game.view:drawBreakroom()
     game.view:drawStorage()
+    game.view:drawBeds()
     game.view:drawNodes(game.clock)
     game.view:drawItems(game.clock)
     game.view:drawSites(game.clock)
@@ -346,6 +353,8 @@ function love.draw()
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
+    elseif state == 'units' then
+        ui:drawUnits(game, game.view)
     elseif state == 'playing' then
         local mx, my = love.mouse.getPosition()
         if game.lineStart and game.lineCost and game.abilities.selected == ABILITY_BRIDGE then
@@ -364,6 +373,11 @@ local function startFromTitle()
     title.editingSeed = false
     if title.seed == '' then title.seed = DEFAULT_SEED end
     newGame(title.seed, title.difficultyIndex)
+end
+
+function closeUnits()
+    state = 'playing'
+    love.mouse.setVisible(false)
 end
 
 function love.mousepressed(x, y, button)
@@ -386,6 +400,21 @@ function love.mousepressed(x, y, button)
     elseif state == 'confirmquit' then
         state = 'playing'
         love.mouse.setVisible(false)
+        return
+    elseif state == 'units' then
+        if button == 1 then
+            local w = ui:unitButtonAt(x, y)
+            if w then
+                game.selectedWorker = w
+                game.follow = true
+                game.abilities:select(ABILITY_SELECT)
+                ui:toast('Following ' .. w.name)
+                Audio.playSFX('click')
+                closeUnits()
+            elseif not ui:insideUnitPanel(x, y) then
+                closeUnits()
+            end
+        end
         return
     end
     -- playing
@@ -492,10 +521,15 @@ function love.keypressed(key)
             else
                 ui:toast('Select a morphi first (SELECT tool, then click one)')
             end
+        elseif key == 'u' then
+            state = 'units'
+            love.mouse.setVisible(true)
         elseif key == 'escape' then
             state = 'confirmquit'
             love.mouse.setVisible(true)
         end
+    elseif state == 'units' then
+        if key == 'u' or key == 'escape' then closeUnits() end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()

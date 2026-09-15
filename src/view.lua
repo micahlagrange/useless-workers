@@ -189,16 +189,44 @@ function View:drawNodes(clock)
 end
 
 -- Built storage tiles: a wooden pallet on the ground.
+-- Storage bins drawn 2.5D so they read as bins: a front face, a right side,
+-- a light rim and a dark open top. Food delivered to a bin sits inside it.
 function View:drawStorage()
     for _, st in ipairs(self.world:storageTiles()) do
         local px, py = (st.x - 1) * TILE_SIZE, (st.y - 1) * TILE_SIZE
+        love.graphics.setColor(0, 0, 0, 0.2)
+        love.graphics.ellipse('fill', px + 8, py + 14, 7, 2)
+        -- front face with two slats
         love.graphics.setColor(0.55, 0.42, 0.24)
-        love.graphics.rectangle('fill', px + 2, py + 3, 12, 10)
-        love.graphics.setColor(0.72, 0.56, 0.32)
-        love.graphics.rectangle('fill', px + 3, py + 4, 10, 2)
-        love.graphics.rectangle('fill', px + 3, py + 8, 10, 2)
-        love.graphics.setColor(0.35, 0.26, 0.14)
-        love.graphics.rectangle('line', px + 2.5, py + 3.5, 11, 9)
+        love.graphics.rectangle('fill', px + 2, py + 7, 10, 7)
+        love.graphics.setColor(0.7, 0.55, 0.32)
+        love.graphics.rectangle('fill', px + 2, py + 9, 10, 1)
+        love.graphics.rectangle('fill', px + 2, py + 12, 10, 1)
+        -- right side, darker
+        love.graphics.setColor(0.36, 0.26, 0.14)
+        love.graphics.polygon('fill', px + 12, py + 7, px + 15, py + 4, px + 15, py + 11, px + 12, py + 14)
+        -- rim and open top
+        love.graphics.setColor(0.82, 0.66, 0.4)
+        love.graphics.polygon('fill', px + 2, py + 7, px + 5, py + 4, px + 15, py + 4, px + 12, py + 7)
+        love.graphics.setColor(0.18, 0.13, 0.07)
+        love.graphics.polygon('fill', px + 4, py + 6.5, px + 6, py + 4.6, px + 13.5, py + 4.6, px + 11.5, py + 6.5)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function View:drawBeds()
+    for _, b in ipairs(self.world.beds) do
+        local px, py = (b.x - 1) * TILE_SIZE, (b.y - 1) * TILE_SIZE
+        love.graphics.setColor(0.4, 0.28, 0.16)
+        love.graphics.rectangle('fill', px + 2, py + 1, 12, 14)
+        love.graphics.setColor(0.93, 0.9, 0.8)
+        love.graphics.rectangle('fill', px + 3, py + 2, 10, 12)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.rectangle('fill', px + 4, py + 3, 8, 3)
+        love.graphics.setColor(0.3, 0.45, 0.75)
+        love.graphics.rectangle('fill', px + 3, py + 7, 10, 7)
+        love.graphics.setColor(0.24, 0.36, 0.62)
+        love.graphics.rectangle('fill', px + 3, py + 7, 10, 1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -227,13 +255,16 @@ end
 function View:drawItems(clock)
     for _, item in ipairs(self.world.items) do
         local px, py = (item.x - 1) * TILE_SIZE, (item.y - 1) * TILE_SIZE
-        love.graphics.setColor(0, 0, 0, 0.2)
-        love.graphics.ellipse('fill', px + 8, py + 12, 5, 2)
+        local inBin = self.world:get(item.x, item.y).storage
+        if not inBin then
+            love.graphics.setColor(0, 0, 0, 0.2)
+            love.graphics.ellipse('fill', px + 8, py + 12, 5, 2)
+        end
         if item.kind == ITEM_FOOD then
             local img = self:fruitImage(item.fruit or 1)
             if img then
                 love.graphics.setColor(1, 1, 1, 1)
-                love.graphics.draw(img, px + 8, py + 8, 0, 0.6, 0.6, 8, 8)
+                love.graphics.draw(img, px + 8, inBin and (py + 6) or (py + 8), 0, inBin and 0.5 or 0.6, inBin and 0.5 or 0.6, 8, 8)
             end
         end
     end

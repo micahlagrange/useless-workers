@@ -50,7 +50,11 @@ SLOT_WORK, SLOT_PERSONAL = 1, 2
 
 -- Breaks: after this much accumulated work a morphi heads to the break room
 BREAK_AFTER_SECONDS = 45
-BREAK_SECONDS       = 8
+BREAK_SECONDS       = 8        -- resting on a break room tile or the ground
+BREAK_SECONDS_BED   = 4        -- resting in a bed
+BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break is due
+-- Every resting morphi claims its own spot: a bed, a break room tile, or a
+-- free tile next to the break room. Nobody naps on top of anybody.
 
 -- Morphis and their roles
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
@@ -72,6 +76,15 @@ WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving u
 WORKER_SULK_SECONDS    = 3
 ICK_SECONDS            = 30
 COMPLAINT_COOLDOWN     = 40     -- seconds before anyone complains about the same tree again
+-- Morale: complaints and hunger wear a morphi down; at zero it quits.
+-- Fed morphis recover slowly, and a break restores a chunk (more in a bed).
+MORALE_MAX             = 100
+MORALE_COMPLAINT_HIT   = 20
+MORALE_HUNGRY_DRAIN    = 1.5    -- per second while hunger is below the eat threshold
+MORALE_RECOVER         = 1.0    -- per second while fed
+MORALE_BREAK_BONUS     = 10
+MORALE_BED_BONUS       = 25
+MORALE_LOW             = 30     -- below this the morphi grumbles and the HUD warns
 DECIDE_INTERVAL        = 0.5
 HARVEST_SECONDS        = 0.8
 EAT_SECONDS            = 1.0
@@ -82,13 +95,15 @@ MAX_WORKERS            = 12
 ABILITY_SELECT  = 'select'
 ABILITY_MINE    = 'mine'      -- drag a rectangle over stone, miners dig it when they can reach it
 ABILITY_STORAGE = 'storage'   -- place a storage tile site, any idle morphi builds it
+ABILITY_BED     = 'bed'       -- place a bed site; a bed is a quicker, better break
 ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
 ABILITY_MEMO    = 'memo'
-ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BRIDGE, ABILITY_MEMO }
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'STORAGE', bridge = 'BRIDGE', memo = 'MEMO' }
+ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BED, ABILITY_BRIDGE, ABILITY_MEMO }
+ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'BIN', bed = 'BED', bridge = 'BRIDGE', memo = 'MEMO' }
 -- Building consumes the stockpile at the break room. Mining costs only time.
 COSTS = {
-    storage = { logs = 2 },
+    storage = { logs = 1 },
+    bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
     memo    = { gold = 1 },
 }
@@ -99,7 +114,7 @@ LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
 MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
 
-SITE_MINE, SITE_STORAGE, SITE_BRIDGE = 'mine', 'storage', 'bridge'
+SITE_MINE, SITE_STORAGE, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'bridge', 'bed'
 
 -- Economy and scoring (section 7)
 QUARTER_SECONDS     = 90

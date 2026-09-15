@@ -43,7 +43,9 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
     self.eatingSlot = nil
     self.workTime = 0         -- accumulated work since the last break
+    self.breakAfter = BREAK_AFTER_SECONDS
     self.wantsBreak = false
+    self.restSpot = nil
     self.breaksTaken = 0
     self.walkTime = 0
     self.icks = {}
@@ -55,6 +57,8 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.alive = true
     self.delivered = 0
     self.complaintCount = 0
+    self.morale = MORALE_MAX
+    self.warnedLowMorale = false
     self.onComplain = opts.onComplain
     self.onEvent = opts.onEvent
     return self
@@ -165,6 +169,10 @@ function Worker:dropJob()
     self:releaseSite()
     self:releaseArea()
     self:releaseItem()
+    if self.restSpot then
+        self.world:releaseRestSpot(self)
+        self.restSpot = nil
+    end
     self:releaseTile()
     self.path = nil
     self.goal = nil
@@ -174,21 +182,27 @@ function Worker:complain(reason, node)
     if node then node.complainedAt = self.clock end
     self.scoring:addComplaint()
     self.complaintCount = self.complaintCount + 1
+    self.morale = self.morale - MORALE_COMPLAINT_HIT
     self:say('!!')
     if node then self:ick(node.x, node.y) end
     if self.onComplain then self.onComplain(self, reason, node) end
     self:emit('complain', reason)
     self:dropJob()
+    if self.morale <= 0 then
+        self.morale = 0
+        self:quit('morale')
+        return
+    end
     self.state = 'sulking'
     self.stateTimer = WORKER_SULK_SECONDS
 end
 
-function Worker:quit()
+function Worker:quit(reason)
     self:dropJob()
     self.slots = {}
     self.scoring:addQuit()
     self:say('I QUIT', 6)
-    self:emit('quit')
+    self:emit('quit', reason or 'starved')
     self.state = 'quitting'
     local t = self:tile()
     local choices = {
@@ -231,7 +245,7 @@ end
 function Worker:stepOff()
     local t = self:tile()
     local tile = self.world:get(t.x, t.y)
-    if not tile or (not tile.item and tile.type ~= TILE_BREAKROOM) then return false end
+    if not tile or (not tile.item and not tile.bed and tile.type ~= TILE_BREAKROOM) then return false end
     local spot = self.world:freeNeighbour(t.x, t.y)
     if not spot then return false end
     local path = self:pathTo(spot.x, spot.y)
@@ -329,11 +343,21 @@ end
 function Worker:startBreak()
     self.wantsBreak = true
     if not self.slots[SLOT_PERSONAL] and self:fetchFood() then return true end
-    local path = self:pathToBreakroom()
+    return self:goRest()
+end
+
+-- Claim a rest spot of my own and walk there.
+function Worker:goRest()
+    local t = self:tile()
+    local spot = self.world:claimRestSpot(self, t.x, t.y)
+    local path = spot and self:pathTo(spot.x, spot.y)
     if path then
+        self.restSpot = spot
         self:setPath(path, 'break')
         return true
     end
+    self.world:releaseRestSpot(self)
+    self.restSpot = nil
     self.wantsBreak = false
     self.workTime = 0
     return false
@@ -347,7 +371,7 @@ function Worker:decide()
         if self:eatSomething() then return end
     end
     -- 2. Earned a break
-    if self.workTime >= BREAK_AFTER_SECONDS or self.wantsBreak then
+    if self.workTime >= self.breakAfter or self.wantsBreak then
         if self:startBreak() then return end
     end
     -- 3. Still holding something? Get it home first.
@@ -433,7 +457,7 @@ function Worker:continueArea()
         self:releaseArea()
         return false
     end
-    if self.hunger < HUNGER_EAT_THRESHOLD or self.workTime >= BREAK_AFTER_SECONDS then
+    if self.hunger < HUNGER_EAT_THRESHOLD or self.workTime >= self.breakAfter then
         self:releaseArea()
         return false
     end
@@ -591,13 +615,20 @@ function Worker:arrive()
         if self.hunger < HUNGER_EAT_THRESHOLD and self:snackInPocket() then
             self:snack(SLOT_PERSONAL)
         elseif self.wantsBreak then
-            local path = self:pathToBreakroom()
-            if path then self:setPath(path, 'break') else self.wantsBreak = false; self.workTime = 0 end
+            self:goRest()
         end
     elseif self.goal == 'break' then
+        local t = self:tile()
+        local tile = self.world:get(t.x, t.y)
+        if tile.restingBy ~= nil and tile.restingBy ~= self then
+            -- somebody took my spot, find another
+            if self:goRest() then return end
+        end
+        tile.restingBy = self
         self.state = 'breaking'
-        self.stateTimer = BREAK_SECONDS
-        self:say('break', 2)
+        local inBed = self.restSpot ~= nil and self.restSpot.bed
+        self.stateTimer = inBed and BREAK_SECONDS_BED or BREAK_SECONDS
+        self:say(inBed and 'zzz' or 'break', 2)
     elseif self.goal == 'work' then
         self.state = 'working'
         if self.targetSite then self.targetSite.working = true end
@@ -618,10 +649,15 @@ function Worker:finishAction()
     if self.state == 'eating' then
         self:finishEating()
     elseif self.state == 'breaking' then
+        local inBed = self.restSpot ~= nil and self.restSpot.bed
         self.workTime = 0
+        self.breakAfter = BREAK_AFTER_SECONDS * (inBed and BED_REST_BONUS or 1)
         self.wantsBreak = false
         self.breaksTaken = self.breaksTaken + 1
-        self:emit('break')
+        self.morale = math.min(MORALE_MAX, self.morale + (inBed and MORALE_BED_BONUS or MORALE_BREAK_BONUS))
+        self.world:releaseRestSpot(self)
+        self.restSpot = nil
+        self:emit('break', inBed and 'bed' or 'floor')
         self.state = 'idle'
         self.decideTimer = 0
         self:stepOff()
@@ -660,6 +696,37 @@ function Worker:accumulateWork(dt)
     end
 end
 
+-- Hunger grinds morale down, a full belly slowly restores it. Returns true
+-- if the morphi has had enough and quit.
+function Worker:updateMorale(dt)
+    if self.hunger < HUNGER_EAT_THRESHOLD then
+        self.morale = self.morale - MORALE_HUNGRY_DRAIN * dt
+    elseif self.morale > 0 then
+        self.morale = math.min(MORALE_MAX, self.morale + MORALE_RECOVER * dt)
+    end
+    if self.morale <= 0 then
+        self.morale = 0
+        self:quit('morale')
+        return true
+    end
+    if self.morale < MORALE_LOW then
+        if not self.warnedLowMorale then
+            self.warnedLowMorale = true
+            self:say('ugh', 3)
+            self:emit('lowmorale')
+        end
+    elseif self.morale > MORALE_LOW + 15 then
+        self.warnedLowMorale = false
+    end
+    return false
+end
+
+function Worker:mood()
+    if self.morale < MORALE_LOW then return 'fed up' end
+    if self.morale < 65 then return 'grumpy' end
+    return 'fine'
+end
+
 function Worker:update(dt, clock)
     self.clock = clock or (self.clock + dt)
     self.animTime = self.animTime + dt
@@ -681,9 +748,10 @@ function Worker:update(dt, clock)
     self.hunger = self.hunger - self.drain * dt
     if self.hunger <= 0 then
         self.hunger = 0
-        self:quit()
+        self:quit('starved')
         return
     end
+    if self:updateMorale(dt) then return end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
@@ -707,7 +775,7 @@ function Worker:describeState()
     if self.state == 'quitting' then return 'Quitting' end
     if self.state == 'sulking' then return 'Complaining' end
     if self.state == 'eating' then return 'Eating' end
-    if self.state == 'breaking' then return 'On a break' end
+    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'On a break' end
     if self.state == 'working' then
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
         return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
@@ -719,7 +787,7 @@ function Worker:describeState()
         end
         if self.goal == 'eat' then return 'Going to eat' end
         if self.goal == 'fetch' then return 'Fetching a snack from storage' end
-        if self.goal == 'break' then return 'Heading to the break room' end
+        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to the break room' end
         if self.goal == 'work' then
             if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind end
             return 'Going ' .. self.roleInfo.verb

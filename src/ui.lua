@@ -36,7 +36,6 @@ function UI.new()
     self.icons = {
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
         mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
-        storage = love.graphics.newImage('assets/images/ui/reload_button.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_btn.png'),
         memo = love.graphics.newImage('assets/images/ui/seed_button.png'),
     }
@@ -44,13 +43,15 @@ function UI.new()
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         mine = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
         storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
+        bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
         memo = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
     }
     self.alerts = {}
     self.toastText, self.toastTtl = nil, 0
+    self.unitButtons = {}
     self.buttons = {}
-    local bw, bh, gap = 148, 60, 10
+    local bw, bh, gap = 126, 60, 8
     local y = WINDOW_HEIGHT - BOTTOM_BAR_H + 10
     for i, tool in ipairs(ABILITY_ORDER) do
         self.buttons[#self.buttons + 1] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = y, w = bw, h = bh, key = tostring(i) }
@@ -179,6 +180,32 @@ function UI:iconComplaint(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.56, y + s * 0.6, s * 0.14, s * 0.1)
 end
 
+-- An open-topped bin drawn 2.5D: front face, right side, light rim, dark inside.
+function UI:iconBin(x, y, s)
+    love.graphics.setColor(0.55, 0.42, 0.24)
+    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.4, s * 0.6, s * 0.5)
+    love.graphics.setColor(0.38, 0.28, 0.15)
+    love.graphics.polygon('fill', x + s * 0.7, y + s * 0.4, x + s * 0.9, y + s * 0.2, x + s * 0.9, y + s * 0.7, x + s * 0.7, y + s * 0.9)
+    love.graphics.setColor(0.8, 0.64, 0.38)
+    love.graphics.polygon('fill', x + s * 0.1, y + s * 0.4, x + s * 0.3, y + s * 0.2, x + s * 0.9, y + s * 0.2, x + s * 0.7, y + s * 0.4)
+    love.graphics.setColor(0.2, 0.14, 0.08)
+    love.graphics.polygon('fill', x + s * 0.2, y + s * 0.38, x + s * 0.34, y + s * 0.25, x + s * 0.82, y + s * 0.25, x + s * 0.66, y + s * 0.38)
+    love.graphics.setColor(0.72, 0.56, 0.32)
+    love.graphics.rectangle('fill', x + s * 0.14, y + s * 0.55, s * 0.52, s * 0.06)
+    love.graphics.rectangle('fill', x + s * 0.14, y + s * 0.72, s * 0.52, s * 0.06)
+end
+
+function UI:iconBed(x, y, s)
+    love.graphics.setColor(0.4, 0.28, 0.16)
+    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.8, s * 0.65)
+    love.graphics.setColor(0.93, 0.9, 0.8)
+    love.graphics.rectangle('fill', x + s * 0.16, y + s * 0.26, s * 0.68, s * 0.53)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.rectangle('fill', x + s * 0.2, y + s * 0.3, s * 0.2, s * 0.45)
+    love.graphics.setColor(0.3, 0.45, 0.75)
+    love.graphics.rectangle('fill', x + s * 0.44, y + s * 0.3, s * 0.4, s * 0.45)
+end
+
 function UI:iconForKind(kind, x, y, s)
     if kind == ITEM_FOOD or kind == CARGO_FOOD then self:iconFood(x, y, s)
     elseif kind == CARGO_LOGS then self:iconLog(x, y, s)
@@ -274,15 +301,24 @@ function UI:drawBottomBar(game)
             love.graphics.rectangle('line', b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1)
         end
         local icon = self.icons[b.tool]
-        if affordable then love.graphics.setColor(1, 1, 1, 1) else love.graphics.setColor(0.4, 0.4, 0.4, 1) end
-        love.graphics.draw(icon, b.x + 8, b.y + 6, 0, 3, 3)
-        love.graphics.setFont(self.fonts.hud)
-        setColor(affordable and C.text or C.dim)
-        love.graphics.print(ABILITY_LABEL[b.tool], b.x + 62, b.y + 8)
+        if icon then
+            if affordable then love.graphics.setColor(1, 1, 1, 1) else love.graphics.setColor(0.4, 0.4, 0.4, 1) end
+            love.graphics.draw(icon, b.x + 6, b.y + 6, 0, 2, 2)
+        elseif b.tool == ABILITY_STORAGE then
+            self:iconBin(b.x + 6, b.y + 6, 32)
+        elseif b.tool == ABILITY_BED then
+            self:iconBed(b.x + 6, b.y + 6, 32)
+        end
+        if not affordable and not icon then
+            love.graphics.setColor(0.1, 0.1, 0.1, 0.55)
+            love.graphics.rectangle('fill', b.x + 6, b.y + 6, 32, 32)
+        end
+        local lx = b.x + 44
+        self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
+        self:printFit(abilities:costText(b.tool), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
         love.graphics.setFont(self.fonts.small)
         setColor(C.dim)
-        love.graphics.print(abilities:costText(b.tool), b.x + 62, b.y + 30)
-        love.graphics.print('[' .. b.key .. ']', b.x + 62, b.y + 44)
+        love.graphics.print('[' .. b.key .. ']', lx, b.y + 44)
     end
     -- right side: selected worker or hints
     local px = WINDOW_WIDTH - 430
@@ -321,11 +357,17 @@ function UI:drawBottomBar(game)
         if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
         love.graphics.rectangle('fill', px + pw - 140, py + 36, fill, 10)
         setColor(C.dim)
-        love.graphics.print('F: follow', px + pw - 140, py + 50)
+        love.graphics.print('MORALE ' .. w:mood(), px + pw - 140, py + 50)
+        love.graphics.setColor(0, 0, 0, 0.6)
+        love.graphics.rectangle('fill', px + pw - 140, py + 61, 140, 6)
+        if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
+        love.graphics.rectangle('fill', px + pw - 140, py + 61, 140 * (w.morale / MORALE_MAX), 6)
+        setColor(C.dim)
+        love.graphics.print('F: follow  U: units', px + pw - 140, py + 70)
     else
         local lines = {
-            'WASD / right-drag pan, wheel zoom, 1-5 tools',
-            'MINE: drag over stone. STORAGE needs 2 logs.',
+            'WASD / right-drag pan, wheel zoom, 1-6 tools, U units',
+            'MINE: drag over stone. BIN and BED cost logs.',
             'SELECT a morphi, then F to follow it. ESC asks.',
         }
         local ly = py + 4
@@ -358,6 +400,94 @@ function UI:drawCursor(tool, mx, my)
     local img = self.cursors[tool] or self.cursors.select
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(img, mx, my, 0, 2, 2)
+end
+
+-- Units menu ------------------------------------------------------------
+
+local UNIT_ROW_H = 54
+
+-- Every living morphi at a glance: picture, name, species, role, task, hunger,
+-- and a FOLLOW button. Button rects are kept in self.unitButtons for hit tests.
+function UI:drawUnits(game, view)
+    local units = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive then units[#units + 1] = w end
+    end
+    local pw = 1000
+    local ph = 74 + #units * UNIT_ROW_H + 30
+    local x, y = self:panel(pw, ph)
+    self.unitPanel = { x = x, y = y, w = pw, h = ph }
+    self:centeredFit('UNITS  (' .. #units .. ' morphis)', y + 16, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    love.graphics.setFont(self.fonts.tiny)
+    setColor(C.dim)
+    love.graphics.print('MORPHI', x + 74, y + 56)
+    love.graphics.print('TASK', x + 330, y + 56)
+    love.graphics.print('HUNGER', x + 640, y + 56)
+    love.graphics.print('MORALE', x + 770, y + 56)
+    self.unitButtons = {}
+    local ry = y + 70
+    for _, w in ipairs(units) do
+        local selected = game.selectedWorker == w
+        if selected then
+            love.graphics.setColor(0.2, 0.23, 0.15, 1)
+            love.graphics.rectangle('fill', x + 12, ry, pw - 24, UNIT_ROW_H - 4)
+        end
+        -- picture
+        local sheet = view and view.sheets[w.sheet]
+        if sheet then
+            love.graphics.setColor(0, 0, 0, 0.5)
+            love.graphics.rectangle('fill', x + 18, ry + 2, 48, 46)
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(sheet.image, sheet.quads[1], x + 18, ry - 1, 0, 3, 3)
+        end
+        -- name, species, role
+        love.graphics.setFont(self.fonts.hud)
+        setColor(C.good)
+        love.graphics.print(w.name, x + 74, ry + 4)
+        self:printFit(w.species .. ', ' .. w.roleInfo.label:lower(), x + 74, ry + 26, 246, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        -- task
+        self:printFit(w:describeState(), x + 330, ry + 8, 296, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        -- hunger
+        love.graphics.setColor(0, 0, 0, 0.6)
+        love.graphics.rectangle('fill', x + 640, ry + 12, 120, 12)
+        local frac = w.hunger / HUNGER_MAX
+        if frac > 0.6 then setColor(C.good)
+        elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then love.graphics.setColor(0.95, 0.75, 0.3)
+        else setColor(C.warn) end
+        love.graphics.rectangle('fill', x + 640, ry + 12, 120 * frac, 12)
+        self:printFit(math.floor(w.hunger + 0.5) .. '%', x + 640, ry + 28, 120, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        -- morale
+        love.graphics.setColor(0, 0, 0, 0.6)
+        love.graphics.rectangle('fill', x + 770, ry + 12, 80, 12)
+        local mf = w.morale / MORALE_MAX
+        if mf > 0.6 then setColor(C.good) elseif mf > MORALE_LOW / MORALE_MAX then love.graphics.setColor(0.95, 0.75, 0.3) else setColor(C.warn) end
+        love.graphics.rectangle('fill', x + 770, ry + 12, 80 * mf, 12)
+        self:printFit(w:mood(), x + 770, ry + 28, 80, 'left', mf > MORALE_LOW / MORALE_MAX and C.dim or C.warn, { self.fonts.small, self.fonts.tiny })
+        -- follow button
+        local following = game.follow and selected
+        local bx, by, bw, bh = x + pw - 130, ry + 8, 112, 30
+        if following then love.graphics.setColor(0.28, 0.32, 0.2, 1) else love.graphics.setColor(0.16, 0.17, 0.14, 1) end
+        love.graphics.rectangle('fill', bx, by, bw, bh)
+        setColor(following and C.accent or C.dim)
+        love.graphics.rectangle('line', bx + 0.5, by + 0.5, bw - 1, bh - 1)
+        self:printFit(following and 'FOLLOWING' or 'FOLLOW', bx, by + 8, bw, 'center', following and C.good or C.text, { self.fonts.small, self.fonts.tiny })
+        self.unitButtons[#self.unitButtons + 1] = { worker = w, x = bx, y = by, w = bw, h = bh }
+        ry = ry + UNIT_ROW_H
+    end
+    self:centeredFit('U or ESC: close     click FOLLOW to watch a morphi', y + ph - 24, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function UI:unitButtonAt(mx, my)
+    for _, b in ipairs(self.unitButtons) do
+        if mx >= b.x and mx <= b.x + b.w and my >= b.y and my <= b.y + b.h then return b.worker end
+    end
+    return nil
+end
+
+function UI:insideUnitPanel(mx, my)
+    local p = self.unitPanel
+    return p and mx >= p.x and mx <= p.x + p.w and my >= p.y and my <= p.y + p.h
 end
 
 -- Panels ----------------------------------------------------------------

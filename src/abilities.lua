@@ -24,6 +24,7 @@ end
 
 function Abilities:costText(tool)
     if tool == ABILITY_STORAGE then return COSTS.storage.logs .. ' logs' end
+    if tool == ABILITY_BED then return COSTS.bed.logs .. ' logs' end
     if tool == ABILITY_BRIDGE then return COSTS.bridge.logs .. ' log/tile' end
     if tool == ABILITY_MEMO then return COSTS.memo.gold .. ' gold' end
     if tool == ABILITY_MINE then return 'drag, free' end
@@ -32,6 +33,7 @@ end
 
 function Abilities:canAfford(tool)
     if tool == ABILITY_STORAGE then return self.world:canAfford(COSTS.storage) end
+    if tool == ABILITY_BED then return self.world:canAfford(COSTS.bed) end
     if tool == ABILITY_BRIDGE then return self.world:canAfford(COSTS.bridge) end
     if tool == ABILITY_MEMO then return self.world:canAfford(COSTS.memo) end
     return true
@@ -44,15 +46,17 @@ end
 -- Click tools. Returns true when something was placed, else false and a reason.
 function Abilities:use(tx, ty)
     local tool = self.selected
-    if tool == ABILITY_STORAGE then
+    if tool == ABILITY_STORAGE or tool == ABILITY_BED then
+        local kind = (tool == ABILITY_STORAGE) and SITE_STORAGE or SITE_BED
+        local cost = COSTS[kind]
         local t = self.world:get(tx, ty)
         if not t then return false, nil end
-        if not self.world:canAfford(COSTS.storage) then return false, 'Need ' .. COSTS.storage.logs .. ' logs in the stockpile' end
-        local site, why = self.world:addSite(SITE_STORAGE, tx, ty)
-        if not site then return false, why and ('Storage ' .. why) or nil end
-        self.world:spend(COSTS.storage)
+        if not self.world:canAfford(cost) then return false, 'Need ' .. cost.logs .. ' logs in the stockpile' end
+        local site, why = self.world:addSite(kind, tx, ty)
+        if not site then return false, why and (kind:sub(1, 1):upper() .. kind:sub(2) .. ' ' .. why) or nil end
+        self.world:spend(cost)
         self.jobs:postSite(site)
-        self:effect('site', { kind = SITE_STORAGE, x = tx, y = ty })
+        self:effect('site', { kind = kind, x = tx, y = ty })
         return true
     elseif tool == ABILITY_MINE then
         return self:designateMine(tx, ty, tx, ty)

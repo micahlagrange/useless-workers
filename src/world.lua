@@ -6,7 +6,7 @@ local World = {}
 World.__index = World
 
 local function newTile(kind, altitude)
-    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, site = nil, storage = false, reservedBy = nil, colorSeed = 0.5 }
+    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, site = nil, storage = false, bed = false, restingBy = nil, reservedBy = nil, colorSeed = 0.5 }
 end
 
 function World.new(w, h, rng)
@@ -23,6 +23,7 @@ function World.new(w, h, rng)
     self.areas = {}
     self.nextAreaId = 1
     self.storageList = {}
+    self.beds = {}
     self.stock = { logs = 0, gold = 0 }
     self.version = 0
     self.breakroom = nil
@@ -86,7 +87,7 @@ function World.generate(seedNumber, rng, w, h)
 end
 
 -- Hand built worlds for tests.
--- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' built storage tile
+-- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' built storage tile  'd' bed
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
@@ -94,6 +95,7 @@ function World.fromGrid(rows, rng)
     local breakroomTiles = {}
     local nodeTiles = {}
     local storageTiles = {}
+    local bedTiles = {}
     for y = 1, h do
         for x = 1, w do
             local ch = rows[y]:sub(x, x)
@@ -110,6 +112,7 @@ function World.fromGrid(rows, rng)
             t.type = kind
             t.passable = PASSABLE[kind] or false
             if ch == 'S' then storageTiles[#storageTiles + 1] = { x = x, y = y } end
+            if ch == 'd' then bedTiles[#bedTiles + 1] = { x = x, y = y } end
         end
     end
     if #breakroomTiles > 0 then
@@ -123,6 +126,7 @@ function World.fromGrid(rows, rng)
         node.ready = true
     end
     for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y) end
+    for _, bt in ipairs(bedTiles) do self:markBed(bt.x, bt.y) end
     self.version = self.version + 1
     return self
 end
@@ -371,7 +375,7 @@ function World:randomNearbyPassable(rng, x, y, radius)
         local ny = y + rng:int(-radius, radius)
         if (nx ~= x or ny ~= y) and self:inBounds(nx, ny) and reach[nx][ny] then
             local t = self.tiles[nx][ny]
-            if not t.item and t.type ~= TILE_BREAKROOM then
+            if not t.item and not t.bed and t.type ~= TILE_BREAKROOM then
                 return { x = nx, y = ny }
             end
             fallback = fallback or { x = nx, y = ny }
@@ -386,7 +390,7 @@ function World:freeNeighbour(x, y)
     for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
         if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
             local t = self.tiles[c[1]][c[2]]
-            if not t.item and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
+            if not t.item and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
         end
     end
     return nil
@@ -600,6 +604,61 @@ function World:markStorage(x, y)
     return true
 end
 
+-- Beds and rest spots -----------------------------------------------------
+
+function World:markBed(x, y)
+    local t = self:get(x, y)
+    if not t or t.bed then return false end
+    t.bed = true
+    self.beds[#self.beds + 1] = { x = x, y = y }
+    return true
+end
+
+-- Claim somewhere to rest: a free bed first, then a free break room tile,
+-- then a free tile next to the break room. Returns {x, y, bed}.
+function World:claimRestSpot(worker, fromX, fromY)
+    local reach = self:reachableFromBreakroom()
+    local best, bestD = nil, math.huge
+    for _, b in ipairs(self.beds) do
+        local t = self.tiles[b.x][b.y]
+        if reach[b.x][b.y] and (t.restingBy == nil or t.restingBy == worker) then
+            local d = Util.manhattan(fromX, fromY, b.x, b.y)
+            if d < bestD then best, bestD = { x = b.x, y = b.y, bed = true }, d end
+        end
+    end
+    if not best and self.breakroom then
+        for _, bt in ipairs(self.breakroom.tiles) do
+            local t = self.tiles[bt.x][bt.y]
+            if reach[bt.x][bt.y] and (t.restingBy == nil or t.restingBy == worker) then
+                local d = Util.manhattan(fromX, fromY, bt.x, bt.y)
+                if d < bestD then best, bestD = { x = bt.x, y = bt.y, bed = false }, d end
+            end
+        end
+    end
+    if not best and self.breakroom then
+        for _, sp in ipairs(self:spawnTiles(2)) do
+            local t = self.tiles[sp.x][sp.y]
+            if t.type ~= TILE_BREAKROOM and not t.item and not t.storage and t.restingBy == nil then
+                best = { x = sp.x, y = sp.y, bed = false }
+                break
+            end
+        end
+    end
+    if best then
+        self:releaseRestSpot(worker)
+        self.tiles[best.x][best.y].restingBy = worker
+    end
+    return best
+end
+
+function World:releaseRestSpot(worker)
+    for x = 1, self.w do
+        for y = 1, self.h do
+            if self.tiles[x][y].restingBy == worker then self.tiles[x][y].restingBy = nil end
+        end
+    end
+end
+
 function World:storageTiles()
     return self.storageList
 end
@@ -727,8 +786,8 @@ function World:addSite(kind, x, y, area)
     if not t or t.site then return nil, 'already marked' end
     if kind == SITE_MINE then
         if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
-    elseif kind == SITE_STORAGE then
-        if not t.passable or t.type == TILE_BREAKROOM or t.item or t.node or t.storage then return nil, 'needs open ground' end
+    elseif kind == SITE_STORAGE or kind == SITE_BED then
+        if not t.passable or t.type == TILE_BREAKROOM or t.item or t.node or t.storage or t.bed then return nil, 'needs open ground' end
     elseif kind == SITE_BRIDGE then
         if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
     end
@@ -791,6 +850,8 @@ function World:completeSite(site)
         self:setType(site.x, site.y, TILE_DIRT)
     elseif site.kind == SITE_STORAGE then
         self:markStorage(site.x, site.y)
+    elseif site.kind == SITE_BED then
+        self:markBed(site.x, site.y)
     elseif site.kind == SITE_BRIDGE then
         self:setType(site.x, site.y, TILE_BRIDGE)
     end

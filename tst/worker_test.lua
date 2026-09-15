@@ -303,6 +303,80 @@ function TestWorker:testTakesABreakAfterEnoughWork()
     lu.assertTrue(self.jobs:hasJobFor(self.tree) or self.scoring.delivered.logs == 1 or w.targetNode == self.tree)
 end
 
+function TestWorker:testTwoTiredMorphisRestOnDifferentTiles()
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 6, 5))
+    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_LUMBERJACK, 6, 5))
+    b.name = 'Priya'
+    a.workTime, b.workTime = BREAK_AFTER_SECONDS, BREAK_AFTER_SECONDS
+    local sawBoth = false
+    for _ = 1, 200 do
+        run({ a, b }, self.world, self.jobs, 0.1)
+        if a.state == 'breaking' and b.state == 'breaking' then
+            sawBoth = true
+            local ta, tb = a:tile(), b:tile()
+            lu.assertFalse(ta.x == tb.x and ta.y == tb.y, 'both napping on the same tile')
+            break
+        end
+    end
+    lu.assertTrue(sawBoth, 'both should be on a break at once')
+end
+
+function TestWorker:testBedIsAShorterBetterBreak()
+    self.world:markBed(7, 2)
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 6, 5))
+    w.workTime = BREAK_AFTER_SECONDS
+    w.morale = 50
+    local napStart
+    for i = 1, 200 do
+        run({ w }, self.world, self.jobs, 0.1)
+        if w.state == 'breaking' then
+            napStart = i
+            lu.assertEquals(w:describeState(), 'Napping in a bed')
+            lu.assertEquals({ w:tile().x, w:tile().y }, { 7, 2 })
+            break
+        end
+    end
+    lu.assertNotNil(napStart, 'never got to bed')
+    run({ w }, self.world, self.jobs, BREAK_SECONDS_BED + 0.3)
+    lu.assertEquals(w.breaksTaken, 1)
+    lu.assertEquals(self.events[#self.events], 'break:bed')
+    lu.assertEquals(w.breakAfter, BREAK_AFTER_SECONDS * BED_REST_BONUS)
+    lu.assertTrue(w.morale >= 50 + MORALE_BED_BONUS - 1, 'bed should restore morale, got ' .. w.morale)
+    lu.assertNil(self.world:get(7, 2).restingBy)
+end
+
+function TestWorker:testComplaintsWearMoraleDownUntilTheyQuit()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    local hits = math.ceil(MORALE_MAX / MORALE_COMPLAINT_HIT)
+    for _ = 1, hits - 1 do w:complain('test') end
+    lu.assertTrue(w.morale > 0 and w.morale <= MORALE_LOW)
+    run({ w }, self.world, self.jobs, 0.1)
+    lu.assertTrue(w:isWorking(), 'still on staff while morale is above zero')
+    local warned = false
+    for _, e in ipairs(self.events) do if e == 'lowmorale' then warned = true end end
+    lu.assertTrue(warned, 'should warn when morale gets low')
+    w.morale = MORALE_COMPLAINT_HIT / 2                      -- one more complaint is the last straw
+    w:complain('test')
+    lu.assertEquals(w.state, 'quitting')
+    run({ w }, self.world, self.jobs, 0.1)
+    lu.assertEquals(w.state, 'quitting')
+    lu.assertEquals(self.events[#self.events], 'quit:morale')
+    lu.assertEquals(self.scoring.quits, 1)
+end
+
+function TestWorker:testHungerDrainsMoraleAndFoodRestoresIt()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
+    self.bush.ready = false; self.bush.timer = 999
+    w.hunger = HUNGER_EAT_THRESHOLD - 5
+    w.drain = 0
+    run({ w }, self.world, self.jobs, 10)
+    lu.assertTrue(w.morale < MORALE_MAX - 10, 'hungry morphi should lose morale')
+    local low = w.morale
+    w.hunger = HUNGER_MAX
+    run({ w }, self.world, self.jobs, 10)
+    lu.assertTrue(w.morale > low, 'fed morphi should recover')
+end
+
 function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     w.hunger = 20
@@ -354,7 +428,7 @@ function TestWorker:testStarvesAndQuits()
     lu.assertEquals(w.state, 'quitting')
     lu.assertEquals(self.scoring.quits, 1)
     lu.assertFalse(w:isWorking())
-    lu.assertEquals(self.events[#self.events], 'quit')
+    lu.assertEquals(self.events[#self.events], 'quit:starved')
     run({ w }, self.world, self.jobs, 6)
     lu.assertFalse(w.alive)
 end

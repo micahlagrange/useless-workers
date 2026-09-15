@@ -100,17 +100,31 @@ end
 function TestAbilities:testStorageSiteCostsLogs()
     self.abilities:select(ABILITY_STORAGE)
     lu.assertTrue((self.abilities:use(3, 4)))
-    lu.assertEquals(self.world.stock.logs, 2)
+    lu.assertEquals(self.world.stock.logs, 3)                -- a bin costs one log
     lu.assertEquals(self.jobs:count('build'), 1)
     lu.assertEquals(self.world:get(3, 4).site.kind, SITE_STORAGE)
     local ok, why = self.abilities:use(3, 4)                 -- already marked
     lu.assertFalse(ok)
     lu.assertTrue((self.abilities:use(6, 1)))
-    lu.assertEquals(self.world.stock.logs, 0)
+    lu.assertEquals(self.world.stock.logs, 2)
+    self.world.stock.logs = 0
     ok, why = self.abilities:use(7, 1)
     lu.assertFalse(ok)
     lu.assertStrContains(why, 'logs')
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
+    lu.assertFalse(ok)
+end
+function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
+    self.abilities:select(ABILITY_BED)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals(self.world.stock.logs, 4 - COSTS.bed.logs)
+    lu.assertEquals(self.jobs:count('build'), 1)
+    local site = self.world:get(3, 4).site
+    lu.assertEquals(site.kind, SITE_BED)
+    self.world:completeSite(site)
+    lu.assertTrue(self.world:get(3, 4).bed)
+    lu.assertEquals(#self.world.beds, 1)
+    local ok = self.abilities:use(3, 4)                     -- can't put a bed on a bed
     lu.assertFalse(ok)
 end
 function TestAbilities:testBridgeSitesAllOrNothing()
