@@ -2,6 +2,7 @@
 DEBUG = false
 UI_DEBUG = false
 PATH_DEBUG = false
+CLICK_DEBUG = false
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 800

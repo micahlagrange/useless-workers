@@ -257,6 +257,7 @@ end
 
 local function drawWorld()
     local cam = game.camera
+    game.view:rebuildCanvas() -- before the camera transform, see View:rebuildCanvas
     cam:apply()
     Effects.applyShake()
     game.view:drawWorld()
@@ -364,6 +365,12 @@ function love.mousepressed(x, y, button)
     end
     local tile = game.camera:toTile(x, y)
     local tool = game.abilities.selected
+    if DEBUG or CLICK_DEBUG then
+        local t = game.world:get(tile.x, tile.y)
+        print(string.format('click screen %d,%d -> tile %d,%d type=%s cam=%.1f,%.1f scale=%.2f win=%dx%d',
+            x, y, tile.x, tile.y, t and t.type or 'nil', game.camera.x, game.camera.y, game.camera.scale,
+            love.graphics.getWidth(), love.graphics.getHeight()))
+    end
     if tool == ABILITY_SELECT then
         game.selectedWorker = workerAt(tile)
     elseif tool == ABILITY_LINE then

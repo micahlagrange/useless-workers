@@ -67,9 +67,13 @@ function View:tileColor(t)
     return base[1] * f, base[2] * f, base[3] * f
 end
 
+-- Must run outside the camera transform: the tiles are baked into the canvas
+-- in world pixels, so any active scale or translate would be baked in too.
 function View:rebuildCanvas()
     if self.canvasVersion == self.world.version then return end
     self.canvasVersion = self.world.version
+    love.graphics.push()
+    love.graphics.origin()
     love.graphics.setCanvas(self.canvas)
     love.graphics.clear(0, 0, 0, 1)
     for x = 1, self.world.w do
@@ -94,11 +98,11 @@ function View:rebuildCanvas()
         end
     end
     love.graphics.setCanvas()
+    love.graphics.pop()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
 function View:drawWorld()
-    self:rebuildCanvas()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.canvas, 0, 0)
 end
