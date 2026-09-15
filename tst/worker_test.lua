@@ -423,29 +423,44 @@ function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()
     lu.assertEquals(self.events[1], 'eat')
 end
 
-function TestWorker:testComplainsAboutWalledOffBush()
+function TestWorker:testLeavesWalledOffBushOnTheQueue()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
     self.bush.ready = false; self.bush.timer = 999
     self.pocket.ready = true
     self.jobs:postNode(self.pocket)
-    run({ w }, self.world, self.jobs, 2)
-    lu.assertEquals(#self.complaints, 1)
-    lu.assertEquals(self.complaints[1].reason, 'blocked')
-    lu.assertEquals(self.complaints[1].node, self.pocket)
-    lu.assertEquals(self.scoring.complaints, 1)
-    lu.assertEquals(self.jobs:count(), 1)       -- job went back on the queue
-    lu.assertTrue(w:isIcked(5, 8))
-    lu.assertEquals(w.state, 'sulking')
-    run({ w }, self.world, self.jobs, 6)
-    lu.assertEquals(#self.complaints, 1)
+    run({ w }, self.world, self.jobs, 3)
+    lu.assertEquals(#self.complaints, 0)         -- nothing to complain about, it just is not reachable
+    lu.assertEquals(self.jobs:count(), 1)        -- and the job is still there
+    lu.assertNil(self.pocket.claimedBy)
     lu.assertEquals(self.scoring.output, 0)
     -- dig it open and the forager gets to it
     self.world:dig(4, 7)
-    w.icks = {}
     run({ w }, self.world, self.jobs, 15)
     lu.assertEquals(self.scoring.delivered.food, 1)
 end
-
+function TestWorker:testPicksTheNearestJobNotTheOldest()
+    -- forager at (9,3): the bush at (2,2) was posted first, a new ripe bush at (8,1) is closer
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER, 9, 3))
+    local close = self.world:addNode(NODE_BUSH, 8, 1); close.ready = true
+    self.jobs:postNode(self.bush)
+    self.jobs:postNode(close)
+    run({ w }, self.world, self.jobs, 0.6)
+    lu.assertEquals(w.targetNode, close)
+    lu.assertEquals(close.claimedBy, w)
+    lu.assertNil(self.bush.claimedBy)
+    lu.assertTrue(self.jobs:hasJobFor(self.bush))
+end
+function TestWorker:testTwoMorphisNeverShareAJob()
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 8, 3))
+    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_LUMBERJACK, 8, 3))
+    self.jobs:postNode(self.tree)
+    run({ a, b }, self.world, self.jobs, 1)
+    local takers = 0
+    if a.targetNode == self.tree then takers = takers + 1 end
+    if b.targetNode == self.tree then takers = takers + 1 end
+    lu.assertEquals(takers, 1)
+    lu.assertFalse(self.jobs:hasJobFor(self.tree))
+end
 function TestWorker:testHungryAndBlockedComplains()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
     self.bush.ready = false; self.bush.timer = 999

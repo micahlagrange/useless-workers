@@ -385,28 +385,44 @@ function Worker:decide()
         self.decideTimer = DECIDE_INTERVAL * 4
         return
     end
-    -- 4. Oldest job of my type, then any build job. Foragers only pick when
-    --    there is a storage tile to bring the food to.
-    local canDoMine = self.role ~= ROLE_FORAGER or self.world:nearestFreeStorageTile(self) ~= nil
+    -- 4. The nearest job I can do and can actually walk to. Jobs nobody can
+    --    reach stay on the queue untouched. Foragers only pick when there is
+    --    somewhere to put the food. The claim happens inside takeNearest, in
+    --    the same step the job leaves the queue, so it cannot be shared.
+    local types = {}
+    if self.role ~= ROLE_FORAGER or self.world:nearestFreeStorageTile(self) ~= nil then
+        types[#types + 1] = self.roleInfo.jobType
+    end
+    for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do types[#types + 1] = extra end
+    types[#types + 1] = 'build'
     local function usable(j)
         if j.node then
-            if not j.node.ready or j.node.claimedBy ~= nil or self:isIcked(j.x, j.y) then return false end
-            if self:recentlyReported(j.node) and not self.world:nodeReachable(j.node) then return false end
-            return true
+            return j.node.ready and j.node.claimedBy == nil and not self:isIcked(j.x, j.y) and self.world:nodeReachable(j.node)
         end
         if j.area then
             return j.area.claimedBy == nil and #j.area.sites > 0 and self.world:areaReachable(j.area)
         end
         return not j.site.done and j.site.claimedBy == nil and self.world:siteReachable(j.site)
     end
-    local job = canDoMine and self.jobs:take(self.roleInfo.jobType, usable) or nil
-    for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do
-        if not job then job = self.jobs:take(extra, usable) end
+    local here = self:tile()
+    local claimedPath = nil
+    local function claim(j)
+        if j.area then
+            j.area.claimedBy = self
+            return true
+        end
+        local spot = j.node and self.world:approachTile(j.node) or self.world:siteApproachTile(j.site)
+        if not spot then return false end
+        local path = self:pathTo(spot.x, spot.y)
+        if not path then return false end
+        claimedPath = path
+        local target = j.node or j.site
+        target.claimedBy = self
+        return true
     end
-    if not job then job = self.jobs:take('build', usable) end
+    local job = self.jobs:takeNearest(types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
     if job and job.area then
         self.job = nil -- the area is the job; it is reposted if anything is left
-        job.area.claimedBy = self
         self.targetArea = job.area
         self.areaTilesDone = 0
         if not self:continueArea() then self:releaseArea(); self.state = 'idle' end
@@ -414,26 +430,9 @@ function Worker:decide()
     end
     if job then
         self.job = job
-        local target = job.node or job.site
-        local spot
-        if job.node then
-            spot = self.world:approachTile(job.node)
-        else
-            spot = self.world:siteApproachTile(job.site)
-        end
-        if not spot then
-            if job.node then self:complain('blocked', job.node) else self:dropJob(); self.state = 'idle' end
-            return
-        end
-        local path = self:pathTo(spot.x, spot.y)
-        if path then
-            target.claimedBy = self
-            self.targetNode = job.node
-            self.targetSite = job.site
-            self:setPath(path, 'work')
-        else
-            if job.node then self:complain('blocked', job.node) else self:dropJob() end
-        end
+        self.targetNode = job.node
+        self.targetSite = job.site
+        self:setPath(claimedPath, 'work')
         return
     end
     -- 4. Do not loiter on the pantry

@@ -36,6 +36,36 @@ function TestJobs:testTakeByTypeSkipsStaleAndPredicate()
     lu.assertEquals(jobs:take('forage').node, good)
     lu.assertNil(jobs:take('forage'))
 end
+function TestJobs:testTakeNearestClaimsAtomically()
+    local jobs = Jobs.new()
+    local far, near, mid, wood = bush(1, 1), bush(9, 9), bush(5, 5), tree(9, 8)
+    jobs:postNode(far)
+    jobs:postNode(near)
+    jobs:postNode(mid)
+    jobs:postNode(wood)
+    -- nearest of the types I can do, not the oldest
+    local j = jobs:takeNearest({ 'forage' }, 9, 9, nil, nil)
+    lu.assertEquals(j.node, near)
+    lu.assertEquals(jobs:count('forage'), 2)
+    -- across types: the tree next door beats the bush further off
+    j = jobs:takeNearest({ 'forage', 'chop' }, 9, 9, nil, nil)
+    lu.assertEquals(j.node, wood)
+    -- a claim that refuses moves on to the next nearest; a refused job stays queued
+    local refused = {}
+    j = jobs:takeNearest({ 'forage' }, 5, 5, nil, function(job)
+        if job.node == mid then refused[#refused + 1] = job; return false end
+        job.node.claimedBy = 'me'
+        return true
+    end)
+    lu.assertEquals(j.node, far)
+    lu.assertEquals(far.claimedBy, 'me')
+    lu.assertEquals(#refused, 1)
+    lu.assertEquals(jobs:count(), 1)
+    lu.assertTrue(jobs:hasJobFor(mid))
+    -- the try limit bounds path attempts
+    lu.assertNil(jobs:takeNearest({ 'forage' }, 5, 5, nil, function() return false end, 1))
+    lu.assertEquals(jobs:count(), 1)
+end
 function TestJobs:testPrioritize()
     local jobs = Jobs.new()
     local a, b = bush(1, 1), bush(2, 2)

@@ -124,6 +124,51 @@ function Jobs:take(jobType, predicate)
     return nil
 end
 
+-- Nearest job first. Candidates of the given types that pass `predicate`
+-- are sorted by distance from (fromX, fromY); `claim(job)` is called on each
+-- in turn and the first one it accepts is removed from the queue and
+-- returned in the same step, so no two morphis can end up with one job.
+-- Stale jobs are dropped along the way. At most `tries` claims are made.
+function Jobs:takeNearest(jobTypes, fromX, fromY, predicate, claim, tries)
+    local wanted = {}
+    for _, t in ipairs(jobTypes) do wanted[t] = true end
+    local candidates = {}
+    local i = 1
+    while i <= #self.items do
+        local job = self.items[i]
+        if (job.node and not job.node.ready) or (job.site and job.site.done) or (job.area and #job.area.sites == 0) then
+            table.remove(self.items, i)
+        else
+            if wanted[job.type] and (predicate == nil or predicate(job)) then
+                local d
+                if job.area then
+                    d = math.huge
+                    for _, s in ipairs(job.area.sites) do
+                        d = math.min(d, math.abs(s.x - fromX) + math.abs(s.y - fromY))
+                    end
+                else
+                    d = math.abs(job.x - fromX) + math.abs(job.y - fromY)
+                end
+                candidates[#candidates + 1] = { job = job, d = d, order = i }
+            end
+            i = i + 1
+        end
+    end
+    table.sort(candidates, function(a, b)
+        if a.d ~= b.d then return a.d < b.d end
+        return a.order < b.order
+    end)
+    tries = tries or #candidates
+    for k = 1, math.min(tries, #candidates) do
+        local job = candidates[k].job
+        if claim == nil or claim(job) then
+            self:remove(job)
+            return job
+        end
+    end
+    return nil
+end
+
 function Jobs:remove(job)
     for i, j in ipairs(self.items) do
         if j == job then

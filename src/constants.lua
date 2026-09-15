@@ -93,6 +93,7 @@ MORALE_BREAK_BONUS     = 10
 MORALE_BED_BONUS       = 25
 MORALE_LOW             = 30     -- below this the morphi grumbles and the HUD warns
 DECIDE_INTERVAL        = 0.5
+JOB_PATH_TRIES         = 8      -- nearest candidates a morphi will try to path to before giving up this tick
 HARVEST_SECONDS        = 0.8
 EAT_SECONDS            = 1.0
 WANDER_RADIUS          = 3
