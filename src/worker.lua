@@ -245,7 +245,7 @@ end
 function Worker:stepOff()
     local t = self:tile()
     local tile = self.world:get(t.x, t.y)
-    if not tile or (not tile.item and not tile.bed and tile.type ~= TILE_BREAKROOM) then return false end
+    if not tile or (#tile.items == 0 and tile.storage == 0 and not tile.bed and tile.type ~= TILE_BREAKROOM) then return false end
     local spot = self.world:freeNeighbour(t.x, t.y)
     if not spot then return false end
     local path = self:pathTo(spot.x, spot.y)
@@ -500,7 +500,7 @@ function Worker:followPath(dt)
         self.state = 'idle'
         return
     end
-    if self.goal == 'fetch' and self.targetItem and self.world:get(self.targetItem.x, self.targetItem.y).item ~= self.targetItem then
+    if self.goal == 'fetch' and self.targetItem and not self.world:tileHasItem(self.targetItem.x, self.targetItem.y, self.targetItem) then
         self:releaseItem()
         self.path = nil
         self.goal = nil
@@ -570,9 +570,8 @@ function Worker:deliverHere()
     if not cargo then return end
     local t = self:tile()
     if cargo.kind == CARGO_FOOD then
-        local tile = self.world:get(t.x, t.y)
-        if tile.item or not tile.passable then
-            -- somebody got here first, find another tile
+        if not self.world:hasRoom(t.x, t.y) then
+            -- somebody filled it first, find another tile
             self:releaseTile()
             if self:goDeliver() then return end
             return
@@ -603,8 +602,8 @@ function Worker:arrive()
     elseif self.goal == 'fetch' then
         local t = self:tile()
         local tile = self.world:get(t.x, t.y)
-        if tile.item and tile.item == self.targetItem then
-            local item = self.world:takeItem(t.x, t.y)
+        if self.world:tileHasItem(t.x, t.y, self.targetItem) then
+            local item = self.world:takeItem(t.x, t.y, self.targetItem)
             self.slots[SLOT_PERSONAL] = { kind = item.kind, fruit = item.fruit }
             self:emit('pickup', item.kind)
         end

@@ -21,6 +21,10 @@ PASSABLE        = { grass = true, dirt = true, bridge = true, breakroom = true }
 WORLD_MIX       = { water = 0.12, grass = 0.55, stone = 0.30, snow = 0.03 }
 NOISE_BASE_FREQUENCY = 1 / 11
 NOISE_OCTAVES   = 3
+-- Rivers run edge to edge and cut the land up, so the far banks need bridges.
+RIVER_COUNT     = 2
+RIVER_WIDTH_MIN = 2
+RIVER_WIDTH_MAX = 3
 
 -- Resource nodes: bushes grow food, trees give logs, ore in stone gives gold
 NODE_BUSH = 'bush'
@@ -30,7 +34,8 @@ NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
 NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
 NODES_PER_QUARTER  = { bush = 2, tree = 2, ore = 3 }
 MAX_NODES_PER_KIND = 16
-NODE_ENCLOSED_FRACTION = 0.34   -- share of nodes placed where morphis cannot reach yet
+NODE_ENCLOSED_FRACTION = 0.4    -- share of nodes placed where morphis cannot reach yet
+NODE_ISLAND_FRACTION   = 0.7    -- of those, the share put across water so bridges matter
 NODE_MIN_SPACING   = 3
 BUSH_RIPEN_SECONDS = 20
 BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX = 2, 10
@@ -94,15 +99,21 @@ MAX_WORKERS            = 12
 -- Player tools (section 6). The player designates work; morphis do it.
 ABILITY_SELECT  = 'select'
 ABILITY_MINE    = 'mine'      -- drag a rectangle over stone, miners dig it when they can reach it
-ABILITY_STORAGE = 'storage'   -- place a storage tile site, any idle morphi builds it
+ABILITY_STORAGE = 'storage'   -- place a free floor storage spot, holds one item
+ABILITY_BIN     = 'bin'       -- place a bin site (costs logs), holds four items
 ABILITY_BED     = 'bed'       -- place a bed site; a bed is a quicker, better break
 ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
 ABILITY_MEMO    = 'memo'
-ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BED, ABILITY_BRIDGE, ABILITY_MEMO }
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'BIN', bed = 'BED', bridge = 'BRIDGE', memo = 'MEMO' }
+ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE, ABILITY_MEMO }
+ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', bridge = 'BRIDGE', memo = 'MEMO' }
+-- Storage: a floor spot is free and holds one item. A bin costs logs and
+-- holds four, shown in the order they came in, quadrant by quadrant.
+STORAGE_FLOOR_CAPACITY = 1
+STORAGE_BIN_CAPACITY   = 4
 -- Building consumes the stockpile at the break room. Mining costs only time.
 COSTS = {
-    storage = { logs = 1 },
+    storage = { logs = 0 },
+    bin     = { logs = 1 },
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
     memo    = { gold = 1 },
@@ -114,7 +125,9 @@ LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
 MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
 
-SITE_MINE, SITE_STORAGE, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'bridge', 'bed'
+SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'bin', 'bridge', 'bed'
+SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED }
+SITE_CAPACITY = { storage = STORAGE_FLOOR_CAPACITY, bin = STORAGE_BIN_CAPACITY }
 
 -- Economy and scoring (section 7)
 QUARTER_SECONDS     = 90
@@ -132,7 +145,7 @@ DIFFICULTIES = {
     { name = 'Unlimited PTO', drain = 1.2, workers = 2, multiplier = 2.0 },
 }
 DEFAULT_DIFFICULTY = 2
-DEFAULT_SEED       = '987'
+DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow
 GRASS_COLORS     = { '#94a35b', '#849151', '#737f47' }

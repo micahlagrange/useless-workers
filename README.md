@@ -54,10 +54,17 @@ do the rest.
 - **Mine**: drag a rectangle over stone or snow. A miner digs each marked tile
   once a neighbouring tile is reachable, so tunnels grow inward. Ore under a
   mark yields gold. Drag from a marked tile to clear marks.
-- **Storage**: click open ground to place a storage site (2 logs). Any idle
-  morphi walks over and builds it. Food can only be stored on built storage
-  tiles, one item each, so this is the first thing to build.
+- **Floor**: click open ground to mark a free floor storage spot. Any idle
+  morphi walks over and builds it. It holds one item. Food can only be
+  stored on built storage, so this is the first thing to place.
+- **Bin**: 1 log, holds four items, shown inside it in the order they came.
+- **Bed**: 2 logs. A bed nap is shorter, lasts longer before the next break,
+  and restores more morale. Every resting morphi claims its own spot.
 - **Bridge**: drag a line over water (1 log per tile). Built tile by tile.
+  Two rivers cut every map and a good share of the resources sit on the far
+  banks, so bridges are how you grow.
+- **Morale**: complaints and hunger wear a morphi down; food and breaks
+  restore it. At zero they quit. Press U to see everyone at a glance.
 - **Memo**: 1 gold to push nearby work to the front of the queue.
 - Logs and gold delivered to the break room go into the stockpile shown in the
   top bar. You start with 4 logs, enough for two storage tiles.
@@ -65,9 +72,10 @@ do the rest.
 ## Controls
 
 - WASD or right-drag to pan, mouse wheel to zoom
-- 1 to 5 pick a tool: select, mine, storage, bridge, memo
-- Select then click a morphi to see who is complaining
-- M mutes, ESC returns to the title
+- 1 to 7 pick a tool: select, mine, floor, bin, bed, bridge, memo
+- Select then click a morphi to see who is complaining, F to follow them
+- U opens the units list with a follow button per morphi
+- M mutes, ESC asks before returning to the title
 
 ## History
 

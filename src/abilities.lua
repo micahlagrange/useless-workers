@@ -23,7 +23,8 @@ function Abilities:select(tool)
 end
 
 function Abilities:costText(tool)
-    if tool == ABILITY_STORAGE then return COSTS.storage.logs .. ' logs' end
+    if tool == ABILITY_STORAGE then return 'free, 1 item' end
+    if tool == ABILITY_BIN then return COSTS.bin.logs .. ' log, 4 items' end
     if tool == ABILITY_BED then return COSTS.bed.logs .. ' logs' end
     if tool == ABILITY_BRIDGE then return COSTS.bridge.logs .. ' log/tile' end
     if tool == ABILITY_MEMO then return COSTS.memo.gold .. ' gold' end
@@ -33,6 +34,7 @@ end
 
 function Abilities:canAfford(tool)
     if tool == ABILITY_STORAGE then return self.world:canAfford(COSTS.storage) end
+    if tool == ABILITY_BIN then return self.world:canAfford(COSTS.bin) end
     if tool == ABILITY_BED then return self.world:canAfford(COSTS.bed) end
     if tool == ABILITY_BRIDGE then return self.world:canAfford(COSTS.bridge) end
     if tool == ABILITY_MEMO then return self.world:canAfford(COSTS.memo) end
@@ -46,8 +48,8 @@ end
 -- Click tools. Returns true when something was placed, else false and a reason.
 function Abilities:use(tx, ty)
     local tool = self.selected
-    if tool == ABILITY_STORAGE or tool == ABILITY_BED then
-        local kind = (tool == ABILITY_STORAGE) and SITE_STORAGE or SITE_BED
+    if SITE_FOR_TOOL[tool] then
+        local kind = SITE_FOR_TOOL[tool]
         local cost = COSTS[kind]
         local t = self.world:get(tx, ty)
         if not t then return false, nil end

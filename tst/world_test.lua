@@ -9,7 +9,8 @@ function TestWorldGen:testCompositionAndBreakroom()
         local world = World.generate(seed, Rng.new(seed))
         local counts = world:countTypes()
         local total = WORLD_W * WORLD_H
-        lu.assertTrue((counts.water or 0) / total > 0.08 and (counts.water or 0) / total < 0.16)
+        -- 12% lakes from the noise bands plus two rivers
+        lu.assertTrue((counts.water or 0) / total > 0.12 and (counts.water or 0) / total < 0.24, 'water share ' .. (counts.water or 0) / total)
         lu.assertTrue((counts.stone or 0) / total > 0.25 and (counts.stone or 0) / total < 0.35)
         lu.assertTrue((counts.grass or 0) / total > 0.45)
         lu.assertNotNil(world.breakroom)
@@ -159,7 +160,7 @@ function TestWorldTools:testStorageIsOnlyBuiltTiles()
     lu.assertEquals(#ring, 3)
     lu.assertEquals(self.world:storageCapacity(), 3)
     for i, st in ipairs(ring) do
-        lu.assertTrue(self.world:get(st.x, st.y).storage)
+        lu.assertTrue(self.world:get(st.x, st.y).storage > 0)
         if i > 1 then lu.assertTrue(ring[i - 1].d <= st.d) end
     end
     local first = self.world:nearestFreeStorageTile()
@@ -186,7 +187,47 @@ function TestWorldTools:testStorageIsOnlyBuiltTiles()
     self.world:storeItem(ITEM_FOOD, first.x, first.y, 1)
     local spot = self.world:freeNeighbour(first.x, first.y)
     lu.assertNotNil(spot)
-    lu.assertNil(self.world:get(spot.x, spot.y).item)
+    lu.assertEquals(#self.world:get(spot.x, spot.y).items, 0)
+end
+function TestWorldTools:testBinsHoldFourInOrder()
+    lu.assertTrue(self.world:markStorage(6, 1, STORAGE_BIN_CAPACITY))
+    lu.assertEquals(self.world:storageCapacity(), 3 + STORAGE_BIN_CAPACITY)
+    local a = self.world:storeItem(ITEM_FOOD, 6, 1, 1)
+    local b = self.world:storeItem(ITEM_FOOD, 6, 1, 2)
+    local c = self.world:storeItem(ITEM_FOOD, 6, 1, 3)
+    local d = self.world:storeItem(ITEM_FOOD, 6, 1, 4)
+    lu.assertNil(self.world:storeItem(ITEM_FOOD, 6, 1, 5))               -- full
+    lu.assertEquals({ a.slot, b.slot, c.slot, d.slot }, { 1, 2, 3, 4 })
+    lu.assertFalse(self.world:hasRoom(6, 1))
+    -- taking one out closes the gap so the bin fills from the first quadrant
+    lu.assertEquals(self.world:takeItem(6, 1, b), b)
+    lu.assertEquals({ a.slot, c.slot, d.slot }, { 1, 2, 3 })
+    lu.assertTrue(self.world:hasRoom(6, 1))
+    lu.assertTrue(self.world:tileHasItem(6, 1, c))
+    lu.assertFalse(self.world:tileHasItem(6, 1, b))
+    -- two carriers can each reserve a slot in the same bin
+    for _, st in ipairs(self.world:storageTiles()) do
+        if st.capacity == 1 then self.world:storeItem(ITEM_FOOD, st.x, st.y, 1) end
+    end
+    local me, other = {}, {}
+    lu.assertEquals(self.world:nearestFreeStorageTile(me), { x = 6, y = 1 })
+    self.world:reserveTile(6, 1, me)
+    lu.assertEquals(self.world:freeSlots(6, 1, other), 0)
+    lu.assertEquals(self.world:freeSlots(6, 1, me), 1)
+    lu.assertNil(self.world:nearestFreeStorageTile(other))
+    -- a bin site turns into a bin
+    local site = self.world:addSite(SITE_BIN, 7, 1)
+    self.world:completeSite(site)
+    lu.assertEquals(self.world:get(7, 1).storage, STORAGE_BIN_CAPACITY)
+end
+function TestWorldGen:testSomeNodesSitAcrossWater()
+    local world = World.generate(Rng.seedToNumber(DEFAULT_SEED), Rng.new(Rng.seedToNumber(DEFAULT_SEED)))
+    local planted = world:spawnAllNodes(NODES_INITIAL)
+    local across = 0
+    for _, node in ipairs(planted) do
+        if not world:nodeReachable(node) and world:acrossWater(node.x, node.y) then across = across + 1 end
+    end
+    lu.assertTrue(across >= 3, 'only ' .. across .. ' nodes across water')
 end
 function TestWorldTools:testSitesAndStockpile()
     lu.assertTrue(self.world:canAfford({ logs = 0 }))
@@ -219,7 +260,7 @@ function TestWorldTools:testSitesAndStockpile()
     lu.assertNotNil(st)
     lu.assertNil(self.world:addSite(SITE_STORAGE, 4, 6))  -- already storage
     self.world:completeSite(st)
-    lu.assertTrue(self.world:get(6, 1).storage)
+    lu.assertTrue(self.world:get(6, 1).storage > 0)
     lu.assertEquals(self.world:storageCapacity(), 4)
 end
 function TestWorldTools:testRestSpotsAreNeverShared()

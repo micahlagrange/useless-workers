@@ -6,7 +6,7 @@ local World = {}
 World.__index = World
 
 local function newTile(kind, altitude)
-    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, site = nil, storage = false, bed = false, restingBy = nil, reservedBy = nil, colorSeed = 0.5 }
+    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, items = {}, site = nil, storage = 0, bed = false, restingBy = nil, reservations = {}, colorSeed = 0.5 }
 end
 
 function World.new(w, h, rng)
@@ -81,13 +81,38 @@ function World.generate(seedNumber, rng, w, h)
             t.colorSeed = rng:random()
         end
     end
+    self:carveRivers(rng)
     self:placeBreakroom()
     self.version = self.version + 1
     return self
 end
 
+-- Rivers wander from one edge to the opposite one. The first runs top to
+-- bottom, the second left to right, so the map splits into banks that only
+-- a bridge (or a long tunnel) connects.
+function World:carveRivers(rng)
+    for i = 1, RIVER_COUNT do
+        local vertical = (i % 2 == 1)
+        local width = rng:int(RIVER_WIDTH_MIN, RIVER_WIDTH_MAX)
+        local along = vertical and self.h or self.w
+        local across = vertical and self.w or self.h
+        local pos = rng:int(math.floor(across * 0.3), math.floor(across * 0.7))
+        for a = 1, along do
+            pos = Util.clamp(pos + rng:int(-1, 1), 2, across - width - 1)
+            for k = 0, width - 1 do
+                local x, y
+                if vertical then x, y = pos + k, a else x, y = a, pos + k end
+                local t = self.tiles[x][y]
+                t.type = TILE_WATER
+                t.passable = false
+                t.altitude = math.min(t.altitude, self.bands.water * 0.9)
+            end
+        end
+    end
+end
+
 -- Hand built worlds for tests.
--- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' built storage tile  'd' bed
+-- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' floor storage (1 item)  'N' bin (4 items)  'd' bed
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
@@ -111,7 +136,8 @@ function World.fromGrid(rows, rng)
             local t = self.tiles[x][y]
             t.type = kind
             t.passable = PASSABLE[kind] or false
-            if ch == 'S' then storageTiles[#storageTiles + 1] = { x = x, y = y } end
+            if ch == 'S' then storageTiles[#storageTiles + 1] = { x = x, y = y, capacity = STORAGE_FLOOR_CAPACITY } end
+            if ch == 'N' then storageTiles[#storageTiles + 1] = { x = x, y = y, capacity = STORAGE_BIN_CAPACITY } end
             if ch == 'd' then bedTiles[#bedTiles + 1] = { x = x, y = y } end
         end
     end
@@ -125,7 +151,7 @@ function World.fromGrid(rows, rng)
         local node = self:addNode(n.kind, n.x, n.y)
         node.ready = true
     end
-    for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y) end
+    for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y, st.capacity) end
     for _, bt in ipairs(bedTiles) do self:markBed(bt.x, bt.y) end
     self.version = self.version + 1
     return self
@@ -375,7 +401,7 @@ function World:randomNearbyPassable(rng, x, y, radius)
         local ny = y + rng:int(-radius, radius)
         if (nx ~= x or ny ~= y) and self:inBounds(nx, ny) and reach[nx][ny] then
             local t = self.tiles[nx][ny]
-            if not t.item and not t.bed and t.type ~= TILE_BREAKROOM then
+            if #t.items == 0 and t.storage == 0 and not t.bed and t.type ~= TILE_BREAKROOM then
                 return { x = nx, y = ny }
             end
             fallback = fallback or { x = nx, y = ny }
@@ -390,7 +416,7 @@ function World:freeNeighbour(x, y)
     for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
         if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
             local t = self.tiles[c[1]][c[2]]
-            if not t.item and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
+            if #t.items == 0 and t.storage == 0 and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
         end
     end
     return nil
@@ -459,13 +485,44 @@ function World:nodeReachable(node)
     return self:approachTile(node) ~= nil
 end
 
+-- True when a straight run of water no longer than one bridge separates
+-- (x, y) from ground the morphis can reach: a bridge would open it up.
+function World:acrossWater(x, y, reach)
+    reach = reach or self:reachableFromBreakroom()
+    for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+        local cx, cy = x, y
+        local water = 0
+        local phase = 'land'
+        for _ = 1, LINE_MAX_LENGTH + 2 do
+            cx, cy = cx + d[1], cy + d[2]
+            if not self:inBounds(cx, cy) then break end
+            local t = self.tiles[cx][cy]
+            if phase == 'land' then
+                if t.type == TILE_WATER then phase = 'water'; water = 1
+                elseif not t.passable or reach[cx][cy] then break end
+            else
+                if t.type == TILE_WATER then
+                    water = water + 1
+                    if water > LINE_MAX_LENGTH then break end
+                elseif t.passable and reach[cx][cy] then
+                    return true
+                else
+                    break
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Plants up to `count` nodes of a kind. A share lands where the morphis
--- cannot reach yet, so the player always has something to dig toward.
+-- cannot reach yet, so the player always has something to dig toward,
+-- and most of that share sits across water so bridges are worth building.
 function World:spawnNodes(kind, count, enclosedFraction)
     enclosedFraction = enclosedFraction or NODE_ENCLOSED_FRACTION
     local rng = self.rng
     local reach = self:reachableFromBreakroom()
-    local reachable, enclosed = {}, {}
+    local reachable, enclosed, island = {}, {}, {}
     for x = 1, self.w do
         for y = 1, self.h do
             local t = self.tiles[x][y]
@@ -476,10 +533,14 @@ function World:spawnNodes(kind, count, enclosedFraction)
                         for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
                             if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then open = true end
                         end
-                        if open then reachable[#reachable + 1] = { x = x, y = y } else enclosed[#enclosed + 1] = { x = x, y = y } end
+                        if open then reachable[#reachable + 1] = { x = x, y = y }
+                        elseif self:acrossWater(x, y, reach) then island[#island + 1] = { x = x, y = y }
+                        else enclosed[#enclosed + 1] = { x = x, y = y } end
                     end
                 elseif t.type == TILE_GRASS then
-                    if reach[x][y] then reachable[#reachable + 1] = { x = x, y = y } else enclosed[#enclosed + 1] = { x = x, y = y } end
+                    if reach[x][y] then reachable[#reachable + 1] = { x = x, y = y }
+                    elseif self:acrossWater(x, y, reach) then island[#island + 1] = { x = x, y = y }
+                    else enclosed[#enclosed + 1] = { x = x, y = y } end
                 end
             end
         end
@@ -488,7 +549,9 @@ function World:spawnNodes(kind, count, enclosedFraction)
     if count > room then count = room end
     if count <= 0 then return {} end
     local wantEnclosed = math.floor(count * enclosedFraction + 0.5)
-    if #enclosed == 0 then wantEnclosed = 0 end
+    if #enclosed == 0 and #island == 0 then wantEnclosed = 0 end
+    local wantIsland = math.floor(wantEnclosed * NODE_ISLAND_FRACTION + 0.5)
+    if #island == 0 then wantIsland = 0 end
     local wantReachable = count - wantEnclosed
     local planted = {}
     local function plantFrom(list, want)
@@ -506,9 +569,12 @@ function World:spawnNodes(kind, count, enclosedFraction)
             end
             i = i + 1
         end
+        return want
     end
-    plantFrom(reachable, wantReachable)
-    plantFrom(enclosed, wantEnclosed)
+    local left = plantFrom(reachable, wantReachable)
+    left = plantFrom(island, wantIsland + left)
+    left = plantFrom(enclosed, wantEnclosed - wantIsland + left)
+    if left > 0 then plantFrom(reachable, left) end
     return planted
 end
 
@@ -583,19 +649,20 @@ function World:spend(cost)
 end
 
 -- Storage --------------------------------------------------------------
--- Food is stored as an item on a built storage tile, one item per tile,
--- closest to the break room first. Without storage tiles food has nowhere
--- to go. Morphis walk over items freely; they just try not to idle on them.
+-- Food is stored as an item on a storage tile, closest to the break room
+-- first. A floor spot holds one item, a bin holds four. Without storage
+-- food has nowhere to go. Morphis walk over items freely; they just try
+-- not to idle on them.
 
-function World:markStorage(x, y)
+function World:markStorage(x, y, capacity)
     local t = self:get(x, y)
-    if not t or t.storage then return false end
-    t.storage = true
+    if not t or t.storage > 0 then return false end
+    t.storage = capacity or STORAGE_FLOOR_CAPACITY
     local d = 0
     if self.breakroom then
         d = (x - (self.breakroom.x + 0.5)) ^ 2 + (y - (self.breakroom.y + 0.5)) ^ 2
     end
-    self.storageList[#self.storageList + 1] = { x = x, y = y, d = d }
+    self.storageList[#self.storageList + 1] = { x = x, y = y, d = d, capacity = t.storage }
     table.sort(self.storageList, function(a, b)
         if a.d ~= b.d then return a.d < b.d end
         if a.y ~= b.y then return a.y < b.y end
@@ -638,7 +705,7 @@ function World:claimRestSpot(worker, fromX, fromY)
     if not best and self.breakroom then
         for _, sp in ipairs(self:spawnTiles(2)) do
             local t = self.tiles[sp.x][sp.y]
-            if t.type ~= TILE_BREAKROOM and not t.item and not t.storage and t.restingBy == nil then
+            if t.type ~= TILE_BREAKROOM and #t.items == 0 and t.storage == 0 and t.restingBy == nil then
                 best = { x = sp.x, y = sp.y, bed = false }
                 break
             end
@@ -664,15 +731,32 @@ function World:storageTiles()
 end
 
 function World:storageCapacity()
-    return #self.storageList
+    local n = 0
+    for _, s in ipairs(self.storageList) do n = n + s.capacity end
+    return n
 end
 
--- Closest free storage tile to the break room. `reservedBy` lets a carrier
--- hold a tile so two foragers do not race for the same one.
+-- Free slots on a tile after other carriers' reservations are counted.
+function World:freeSlots(x, y, reservedBy)
+    local t = self:get(x, y)
+    if not t or t.storage == 0 or not t.passable then return 0 end
+    local held = 0
+    for who in pairs(t.reservations) do
+        if who ~= reservedBy then held = held + 1 end
+    end
+    return t.storage - #t.items - held
+end
+
+function World:hasRoom(x, y)
+    local t = self:get(x, y)
+    return t ~= nil and t.storage > 0 and t.passable and #t.items < t.storage
+end
+
+-- Closest storage tile with room, nearest the break room. `reservedBy`
+-- lets a carrier hold a slot so two foragers do not race for the same one.
 function World:nearestFreeStorageTile(reservedBy)
     for _, s in ipairs(self.storageList) do
-        local t = self.tiles[s.x][s.y]
-        if t.passable and not t.item and (t.reservedBy == nil or t.reservedBy == reservedBy) then
+        if self:freeSlots(s.x, s.y, reservedBy) > 0 then
             return { x = s.x, y = s.y }
         end
     end
@@ -681,32 +765,49 @@ end
 
 function World:reserveTile(x, y, worker)
     local t = self:get(x, y)
-    if t then t.reservedBy = worker end
+    if t then t.reservations[worker] = true end
 end
 
 function World:releaseReservations(worker)
     for _, s in ipairs(self:storageTiles()) do
-        local t = self.tiles[s.x][s.y]
-        if t.reservedBy == worker then t.reservedBy = nil end
+        self.tiles[s.x][s.y].reservations[worker] = nil
     end
 end
 
 function World:storeItem(kind, x, y, fruit)
     local t = self:get(x, y)
-    if not t or t.item or not t.passable or not t.storage then return nil end
-    local item = { id = self.nextItemId, kind = kind, x = x, y = y, fruit = fruit or 1, claimedBy = nil }
+    if not t or not t.passable or t.storage == 0 or #t.items >= t.storage then return nil end
+    local item = { id = self.nextItemId, kind = kind, x = x, y = y, fruit = fruit or 1, claimedBy = nil, slot = #t.items + 1 }
     self.nextItemId = self.nextItemId + 1
     self.items[#self.items + 1] = item
-    t.item = item
-    t.reservedBy = nil
+    t.items[#t.items + 1] = item
     return item
 end
 
-function World:takeItem(x, y)
+function World:tileHasItem(x, y, item)
     local t = self:get(x, y)
-    if not t or not t.item then return nil end
-    local item = t.item
-    t.item = nil
+    if not t then return false end
+    for _, it in ipairs(t.items) do
+        if it == item then return true end
+    end
+    return false
+end
+
+-- Take a specific item (or the first one) off a tile. The rest close up so
+-- a bin always fills from its first quadrant.
+function World:takeItem(x, y, item)
+    local t = self:get(x, y)
+    if not t or #t.items == 0 then return nil end
+    local index = 1
+    if item then
+        index = nil
+        for i, it in ipairs(t.items) do
+            if it == item then index = i end
+        end
+        if not index then return nil end
+    end
+    item = table.remove(t.items, index)
+    for i, it in ipairs(t.items) do it.slot = i end
     for i = #self.items, 1, -1 do
         if self.items[i] == item then table.remove(self.items, i) end
     end
@@ -786,8 +887,8 @@ function World:addSite(kind, x, y, area)
     if not t or t.site then return nil, 'already marked' end
     if kind == SITE_MINE then
         if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
-    elseif kind == SITE_STORAGE or kind == SITE_BED then
-        if not t.passable or t.type == TILE_BREAKROOM or t.item or t.node or t.storage or t.bed then return nil, 'needs open ground' end
+    elseif kind == SITE_STORAGE or kind == SITE_BIN or kind == SITE_BED then
+        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.bed then return nil, 'needs open ground' end
     elseif kind == SITE_BRIDGE then
         if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
     end
@@ -849,7 +950,9 @@ function World:completeSite(site)
         end
         self:setType(site.x, site.y, TILE_DIRT)
     elseif site.kind == SITE_STORAGE then
-        self:markStorage(site.x, site.y)
+        self:markStorage(site.x, site.y, STORAGE_FLOOR_CAPACITY)
+    elseif site.kind == SITE_BIN then
+        self:markStorage(site.x, site.y, STORAGE_BIN_CAPACITY)
     elseif site.kind == SITE_BED then
         self:markBed(site.x, site.y)
     elseif site.kind == SITE_BRIDGE then

@@ -97,16 +97,18 @@ function TestAbilities:testMineDesignationPostsJobsAndIsFree()
     lu.assertEquals(#self.world.areas, 0)
     lu.assertNil(self.jobs:take('mine'))
 end
-function TestAbilities:testStorageSiteCostsLogs()
+function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     self.abilities:select(ABILITY_STORAGE)
     lu.assertTrue((self.abilities:use(3, 4)))
-    lu.assertEquals(self.world.stock.logs, 3)                -- a bin costs one log
+    lu.assertEquals(self.world.stock.logs, 4)                -- floor spots are free
     lu.assertEquals(self.jobs:count('build'), 1)
     lu.assertEquals(self.world:get(3, 4).site.kind, SITE_STORAGE)
     local ok, why = self.abilities:use(3, 4)                 -- already marked
     lu.assertFalse(ok)
+    self.abilities:select(ABILITY_BIN)
     lu.assertTrue((self.abilities:use(6, 1)))
-    lu.assertEquals(self.world.stock.logs, 2)
+    lu.assertEquals(self.world.stock.logs, 4 - COSTS.bin.logs)
+    lu.assertEquals(self.world:get(6, 1).site.kind, SITE_BIN)
     self.world.stock.logs = 0
     ok, why = self.abilities:use(7, 1)
     lu.assertFalse(ok)

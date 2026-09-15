@@ -150,7 +150,7 @@ local function newGame(seedString, difficultyIndex)
     Effects.clear()
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
-    ui:alert('Build STORAGE (2 logs) so foragers have somewhere to put food. Drag MINE over stone and Cwab digs it out.')
+    ui:alert('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
     state = 'playing'
     love.mouse.setVisible(false)
 end

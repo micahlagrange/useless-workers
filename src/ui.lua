@@ -43,6 +43,7 @@ function UI.new()
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         mine = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
         storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
+        bin = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
         memo = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
@@ -51,7 +52,7 @@ function UI.new()
     self.toastText, self.toastTtl = nil, 0
     self.unitButtons = {}
     self.buttons = {}
-    local bw, bh, gap = 126, 60, 8
+    local bw, bh, gap = 110, 60, 8
     local y = WINDOW_HEIGHT - BOTTOM_BAR_H + 10
     for i, tool in ipairs(ABILITY_ORDER) do
         self.buttons[#self.buttons + 1] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = y, w = bw, h = bh, key = tostring(i) }
@@ -195,6 +196,18 @@ function UI:iconBin(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.14, y + s * 0.72, s * 0.52, s * 0.06)
 end
 
+-- A floor storage spot: a chalked square with a corner mark.
+function UI:iconFloor(x, y, s)
+    love.graphics.setColor(0.35, 0.3, 0.2)
+    love.graphics.rectangle('fill', x + s * 0.12, y + s * 0.2, s * 0.76, s * 0.6)
+    love.graphics.setColor(0.85, 0.8, 0.6)
+    love.graphics.rectangle('line', x + s * 0.12 + 0.5, y + s * 0.2 + 0.5, s * 0.76 - 1, s * 0.6 - 1)
+    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.3, y + s * 0.2)
+    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.12, y + s * 0.38)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self.foodIcon, x + s * 0.3, y + s * 0.3, 0, s * 0.4 / 16, s * 0.4 / 16)
+end
+
 function UI:iconBed(x, y, s)
     love.graphics.setColor(0.4, 0.28, 0.16)
     love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.8, s * 0.65)
@@ -301,19 +314,22 @@ function UI:drawBottomBar(game)
             love.graphics.rectangle('line', b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1)
         end
         local icon = self.icons[b.tool]
+        local IS = 26
         if icon then
             if affordable then love.graphics.setColor(1, 1, 1, 1) else love.graphics.setColor(0.4, 0.4, 0.4, 1) end
-            love.graphics.draw(icon, b.x + 6, b.y + 6, 0, 2, 2)
+            love.graphics.draw(icon, b.x + 5, b.y + 8, 0, IS / 16, IS / 16)
         elseif b.tool == ABILITY_STORAGE then
-            self:iconBin(b.x + 6, b.y + 6, 32)
+            self:iconFloor(b.x + 5, b.y + 8, IS)
+        elseif b.tool == ABILITY_BIN then
+            self:iconBin(b.x + 5, b.y + 8, IS)
         elseif b.tool == ABILITY_BED then
-            self:iconBed(b.x + 6, b.y + 6, 32)
+            self:iconBed(b.x + 5, b.y + 8, IS)
         end
         if not affordable and not icon then
             love.graphics.setColor(0.1, 0.1, 0.1, 0.55)
-            love.graphics.rectangle('fill', b.x + 6, b.y + 6, 32, 32)
+            love.graphics.rectangle('fill', b.x + 5, b.y + 8, IS, IS)
         end
-        local lx = b.x + 44
+        local lx = b.x + 5 + IS + 4
         self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
         self:printFit(abilities:costText(b.tool), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
         love.graphics.setFont(self.fonts.small)
@@ -366,8 +382,8 @@ function UI:drawBottomBar(game)
         love.graphics.print('F: follow  U: units', px + pw - 140, py + 70)
     else
         local lines = {
-            'WASD / right-drag pan, wheel zoom, 1-6 tools, U units',
-            'MINE: drag over stone. BIN and BED cost logs.',
+            'WASD / right-drag pan, wheel zoom, 1-7 tools, U units',
+            'FLOOR spot: free, 1 item. BIN: 1 log, 4 items. BED: 2 logs.',
             'SELECT a morphi, then F to follow it. ESC asks.',
         }
         local ly = py + 4
@@ -557,7 +573,7 @@ function UI:drawTitle(title, highScore)
     self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), 500, self.fonts.hud)
     self:centered('ENTER or click to start', 570, self.fonts.big, C.good)
     self:centered('LEFT / RIGHT: difficulty     M: mute', 620, self.fonts.small, C.dim)
-    self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine and build storage from logs.', 660, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine, bridge water, build bins and beds.', 660, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
     self:centeredFit('You never control a morphi. That is the whole problem. Gold is worth 3, logs 2, food 1.', 682, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
 end
 
