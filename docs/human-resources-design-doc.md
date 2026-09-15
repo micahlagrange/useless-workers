@@ -3,6 +3,8 @@
 **Working title.** Alternate: *Middle Management Simulator*.
 **Tagline:** Control the environment. The employees will manage themselves. Badly.
 
+> **Revision after the first playable:** the workers are now the Morphi sprites from this repo's prototype, each with a role. Foragers (Pupper, Woofoof) pick food from bushes on the ground and stock a pantry in the break room. Lumberjacks (Twins) cut trees into stumps for logs. Miners (Cwab, the blob) work gold ore inside stone from a neighbouring tile, and the mined tile opens up. Where this doc says "fruit tree", read "bush"; trees are now a log resource. Gold is worth 3, logs 2, food 1. The rest of the loop is unchanged.
+
 A jam-scale god sim for LÖVE2D. You never control a worker. You dig, blast, and bridge a procedurally generated map so that a handful of hungry AI employees can reach fruit and carry it to the break room. Every ninety seconds a Quarterly Report grades you on productivity, complaints, and attrition. Keep them fed and headcount grows. Let them starve and they quit, one by one, until Human Resources is just you.
 
 Built from parts that already exist across five previous jam repos. Nothing in this doc needs a new library.
