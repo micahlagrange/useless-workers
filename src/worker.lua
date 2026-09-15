@@ -1,7 +1,8 @@
 -- A morphi. Has a role (forager, lumberjack, miner), gets hungry, takes jobs
 -- of its own type off the shared queue, complains when it cannot reach them,
 -- carries a work item in slot 1 and a personal snack in slot 2, and takes a
--- break in the break room after enough work.
+-- break in the break room after enough work. Nothing interrupts a job:
+-- eating, fetching a snack and taking a break are all chosen while idle.
 require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
@@ -36,7 +37,6 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.targetItem = nil
     self.targetTile = nil
     self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
-    self.resume = nil         -- what to go back to after a snack
     self.eatingSlot = nil
     self.workTime = 0         -- accumulated work since the last break
     self.wantsBreak = false
@@ -146,7 +146,6 @@ function Worker:dropJob()
     self:releaseTile()
     self.path = nil
     self.goal = nil
-    self.resume = nil
 end
 
 function Worker:complain(reason, node)
@@ -221,14 +220,9 @@ end
 
 -- Eating ----------------------------------------------------------------
 
--- Stop whatever is happening and eat from a slot. Resumes afterwards.
+-- Eat from a slot. Only ever chosen while idle, like any other job.
 function Worker:snack(slot)
-    if self.state == 'eating' or self.state == 'quitting' then return false end
     if not self:hasFoodInSlot(slot) then return false end
-    self.resume = {
-        state = self.state, goal = self.goal, path = self.path, pathIndex = self.pathIndex,
-        stateTimer = self.stateTimer, walkTime = self.walkTime,
-    }
     self.eatingSlot = slot
     self.state = 'eating'
     self.stateTimer = EAT_SECONDS
@@ -251,17 +245,9 @@ function Worker:finishEating()
         self:emit('eat')
         self:releaseNode()
     end
-    local r = self.resume
-    self.resume = nil
-    if r and r.state ~= 'idle' and r.state ~= 'sulking' then
-        self.state, self.goal, self.path, self.pathIndex = r.state, r.goal, r.path, r.pathIndex
-        self.stateTimer, self.walkTime = r.stateTimer, r.walkTime
-        if self.state == 'walking' and not self.path then self.state = 'idle' end
-    else
-        self.goal = nil
-        self.state = 'idle'
-        self.decideTimer = 0
-    end
+    self.goal = nil
+    self.state = 'idle'
+    self.decideTimer = 0
 end
 
 -- Nearest ripe, unclaimed, not icked bush the morphi can reach. Second return
@@ -569,27 +555,6 @@ function Worker:update(dt, clock)
         return
     end
     self.hunger = self.hunger - self.drain * dt
-    -- Hungry with a snack in the pocket: stop and eat, whatever is going on
-    if self.hunger < HUNGER_EAT_THRESHOLD and self.state ~= 'eating' and self.state ~= 'sulking' then
-        if self:snackInPocket() then
-            self:snack(SLOT_PERSONAL)
-        elseif self.hunger < HUNGER_STARVING and self:hasFoodInSlot(SLOT_WORK) then
-            self:say('mine now')
-            self:releaseTile()
-            self.slots[SLOT_WORK].kind = ITEM_FOOD
-            self:snack(SLOT_WORK)
-            self.resume = nil
-        elseif self.hunger < HUNGER_STARVING and self:carrying() then
-            -- drops the log or nugget and goes looking for food
-            self:say('too hungry')
-            self.slots[SLOT_WORK] = nil
-            self:releaseTile()
-            self.path = nil
-            self.goal = nil
-            self.state = 'idle'
-            self.decideTimer = 0
-        end
-    end
     if self.hunger <= 0 then
         self.hunger = 0
         self:quit()

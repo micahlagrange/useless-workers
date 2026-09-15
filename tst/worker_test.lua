@@ -136,7 +136,7 @@ function TestWorker:testHungryMorphiFetchesFromStorageIntoSlot2()
     lu.assertNil(w.slots[SLOT_PERSONAL])
 end
 
-function TestWorker:testSnackInterruptsWorkAndResumes()
+function TestWorker:testHungryWithSnackFinishesTheJobFirst()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     w.slots[SLOT_PERSONAL] = { kind = ITEM_FOOD, fruit = 1 }
     self.jobs:postNode(self.tree)
@@ -144,16 +144,15 @@ function TestWorker:testSnackInterruptsWorkAndResumes()
     lu.assertEquals(w.state, 'walking')
     lu.assertEquals(w.goal, 'work')
     w.hunger = HUNGER_EAT_THRESHOLD - 1
-    run({ w }, self.world, self.jobs, 0.1)
-    lu.assertEquals(w.state, 'eating')
-    lu.assertNotNil(w.resume)
-    run({ w }, self.world, self.jobs, EAT_SECONDS + 0.1)
-    lu.assertNil(w.slots[SLOT_PERSONAL])
-    lu.assertTrue(w.hunger > 60)
-    lu.assertEquals(w.state, 'walking') -- back on the job
-    lu.assertEquals(w.goal, 'work')
-    run({ w }, self.world, self.jobs, 14)
+    run({ w }, self.world, self.jobs, 0.3)
+    lu.assertEquals(w.state, 'walking') -- no interruption
+    lu.assertNotNil(w.slots[SLOT_PERSONAL])
+    run({ w }, self.world, self.jobs, 16)
     lu.assertEquals(self.scoring.delivered.logs, 1)
+    -- once idle, the snack was the next thing it did
+    lu.assertNil(w.slots[SLOT_PERSONAL])
+    lu.assertTrue(w.hunger > 50, 'hunger was ' .. w.hunger)
+    lu.assertEquals(self.events[#self.events], 'eat')
 end
 
 function TestWorker:testTakesABreakAfterEnoughWork()
@@ -180,16 +179,6 @@ function TestWorker:testTakesABreakAfterEnoughWork()
     lu.assertEquals(w.breaksTaken, 1)
     lu.assertEquals(w.workTime < BREAK_AFTER_SECONDS, true)
     lu.assertTrue(self.jobs:hasJobFor(self.tree) or self.scoring.delivered.logs == 1 or w.targetNode == self.tree)
-end
-
-function TestWorker:testStarvingForagerEatsItsWorkItem()
-    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
-    w.slots[SLOT_WORK] = { kind = CARGO_FOOD, fruit = 1 }
-    w.hunger = HUNGER_STARVING - 1
-    run({ w }, self.world, self.jobs, EAT_SECONDS + 0.2)
-    lu.assertNil(w.slots[SLOT_WORK])
-    lu.assertTrue(w.hunger > 40)
-    lu.assertEquals(self.scoring.delivered.food, 0)
 end
 
 function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()

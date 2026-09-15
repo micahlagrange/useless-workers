@@ -18,10 +18,10 @@ complaints and attrition. Keep them fed for four quarters.
 Delivered food is a real item on the ground: the closest free tile to the break
 room, one per tile. Morphis walk over stored items but try not to idle on them.
 Every morphi has two inventory slots: slot 1 holds the work item it is carrying,
-slot 2 a personal snack picked up from storage. A hungry morphi with a snack
-stops whatever it is doing, eats, and carries on. After 45 seconds of work a
-morphi grabs a snack from storage if it has none and takes a break in the break
-room. Gold is worth 3, logs 2, food 1 in the final score. Hires cycle forager,
+slot 2 a personal snack picked up from storage. Nothing interrupts a job: when
+a morphi is idle and hungry it eats the snack in its pocket, or fetches one from
+storage, or eats straight off a bush. After 45 seconds of work a morphi grabs a
+snack from storage if it has none and takes a break in the break room. Gold is worth 3, logs 2, food 1 in the final score. Hires cycle forager,
 lumberjack, miner.
 
 Design doc (written under the working title Human Resources): [docs/human-resources-design-doc.md](docs/human-resources-design-doc.md)
