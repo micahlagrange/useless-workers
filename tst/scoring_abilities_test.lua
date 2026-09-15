@@ -120,7 +120,7 @@ function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     self.abilities:select(ABILITY_BED)
     lu.assertTrue((self.abilities:use(3, 4)))
     lu.assertEquals(self.world.stock.logs, 4 - COSTS.bed.logs)
-    lu.assertEquals(self.jobs:count('build'), 1)
+    lu.assertEquals(self.jobs:count('woodwork'), 1)                -- lumberjack work, not a generic build
     local site = self.world:get(3, 4).site
     lu.assertEquals(site.kind, SITE_BED)
     self.world:completeSite(site)
@@ -151,17 +151,6 @@ function TestAbilities:testBridgeSitesAllOrNothing()
     lu.assertTrue(self.world:isReachable(6, 4))
     lu.assertEquals(#self.world.sites, 0)
 end
-function TestAbilities:testMemoCostsGoldAndPrioritizes()
-    local bush = self.world.nodes[1]
-    local other = self.world:addNode(NODE_BUSH, 15, 1); other.ready = true -- outside the memo radius
-    self.jobs:postNode(other)
-    self.jobs:postNode(bush)
-    self.abilities:select(ABILITY_MEMO)
-    lu.assertTrue((self.abilities:use(4, 2)))
-    lu.assertEquals(self.jobs:take('forage').node, bush)
-    lu.assertEquals(self.world.stock.gold, 1)
-end
-
 TestHighscore = {}
 function TestHighscore:testMemoryFallback()
     Highscore.resetMemory()

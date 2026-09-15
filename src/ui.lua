@@ -37,7 +37,6 @@ function UI.new()
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
         mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_btn.png'),
-        memo = love.graphics.newImage('assets/images/ui/seed_button.png'),
     }
     self.cursors = {
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
@@ -46,7 +45,6 @@ function UI.new()
         bin = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
-        memo = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
     }
     self.alerts = {}
     self.toastText, self.toastTtl = nil, 0
@@ -382,7 +380,7 @@ function UI:drawBottomBar(game)
         love.graphics.print('F: follow  U: units', px + pw - 140, py + 70)
     else
         local lines = {
-            'WASD / right-drag pan, wheel zoom, 1-7 tools, U units',
+            'WASD / right-drag pan, wheel zoom, 1-6 tools, U units',
             'FLOOR spot: free, 1 item. BIN: 1 log, 4 items. BED: 2 logs.',
             'SELECT a morphi, then F to follow it. ESC asks.',
         }

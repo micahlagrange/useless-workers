@@ -400,6 +400,9 @@ function Worker:decide()
         return not j.site.done and j.site.claimedBy == nil and self.world:siteReachable(j.site)
     end
     local job = canDoMine and self.jobs:take(self.roleInfo.jobType, usable) or nil
+    for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do
+        if not job then job = self.jobs:take(extra, usable) end
+    end
     if not job then job = self.jobs:take('build', usable) end
     if job and job.area then
         self.job = nil -- the area is the job; it is reposted if anything is left
@@ -718,6 +721,23 @@ function Worker:updateMorale(dt)
         self.warnedLowMorale = false
     end
     return false
+end
+
+-- What is in the morphi's hand while it heads to or does tool work:
+-- 'axe' for trees, 'pickaxe' for ore and mine marks, 'saw' for a bed,
+-- 'log' for floor spots, bins and bridges. Nil for foraging and the rest.
+function Worker:toolInHand()
+    if not (self.state == 'working' or (self.state == 'walking' and self.goal == 'work')) then return nil end
+    if self.targetNode then
+        if self.targetNode.kind == NODE_TREE then return 'axe' end
+        if self.targetNode.kind == NODE_ORE then return 'pickaxe' end
+        return nil
+    end
+    local site = self.targetSite
+    if not site then return nil end
+    if site.kind == SITE_MINE then return 'pickaxe' end
+    if site.kind == SITE_BED then return 'saw' end
+    return 'log'
 end
 
 function Worker:mood()

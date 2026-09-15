@@ -96,8 +96,7 @@ local function hire(n)
 end
 
 local function onReady(node)
-    game.jobs:postNode(node, node.memo)
-    node.memo = false
+    game.jobs:postNode(node)
 end
 
 local function onEffect(name, data)
@@ -109,9 +108,6 @@ local function onEffect(name, data)
         ui:toast(data.count .. ' mark' .. (data.count == 1 and '' or 's') .. ' cleared')
     elseif name == 'site' then
         Audio.playSFX('line')
-    elseif name == 'memo' then
-        Audio.playSFX('memo')
-        ui:toast('Memo sent about ' .. data.nodes .. ' spot' .. (data.nodes == 1 and '' or 's'))
     end
 end
 
@@ -326,8 +322,6 @@ local function drawWorld()
                     game.view:drawTileFill(p.x, p.y, color)
                 end
                 game.lineCost = cost
-            elseif tool == ABILITY_MEMO then
-                game.view:drawTileOutline(tile.x - MEMO_RADIUS, tile.y - MEMO_RADIUS, { 1, 0.95, 0.5, 0.6 }, MEMO_RADIUS * 2 + 1)
             else
                 game.view:drawTileOutline(tile.x, tile.y, { 1, 1, 1, 0.8 })
             end

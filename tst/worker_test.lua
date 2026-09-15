@@ -377,6 +377,42 @@ function TestWorker:testHungerDrainsMoraleAndFoodRestoresIt()
     lu.assertTrue(w.morale > low, 'fed morphi should recover')
 end
 
+function TestWorker:testOnlyALumberjackBuildsABed()
+    self.bush.ready = false; self.bush.timer = 999
+    local site = self.world:addSite(SITE_BED, 7, 2)
+    self.jobs:postSite(site)
+    local forager = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER, 6, 5))
+    run({ forager }, self.world, self.jobs, 6)
+    lu.assertFalse(self.world:get(7, 2).bed, 'a forager should leave woodwork alone')
+    lu.assertTrue(self.jobs:hasJobForSite(site))
+    local jack = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_LUMBERJACK, 6, 5))
+    local sawTool = false
+    for _ = 1, 100 do
+        run({ jack }, self.world, self.jobs, 0.1)
+        if jack:toolInHand() == 'saw' then sawTool = true end
+        if self.world:get(7, 2).bed then break end
+    end
+    lu.assertTrue(self.world:get(7, 2).bed, 'lumberjack should build the bed')
+    lu.assertTrue(sawTool, 'should carry a saw to the bed site')
+    lu.assertNil(jack:toolInHand())
+end
+
+function TestWorker:testToolsInHand()
+    local jack = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 8, 2))
+    self.jobs:postNode(self.tree)
+    run({ jack }, self.world, self.jobs, 0.6)
+    lu.assertEquals(jack:toolInHand(), 'axe')
+    local miner = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_MINER, 3, 5))
+    self.jobs:postNode(self.ore)
+    run({ miner }, self.world, self.jobs, 0.6)
+    lu.assertEquals(miner:toolInHand(), 'pickaxe')
+    local forager = Worker.new(self.world, self.jobs, self.scoring, Rng.new(4), self.opts(ROLE_FORAGER, 2, 3))
+    local site = self.world:addSite(SITE_STORAGE, 2, 1)
+    self.jobs:postSite(site)
+    run({ forager }, self.world, self.jobs, 0.6)
+    lu.assertEquals(forager:toolInHand(), 'log')
+end
+
 function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     w.hunger = 20

@@ -431,7 +431,7 @@ end
 function World:addNode(kind, x, y)
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
-        ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil, memo = false,
+        ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil,
         fruit = self.rng and self.rng:int(1, 999) or 1,
     }
     if kind == NODE_BUSH then node.timer = BUSH_RIPEN_SECONDS end

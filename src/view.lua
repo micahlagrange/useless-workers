@@ -180,10 +180,6 @@ function View:drawNodes(clock)
             love.graphics.rectangle('fill', px + 10, py + 7, 1, 1)
             love.graphics.rectangle('fill', px + 4, py + 4, 1, 1)
         end
-        if node.memo and not node.ready then
-            love.graphics.setColor(1, 0.95, 0.5)
-            love.graphics.rectangle('fill', px + 11, py + 1, 4, 4)
-        end
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -321,6 +317,38 @@ function View:drawBubble(x, y, text, color)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Hand tools, drawn about the grip so they can swing. Facing right.
+function View:drawTool(kind, x, y, angle, sx)
+    love.graphics.push()
+    love.graphics.translate(x, y)
+    love.graphics.scale(sx, 1)
+    love.graphics.rotate(angle)
+    if kind == 'axe' then
+        love.graphics.setColor(0.45, 0.3, 0.15)
+        love.graphics.rectangle('fill', -1, -7, 2, 9)
+        love.graphics.setColor(0.7, 0.72, 0.75)
+        love.graphics.polygon('fill', 1, -8, 5, -7, 5, -3, 1, -4)
+    elseif kind == 'pickaxe' then
+        love.graphics.setColor(0.45, 0.3, 0.15)
+        love.graphics.rectangle('fill', -1, -7, 2, 9)
+        love.graphics.setColor(0.6, 0.62, 0.66)
+        love.graphics.polygon('fill', -5, -6, 5, -6, 4, -8, -4, -8)
+    elseif kind == 'saw' then
+        love.graphics.setColor(0.45, 0.3, 0.15)
+        love.graphics.rectangle('fill', -2, -2, 3, 4)
+        love.graphics.setColor(0.78, 0.8, 0.82)
+        love.graphics.polygon('fill', 1, -2, 9, -2, 9, 1, 1, 2)
+        love.graphics.setColor(0.5, 0.52, 0.55)
+        for i = 2, 8, 2 do love.graphics.rectangle('fill', i, 1, 1, 1) end
+    elseif kind == 'log' then
+        love.graphics.setColor(0.5, 0.35, 0.18)
+        love.graphics.rectangle('fill', -4, -3, 9, 4)
+        love.graphics.setColor(0.78, 0.6, 0.34)
+        love.graphics.rectangle('fill', 4, -3, 2, 4)
+    end
+    love.graphics.pop()
+end
+
 function View:drawWorker(w, clock, selected)
     local sheet = self.sheets[w.sheet] or self.sheets.pupper
     local frameIndex = 1
@@ -341,6 +369,12 @@ function View:drawWorker(w, clock, selected)
         love.graphics.setColor(1, 1, 1, 1)
     end
     love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx, 1, 8, 16)
+    local tool = w:toolInHand()
+    if tool then
+        local swing = 0
+        if w.state == 'working' then swing = -0.9 + 0.7 * math.sin((clock or 0) * 12 + w.id) end
+        self:drawTool(tool, w.x + 5 * sx, feetY - 6, swing, sx)
+    end
     local cargo = w.slots[SLOT_WORK]
     if cargo then
         local bob = math.sin((clock or 0) * 6 + w.id) * 1

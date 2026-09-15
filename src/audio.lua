@@ -8,7 +8,6 @@ local files = {
     dig = { 'assets/audio/mine1.mp3', 'assets/audio/mine2.mp3', 'assets/audio/mine3.mp3', 'assets/audio/mine4.mp3', 'assets/audio/mine5.mp3' },
     explode = { 'assets/audio/explode1.mp3', 'assets/audio/explode2.mp3', 'assets/audio/explode3.mp3' },
     line = 'assets/audio/line_mine.mp3',
-    memo = 'assets/audio/click.mp3',
     complain = 'assets/audio/tension1.mp3',
     eat = { 'assets/audio/crunch.mp3', 'assets/audio/crunch2.mp3', 'assets/audio/slurp.mp3' },
     deliver = { 'assets/audio/doot1.mp3', 'assets/audio/doot23.mp3' },

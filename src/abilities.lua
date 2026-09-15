@@ -27,7 +27,6 @@ function Abilities:costText(tool)
     if tool == ABILITY_BIN then return COSTS.bin.logs .. ' log, 4 items' end
     if tool == ABILITY_BED then return COSTS.bed.logs .. ' logs' end
     if tool == ABILITY_BRIDGE then return COSTS.bridge.logs .. ' log/tile' end
-    if tool == ABILITY_MEMO then return COSTS.memo.gold .. ' gold' end
     if tool == ABILITY_MINE then return 'drag, free' end
     return 'free'
 end
@@ -37,7 +36,6 @@ function Abilities:canAfford(tool)
     if tool == ABILITY_BIN then return self.world:canAfford(COSTS.bin) end
     if tool == ABILITY_BED then return self.world:canAfford(COSTS.bed) end
     if tool == ABILITY_BRIDGE then return self.world:canAfford(COSTS.bridge) end
-    if tool == ABILITY_MEMO then return self.world:canAfford(COSTS.memo) end
     return true
 end
 
@@ -62,26 +60,6 @@ function Abilities:use(tx, ty)
         return true
     elseif tool == ABILITY_MINE then
         return self:designateMine(tx, ty, tx, ty)
-    elseif tool == ABILITY_MEMO then
-        if not self.world:canAfford(COSTS.memo) then return false, 'Need ' .. COSTS.memo.gold .. ' gold for a memo' end
-        local touched = 0
-        for _, node in ipairs(self.world.nodes) do
-            if math.abs(node.x - tx) <= MEMO_RADIUS and math.abs(node.y - ty) <= MEMO_RADIUS then
-                node.memo = true
-                if node.ready then self.jobs:postNode(node, true) end
-                touched = touched + 1
-            end
-        end
-        for _, site in ipairs(self.world.sites) do
-            if math.abs(site.x - tx) <= MEMO_RADIUS and math.abs(site.y - ty) <= MEMO_RADIUS then
-                self.jobs:prioritize(site.area or site)
-                touched = touched + 1
-            end
-        end
-        if touched == 0 then return false, 'Nothing to work on near that memo' end
-        self.world:spend(COSTS.memo)
-        self:effect('memo', { x = tx, y = ty, nodes = touched })
-        return true
     end
     return false, nil
 end

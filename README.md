@@ -72,7 +72,7 @@ do the rest.
 ## Controls
 
 - WASD or right-drag to pan, mouse wheel to zoom
-- 1 to 7 pick a tool: select, mine, floor, bin, bed, bridge, memo
+- 1 to 6 pick a tool: select, mine, floor, bin, bed, bridge
 - Select then click a morphi to see who is complaining, F to follow them
 - U opens the units list with a follow button per morphi
 - M mutes, ESC asks before returning to the title

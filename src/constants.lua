@@ -58,6 +58,8 @@ BREAK_AFTER_SECONDS = 45
 BREAK_SECONDS       = 8        -- resting on a break room tile or the ground
 BREAK_SECONDS_BED   = 4        -- resting in a bed
 BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break is due
+-- Floor spots, bins and bridges are 'build' jobs anyone takes. A bed is
+-- 'woodwork': only a lumberjack builds it.
 -- Every resting morphi claims its own spot: a bed, a break room tile, or a
 -- free tile next to the break room. Nobody naps on top of anybody.
 
@@ -65,7 +67,7 @@ BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break 
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins' } },
+    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins' }, alsoTakes = { 'woodwork' } },
     miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
 }
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
@@ -103,9 +105,8 @@ ABILITY_STORAGE = 'storage'   -- place a free floor storage spot, holds one item
 ABILITY_BIN     = 'bin'       -- place a bin site (costs logs), holds four items
 ABILITY_BED     = 'bed'       -- place a bed site; a bed is a quicker, better break
 ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
-ABILITY_MEMO    = 'memo'
-ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE, ABILITY_MEMO }
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', bridge = 'BRIDGE', memo = 'MEMO' }
+ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
+ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', bridge = 'BRIDGE' }
 -- Storage: a floor spot is free and holds one item. A bin costs logs and
 -- holds four, shown in the order they came in, quadrant by quadrant.
 STORAGE_FLOOR_CAPACITY = 1
@@ -116,11 +117,9 @@ COSTS = {
     bin     = { logs = 1 },
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
-    memo    = { gold = 1 },
 }
 STARTING_STOCK  = { logs = 4, gold = 0 }
 BUILD_SECONDS   = 3.0
-MEMO_RADIUS     = 5
 LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
 MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
