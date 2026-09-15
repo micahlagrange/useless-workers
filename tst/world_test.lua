@@ -34,33 +34,60 @@ function TestWorldGen:testDeterministicForSeed()
     lu.assertEquals(a.breakroom.x, b.breakroom.x)
 end
 
-function TestWorldGen:testTreesLandOnGrassWithSomeEnclosed()
+function TestWorldGen:testNodesLandInTheRightPlaces()
     local world = World.generate(987, Rng.new(987))
-    local planted = world:spawnTrees(TREES_INITIAL)
-    lu.assertEquals(#planted, TREES_INITIAL)
-    local reachable, enclosed = 0, 0
-    for _, tree in ipairs(planted) do
-        lu.assertEquals(world:get(tree.x, tree.y).type, TILE_GRASS)
-        lu.assertEquals(world:get(tree.x, tree.y).tree, tree)
-        if world:isReachable(tree.x, tree.y) then reachable = reachable + 1 else enclosed = enclosed + 1 end
+    local planted = world:spawnAllNodes(NODES_INITIAL)
+    lu.assertEquals(#planted, NODES_INITIAL.bush + NODES_INITIAL.tree + NODES_INITIAL.ore)
+    local reachable, enclosed = {}, {}
+    for _, node in ipairs(planted) do
+        local t = world:get(node.x, node.y)
+        lu.assertEquals(t.node, node)
+        if node.kind == NODE_ORE then
+            lu.assertEquals(t.type, TILE_STONE)
+        else
+            lu.assertEquals(t.type, TILE_GRASS)
+        end
+        if world:nodeReachable(node) then
+            reachable[node.kind] = (reachable[node.kind] or 0) + 1
+        else
+            enclosed[node.kind] = (enclosed[node.kind] or 0) + 1
+        end
     end
-    lu.assertTrue(reachable >= 6, 'reachable trees: ' .. reachable)
-    lu.assertTrue(enclosed >= 2, 'enclosed trees: ' .. enclosed)
+    for _, kind in ipairs(NODE_KINDS) do
+        lu.assertTrue((reachable[kind] or 0) >= 3, kind .. ' reachable: ' .. tostring(reachable[kind]))
+        lu.assertTrue((enclosed[kind] or 0) >= 1, kind .. ' enclosed: ' .. tostring(enclosed[kind]))
+    end
+    -- bushes start unripe, trees and ore are ready at once
+    for _, node in ipairs(planted) do
+        lu.assertEquals(node.ready, node.kind ~= NODE_BUSH)
+    end
     -- cap
-    world:spawnTrees(100)
-    lu.assertEquals(#world.trees, MAX_TREES)
+    world:spawnNodes(NODE_BUSH, 100)
+    lu.assertEquals(#world:nodesOfKind(NODE_BUSH), MAX_NODES_PER_KIND)
 end
 
-function TestWorldGen:testTreesRipenAndPost()
+function TestWorldGen:testBushesRipenTreesRegrowOreDepletes()
     local world = World.generate(3, Rng.new(3))
-    world:spawnTrees(5)
-    local ripened = {}
-    for _ = 1, 120 do world:update(0.1, function(t) ripened[#ripened + 1] = t end) end
-    lu.assertEquals(#ripened, 5)
-    lu.assertEquals(world:ripeTreeCount(), 5)
-    world:harvest(ripened[1])
-    lu.assertFalse(ripened[1].ripe)
-    lu.assertEquals(ripened[1].timer, TREE_RIPEN_SECONDS)
+    world:spawnNodes(NODE_BUSH, 5)
+    local ready = {}
+    for _ = 1, 120 do world:update(0.1, function(n) ready[#ready + 1] = n end) end
+    lu.assertEquals(#ready, 5)
+    lu.assertEquals(world:readyNodeCount(NODE_BUSH), 5)
+    lu.assertEquals(world:harvestNode(ready[1]), CARGO_FOOD)
+    lu.assertFalse(ready[1].ready)
+    lu.assertEquals(ready[1].timer, BUSH_RIPEN_SECONDS)
+    local tree = world:spawnNodes(NODE_TREE, 1)[1]
+    lu.assertTrue(tree.ready)
+    lu.assertEquals(world:harvestNode(tree), CARGO_LOGS)
+    lu.assertFalse(tree.ready)
+    lu.assertEquals(tree.timer, TREE_REGROW_SECONDS)
+    local ore = world:spawnNodes(NODE_ORE, 1, 0)[1]
+    local ox, oy = ore.x, ore.y
+    lu.assertEquals(world:get(ox, oy).type, TILE_STONE)
+    lu.assertEquals(world:harvestNode(ore), CARGO_GOLD)
+    lu.assertEquals(world:get(ox, oy).type, TILE_DIRT)
+    lu.assertNil(world:get(ox, oy).node)
+    lu.assertEquals(#world:nodesOfKind(NODE_ORE), 0)
 end
 
 TestWorldTools = {}
@@ -68,9 +95,9 @@ local grid = {
     '..........',
     '..#####...',
     '..#...#...',
-    '..#.T.#...',
+    '..#.b.#...',
     '..#####...',
-    '.BB.......',
+    '.BB....G..',
     '.BB..~~~..',
     '.....~~~..',
 }
@@ -83,8 +110,22 @@ function TestWorldTools:testGridParsing()
     lu.assertEquals(self.world:get(3, 2).type, TILE_STONE)
     lu.assertEquals(self.world:get(6, 7).type, TILE_WATER)
     lu.assertEquals(#self.world.breakroom.tiles, 4)
-    lu.assertEquals(#self.world.trees, 1)
-    lu.assertTrue(self.world.trees[1].ripe)
+    lu.assertEquals(#self.world.nodes, 2)
+    lu.assertEquals(self.world.nodes[1].kind, NODE_BUSH)
+    lu.assertTrue(self.world.nodes[1].ready)
+    lu.assertEquals(self.world.nodes[2].kind, NODE_ORE)
+    lu.assertEquals(self.world:get(8, 6).type, TILE_STONE)
+end
+function TestWorldTools:testOreIsWorkedFromNextDoor()
+    local ore = self.world.nodes[2]
+    local spot = self.world:approachTile(ore)
+    lu.assertNotNil(spot)
+    lu.assertTrue(self.world:isPassable(spot.x, spot.y))
+    lu.assertEquals(math.abs(spot.x - ore.x) + math.abs(spot.y - ore.y), 1)
+    local bush = self.world.nodes[1]
+    lu.assertNil(self.world:approachTile(bush)) -- walled in
+    self.world:dig(4, 5)
+    lu.assertEquals(self.world:approachTile(bush), { x = 5, y = 4 })
 end
 function TestWorldTools:testEnclosedTreeUnreachableUntilDug()
     lu.assertFalse(self.world:isReachable(5, 4))

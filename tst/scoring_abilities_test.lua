@@ -17,11 +17,17 @@ function TestScoring:testGrades()
 end
 function TestScoring:testQuarterCloseAndHires()
     local s = Scoring.new(2)
-    for _ = 1, 12 do s:addOutput() end
+    for _ = 1, 10 do s:addDelivery(CARGO_FOOD) end
+    s:addDelivery(CARGO_LOGS)
+    s:addDelivery(CARGO_GOLD)
     s:addComplaint()
     s:sampleFed(50); s:sampleFed(70)
     local r = s:closeQuarter(4)
     lu.assertEquals(r.output, 12)
+    lu.assertEquals(r.food, 10)
+    lu.assertEquals(r.logs, 1)
+    lu.assertEquals(r.gold, 1)
+    lu.assertEquals(s:lifetimeValue(), 10 + 2 + 3)
     lu.assertEquals(r.fedPct, 60)
     lu.assertEquals(r.complaints, 1)
     lu.assertEquals(r.grade, 'A')
@@ -38,12 +44,12 @@ end
 function TestScoring:testYearAndFinalScore()
     local s = Scoring.new(3)
     for _ = 1, 4 do
-        for _ = 1, 5 do s:addOutput() end
+        for _ = 1, 5 do s:addDelivery(CARGO_GOLD) end
         s:closeQuarter(3)
     end
     lu.assertTrue(s:yearComplete())
     s:addQuit()
-    lu.assertEquals(s:finalScore(), math.floor((20 - 3) * 1.5))
+    lu.assertEquals(s:finalScore(), math.floor((20 * 3 - 3) * 1.5))
     s:startEndless()
     lu.assertFalse(s:yearComplete())
     local drain = s.drain
@@ -62,7 +68,7 @@ TestAbilities = {}
 function TestAbilities:setUp()
     self.world = World.fromGrid({
         '..###..........',
-        '..#T#..........',
+        '..#b#..........',
         '..###..........',
         'BB.~~..........',
         'BB.~~..........',
@@ -89,7 +95,7 @@ function TestAbilities:testExplodeOpensPocket()
     lu.assertTrue((self.abilities:use(4, 2)))
     lu.assertEquals(self.scoring.budget, BUDGET_START - 4)
     lu.assertTrue(self.world:isReachable(4, 2))
-    lu.assertEquals(self.world:get(4, 2).type, TILE_GRASS) -- the tree tile itself was grass
+    lu.assertEquals(self.world:get(4, 2).type, TILE_GRASS) -- the bush tile itself was grass
 end
 function TestAbilities:testBridgeAllOrNothing()
     self.abilities:select(ABILITY_LINE)
@@ -108,13 +114,13 @@ function TestAbilities:testBridgeAllOrNothing()
     lu.assertTrue(self.world:isReachable(6, 4))
 end
 function TestAbilities:testMemoPrioritizes()
-    local tree = self.world.trees[1]
-    local other = self.world:addTree(15, 1); other.ripe = true -- outside the memo radius
-    self.jobs:postHarvest(other)
-    self.jobs:postHarvest(tree)
+    local bush = self.world.nodes[1]
+    local other = self.world:addNode(NODE_BUSH, 15, 1); other.ready = true -- outside the memo radius
+    self.jobs:postNode(other)
+    self.jobs:postNode(bush)
     self.abilities:select(ABILITY_MEMO)
     lu.assertTrue((self.abilities:use(4, 2)))
-    lu.assertEquals(self.jobs:take().tree, tree)
+    lu.assertEquals(self.jobs:take('forage').node, bush)
     lu.assertEquals(self.scoring.budget, BUDGET_START - 2)
 end
 

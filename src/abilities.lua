@@ -51,18 +51,18 @@ function Abilities:use(tx, ty)
     elseif tool == ABILITY_MEMO then
         if not self.scoring:canAfford(self:cost(tool)) then return false, 'Not enough budget' end
         local touched = 0
-        for _, tree in ipairs(self.world.trees) do
-            if math.abs(tree.x - tx) <= MEMO_RADIUS and math.abs(tree.y - ty) <= MEMO_RADIUS then
-                tree.memo = true
-                if tree.ripe then
-                    self.jobs:postHarvest(tree, true)
+        for _, node in ipairs(self.world.nodes) do
+            if math.abs(node.x - tx) <= MEMO_RADIUS and math.abs(node.y - ty) <= MEMO_RADIUS then
+                node.memo = true
+                if node.ready then
+                    self.jobs:postNode(node, true)
                 end
                 touched = touched + 1
             end
         end
-        if touched == 0 then return false, 'No trees near that memo' end
+        if touched == 0 then return false, 'Nothing to work on near that memo' end
         self.scoring:spend(self:cost(tool))
-        self:effect('memo', { x = tx, y = ty, trees = touched })
+        self:effect('memo', { x = tx, y = ty, nodes = touched })
         return true
     end
     return false, nil

@@ -37,27 +37,26 @@ end
 
 -- Game setup ---------------------------------------------------------------
 
-local function tintFor(index)
-    local i = (index - 1) % #WORKER_TINTS + 1
-    return Util.hexToRgb(WORKER_TINTS[i]), WORKER_TINT_NAMES[i]
-end
+local NODE_WORDS = { bush = 'bush', tree = 'tree', ore = 'gold' }
 
-local function onComplain(worker, reason, x, y)
+local function onComplain(worker, reason, node)
+    local where = node and (NODE_WORDS[node.kind] .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
     local text
     if reason == 'hungry' then
-        text = worker.name .. ' is hungry and the fruit at ' .. x .. ',' .. y .. ' is walled off'
+        text = worker.name .. ' is hungry and the ' .. where .. ' is walled off'
     elseif reason == 'slow' then
-        text = worker.name .. ' gave up walking to ' .. (x or '?') .. ',' .. (y or '?')
+        text = worker.name .. ' gave up walking to the ' .. where
     else
-        text = worker.name .. " can't reach the fruit at " .. x .. ',' .. y
+        text = worker.name .. " can't reach the " .. where
     end
-    ui:alert(text, x and { x = x, y = y } or nil)
+    ui:alert(text, node and { x = node.x, y = node.y } or nil)
     Audio.playSFX('complain')
 end
 
-local function onWorkerEvent(worker, name)
+local function onWorkerEvent(worker, name, data)
     if name == 'eat' then Audio.playSFX('eat')
     elseif name == 'deliver' then Audio.playSFX('deliver')
+    elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
     elseif name == 'quit' then
         Audio.playSFX('quit')
         ui:alert(worker.name .. ' quit. Starved on the job.')
@@ -70,11 +69,14 @@ local function hire(n)
     for _ = 1, n do
         game.hired = game.hired + 1
         local spot = spots[(game.hired - 1) % #spots + 1]
-        local tint, tintName = tintFor(game.hired)
+        local role = HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
+        local sheets = ROLES[role].sheets
+        game.roleHires[role] = (game.roleHires[role] or 0) + 1
         local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
             x = spot.x, y = spot.y,
-            name = WORKER_NAMES[(game.hired - 1) % #WORKER_NAMES + 1],
-            tint = tint, tintName = tintName,
+            role = role,
+            sheet = sheets[(game.roleHires[role] - 1) % #sheets + 1],
+            name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
             onComplain = onComplain,
             onEvent = onWorkerEvent,
@@ -83,9 +85,9 @@ local function hire(n)
     end
 end
 
-local function onRipe(tree)
-    game.jobs:postHarvest(tree, tree.memo)
-    tree.memo = false
+local function onReady(node)
+    game.jobs:postNode(node, node.memo)
+    node.memo = false
 end
 
 local function onEffect(name, data)
@@ -100,7 +102,7 @@ local function onEffect(name, data)
         Audio.playSFX('line')
     elseif name == 'memo' then
         Audio.playSFX('memo')
-        ui:toast('Memo sent to ' .. data.trees .. ' tree' .. (data.trees == 1 and '' or 's'))
+        ui:toast('Memo sent about ' .. data.nodes .. ' spot' .. (data.nodes == 1 and '' or 's'))
     end
 end
 
@@ -112,9 +114,14 @@ local function newGame(seedString, difficultyIndex)
     game.scoring = Scoring.new(difficultyIndex)
     game.world = World.generate(game.seedNumber, game.rng)
     game.jobs = Jobs.new()
-    game.world:spawnTrees(TREES_INITIAL)
+    game.world:spawnAllNodes(NODES_INITIAL)
+    -- everything standing at the start is already workable
+    for _, node in ipairs(game.world.nodes) do
+        if node.ready then game.jobs:postNode(node) end
+    end
     game.workers = {}
     game.hired = 0
+    game.roleHires = {}
     game.clock = 0
     game.staffCount = 0
     game.averageHunger = 100
@@ -132,7 +139,7 @@ local function newGame(seedString, difficultyIndex)
     Effects.clear()
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
-    ui:alert('Keep them fed. Dig, blast and bridge so they can reach the fruit.')
+    ui:alert('Pupper forages, Twins chops, Cwab mines. Dig, blast and bridge so they can reach their work.')
     state = 'playing'
     love.mouse.setVisible(false)
 end
@@ -160,7 +167,9 @@ end
 local function closeQuarter()
     local count = staffStats()
     game.report = game.scoring:closeQuarter(count)
-    game.world:spawnTrees(TREES_PER_QUARTER)
+    for _, node in ipairs(game.world:spawnAllNodes(NODES_PER_QUARTER)) do
+        if node.ready then game.jobs:postNode(node) end
+    end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end
     if game.report.hires > 0 then
         hire(game.report.hires)
@@ -211,7 +220,7 @@ end
 local function updatePlaying(dt)
     game.clock = game.clock + dt
     game.jobs:update(dt)
-    game.world:update(dt, onRipe)
+    game.world:update(dt, onReady)
     for _, w in ipairs(game.workers) do
         w:update(dt, game.clock)
     end
@@ -262,7 +271,7 @@ local function drawWorld()
     Effects.applyShake()
     game.view:drawWorld()
     game.view:drawBreakroom()
-    game.view:drawTrees(game.clock)
+    game.view:drawNodes(game.clock)
     -- tiles the alerts are pointing at
     local pulse = 0.4 + 0.4 * math.abs(math.sin(game.clock * 6))
     for _, t in ipairs(ui:alertTiles()) do

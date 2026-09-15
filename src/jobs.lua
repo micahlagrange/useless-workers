@@ -1,6 +1,16 @@
--- First come, first served job queue. The only job type this jam is 'harvest'.
+-- First come, first served job queue. Jobs are typed by the node they point
+-- at: 'forage' for bushes, 'chop' for trees, 'mine' for ore. Each role only
+-- takes its own type.
+require('src.constants')
+
 local Jobs = {}
 Jobs.__index = Jobs
+
+local TYPE_FOR_KIND = { bush = 'forage', tree = 'chop', ore = 'mine' }
+
+function Jobs.typeForNode(node)
+    return TYPE_FOR_KIND[node.kind]
+end
 
 function Jobs.new()
     return setmetatable({ items = {}, clock = 0 }, Jobs)
@@ -10,20 +20,25 @@ function Jobs:update(dt)
     self.clock = self.clock + dt
 end
 
-function Jobs:count()
-    return #self.items
+function Jobs:count(jobType)
+    if not jobType then return #self.items end
+    local n = 0
+    for _, job in ipairs(self.items) do
+        if job.type == jobType then n = n + 1 end
+    end
+    return n
 end
 
-function Jobs:hasJobFor(tree)
+function Jobs:hasJobFor(node)
     for _, job in ipairs(self.items) do
-        if job.tree == tree then return true end
+        if job.node == node then return true end
     end
     return false
 end
 
 function Jobs:post(job, front)
-    if job.tree and self:hasJobFor(job.tree) then
-        if front then self:prioritize(job.tree) end
+    if job.node and self:hasJobFor(job.node) then
+        if front then self:prioritize(job.node) end
         return false
     end
     job.postedAt = job.postedAt or self.clock
@@ -35,14 +50,14 @@ function Jobs:post(job, front)
     return true
 end
 
-function Jobs:postHarvest(tree, front)
-    return self:post({ type = 'harvest', x = tree.x, y = tree.y, tree = tree }, front)
+function Jobs:postNode(node, front)
+    return self:post({ type = Jobs.typeForNode(node), x = node.x, y = node.y, node = node }, front)
 end
 
--- Move the job for this tree to the front of the queue.
-function Jobs:prioritize(tree)
+-- Move the job for this node to the front of the queue.
+function Jobs:prioritize(node)
     for i, job in ipairs(self.items) do
-        if job.tree == tree then
+        if job.node == node then
             table.remove(self.items, i)
             table.insert(self.items, 1, job)
             return true
@@ -51,15 +66,15 @@ function Jobs:prioritize(tree)
     return false
 end
 
--- Returns and removes the oldest job that passes the predicate. Jobs whose
--- tree is no longer ripe are dropped along the way.
-function Jobs:take(predicate)
+-- Returns and removes the oldest job of the given type that passes the
+-- predicate. Jobs whose node is no longer ready are dropped along the way.
+function Jobs:take(jobType, predicate)
     local i = 1
     while i <= #self.items do
         local job = self.items[i]
-        if job.tree and not job.tree.ripe then
+        if job.node and not job.node.ready then
             table.remove(self.items, i)
-        elseif predicate == nil or predicate(job) then
+        elseif (jobType == nil or job.type == jobType) and (predicate == nil or predicate(job)) then
             table.remove(self.items, i)
             return job
         else

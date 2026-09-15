@@ -6,121 +6,170 @@ local Jobs = require('src.jobs')
 local Scoring = require('src.scoring')
 local Worker = require('src.worker')
 
-local function run(workers, world, jobs, seconds, dt, onRipe)
+local function run(workers, world, jobs, seconds, dt)
     dt = dt or 0.05
     local clock = 0
     local steps = math.floor(seconds / dt)
     for _ = 1, steps do
         clock = clock + dt
         jobs:update(dt)
-        world:update(dt, onRipe or function(t) jobs:postHarvest(t) end)
+        world:update(dt, function(n) jobs:postNode(n) end)
         for _, w in ipairs(workers) do w:update(dt, clock) end
     end
     return clock
 end
 
+-- b: ripe bush (reachable) at (2,2)   T: tree at (9,2)   G: ore at (3,6) in a stone wall
+-- pocket bush at (5,8) walled in
+local GRID = {
+    '..........',
+    '.b......T.',
+    '..........',
+    '....BB....',
+    '....BB....',
+    '..G.......',
+    '..#####...',
+    '..#.b.#...',
+    '..#####...',
+}
+
 TestWorker = {}
 function TestWorker:setUp()
-    self.world = World.fromGrid({
-        '..........',
-        '.T........',
-        '..........',
-        '....BB....',
-        '....BB....',
-        '..........',
-        '..#####...',
-        '..#.T.#...',
-        '..#####...',
-    }, Rng.new(1))
+    self.world = World.fromGrid(GRID, Rng.new(1))
     self.jobs = Jobs.new()
     self.scoring = Scoring.new(2)
     self.complaints = {}
     self.events = {}
-    self.worker = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), {
-        x = 5, y = 4, name = 'Dave', drain = 0.5,
-        onComplain = function(_, reason, x, y) self.complaints[#self.complaints + 1] = { reason = reason, x = x, y = y } end,
-        onEvent = function(_, name) self.events[#self.events + 1] = name end,
-    })
+    self.bush = self.world:get(2, 2).node
+    self.tree = self.world:get(9, 2).node
+    self.ore = self.world:get(3, 6).node
+    self.pocket = self.world:get(5, 8).node
+    self.pocket.ready = false; self.pocket.timer = 999
+    self.opts = function(role, x, y)
+        return {
+            x = x or 5, y = y or 4, role = role, name = 'Dave', drain = 0.5,
+            onComplain = function(_, reason, node) self.complaints[#self.complaints + 1] = { reason = reason, node = node } end,
+            onEvent = function(_, name, data) self.events[#self.events + 1] = name .. (data and (':' .. tostring(data)) or '') end,
+        }
+    end
 end
 
-function TestWorker:testHarvestsAndDelivers()
-    local tree = self.world.trees[1]           -- (2,2), reachable, ripe
-    local pocket = self.world.trees[2]         -- (5,8), walled in
-    pocket.ripe = false; pocket.timer = 999
-    self.jobs:postHarvest(tree)
-    run({ self.worker }, self.world, self.jobs, 12)
+function TestWorker:testForagerPicksAndStocksThePantry()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    self.jobs:postNode(self.bush)
+    run({ w }, self.world, self.jobs, 12)
     lu.assertEquals(self.scoring.output, 1)
-    lu.assertEquals(self.worker.delivered, 1)
-    lu.assertFalse(tree.ripe)
-    lu.assertNil(self.worker.carrying)
-    lu.assertEquals(self.jobs:count(), 0)
-    lu.assertEquals(self.events[1], 'harvest')
-    lu.assertEquals(self.events[2], 'deliver')
+    lu.assertEquals(self.scoring.delivered.food, 1)
+    lu.assertEquals(self.world.breakroom.food, 1)
+    lu.assertFalse(self.bush.ready)
+    lu.assertNil(w.carrying)
+    lu.assertEquals(self.events[1], 'work:bush')
+    lu.assertEquals(self.events[2], 'deliver:food')
     lu.assertEquals(#self.complaints, 0)
 end
 
-function TestWorker:testEatsWhenHungry()
-    self.world.trees[2].ripe = false; self.world.trees[2].timer = 999
-    self.worker.hunger = 20
-    run({ self.worker }, self.world, self.jobs, 8)
-    lu.assertTrue(self.worker.hunger > 40, 'hunger was ' .. self.worker.hunger)
+function TestWorker:testLumberjackChopsTreeIntoStump()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
+    self.jobs:postNode(self.bush)   -- not my job
+    self.jobs:postNode(self.tree)
+    run({ w }, self.world, self.jobs, 14)
+    lu.assertEquals(self.scoring.delivered.logs, 1)
+    lu.assertEquals(self.scoring.delivered.food, 0)
+    lu.assertFalse(self.tree.ready)
+    lu.assertEquals(self.tree.timer > 0, true)
+    lu.assertTrue(self.jobs:hasJobFor(self.bush)) -- still queued for a forager
+    lu.assertEquals(self.events[2], 'deliver:logs')
+end
+
+function TestWorker:testMinerWorksOreFromNextDoorAndOpensTheTile()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    self.jobs:postNode(self.ore)
+    run({ w }, self.world, self.jobs, 14)
+    lu.assertEquals(self.scoring.delivered.gold, 1)
+    lu.assertEquals(self.world:get(3, 6).type, TILE_DIRT)
+    lu.assertNil(self.world:get(3, 6).node)
+    lu.assertEquals(#self.world:nodesOfKind(NODE_ORE), 0)
+end
+
+function TestWorker:testHungryMorphiEatsFromThePantryFirst()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    self.world.breakroom.food = 2
+    w.hunger = 20
+    run({ w }, self.world, self.jobs, 4)
+    lu.assertEquals(self.world.breakroom.food, 1)
+    lu.assertTrue(w.hunger > 50, 'hunger was ' .. w.hunger)
+    lu.assertTrue(self.bush.ready) -- left the bush alone
+    lu.assertEquals(self.events[1], 'eat')
+end
+
+function TestWorker:testHungryMorphiEatsFromABushWhenPantryIsEmpty()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
+    w.hunger = 20
+    run({ w }, self.world, self.jobs, 8)
+    lu.assertTrue(w.hunger > 40, 'hunger was ' .. w.hunger)
+    lu.assertFalse(self.bush.ready)
     lu.assertEquals(self.scoring.output, 0)
     lu.assertEquals(self.events[1], 'eat')
 end
 
-function TestWorker:testComplainsAboutWalledOffFruit()
-    self.world.trees[1].ripe = false; self.world.trees[1].timer = 999
-    local pocket = self.world.trees[2]
-    self.jobs:postHarvest(pocket)
-    run({ self.worker }, self.world, self.jobs, 2)
+function TestWorker:testComplainsAboutWalledOffBush()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    self.bush.ready = false; self.bush.timer = 999
+    self.pocket.ready = true
+    self.jobs:postNode(self.pocket)
+    run({ w }, self.world, self.jobs, 2)
     lu.assertEquals(#self.complaints, 1)
     lu.assertEquals(self.complaints[1].reason, 'blocked')
-    lu.assertEquals(self.complaints[1].x, 5)
+    lu.assertEquals(self.complaints[1].node, self.pocket)
     lu.assertEquals(self.scoring.complaints, 1)
     lu.assertEquals(self.jobs:count(), 1)       -- job went back on the queue
-    lu.assertTrue(self.worker:isIcked(5, 8))
-    lu.assertEquals(self.worker.state, 'sulking')
-    -- after the sulk the worker leaves the icked tree alone and wanders instead
-    run({ self.worker }, self.world, self.jobs, 6)
+    lu.assertTrue(w:isIcked(5, 8))
+    lu.assertEquals(w.state, 'sulking')
+    run({ w }, self.world, self.jobs, 6)
     lu.assertEquals(#self.complaints, 1)
     lu.assertEquals(self.scoring.output, 0)
-    -- dig it open and the worker gets to it
+    -- dig it open and the forager gets to it
     self.world:dig(4, 7)
-    self.worker.icks = {}
-    run({ self.worker }, self.world, self.jobs, 15)
-    lu.assertEquals(self.scoring.output, 1)
+    w.icks = {}
+    run({ w }, self.world, self.jobs, 15)
+    lu.assertEquals(self.scoring.delivered.food, 1)
 end
 
 function TestWorker:testHungryAndBlockedComplains()
-    self.world.trees[1].ripe = false; self.world.trees[1].timer = 999
-    self.worker.hunger = 10
-    run({ self.worker }, self.world, self.jobs, 1.5)
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    self.bush.ready = false; self.bush.timer = 999
+    self.pocket.ready = true
+    w.hunger = 10
+    run({ w }, self.world, self.jobs, 1.5)
     lu.assertEquals(self.complaints[1].reason, 'hungry')
 end
 
 function TestWorker:testStarvesAndQuits()
-    self.world.trees[1].ripe = false; self.world.trees[1].timer = 999
-    self.world.trees[2].ripe = false; self.world.trees[2].timer = 999
-    self.worker.hunger = 3
-    self.worker.drain = 2
-    run({ self.worker }, self.world, self.jobs, 2)
-    lu.assertEquals(self.worker.state, 'quitting')
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
+    self.bush.ready = false; self.bush.timer = 999
+    w.hunger = 3
+    w.drain = 2
+    run({ w }, self.world, self.jobs, 2)
+    lu.assertEquals(w.state, 'quitting')
     lu.assertEquals(self.scoring.quits, 1)
-    lu.assertFalse(self.worker:isWorking())
+    lu.assertFalse(w:isWorking())
     lu.assertEquals(self.events[#self.events], 'quit')
-    run({ self.worker }, self.world, self.jobs, 6)
-    lu.assertFalse(self.worker.alive)
+    run({ w }, self.world, self.jobs, 6)
+    lu.assertFalse(w.alive)
 end
 
-function TestWorker:testTwoWorkersShareQueue()
-    local other = Worker.new(self.world, self.jobs, self.scoring, Rng.new(9), { x = 6, y = 5, name = 'Priya', drain = 0.5 })
-    self.world.trees[2].ripe = false; self.world.trees[2].timer = 999
-    local extra = self.world:addTree(9, 2); extra.ripe = true
-    self.jobs:postHarvest(self.world.trees[1])
-    self.jobs:postHarvest(extra)
-    run({ self.worker, other }, self.world, self.jobs, 12)
-    lu.assertEquals(self.scoring.output, 2)
-    lu.assertEquals(self.worker.delivered + other.delivered, 2)
+function TestWorker:testThreeRolesShareOneQueue()
+    local f = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER, 5, 4))
+    local l = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_LUMBERJACK, 6, 4))
+    local m = Worker.new(self.world, self.jobs, self.scoring, Rng.new(4), self.opts(ROLE_MINER, 5, 5))
+    self.jobs:postNode(self.ore)
+    self.jobs:postNode(self.bush)
+    self.jobs:postNode(self.tree)
+    run({ f, l, m }, self.world, self.jobs, 16)
+    lu.assertEquals(self.scoring.delivered.food, 1)
+    lu.assertEquals(self.scoring.delivered.logs, 1)
+    lu.assertEquals(self.scoring.delivered.gold, 1)
+    lu.assertEquals(self.jobs:count(), 0)
 end
 
 TestSimulation = {}
@@ -128,14 +177,22 @@ local function simulateQuarter(difficultyIndex)
     local seed = Rng.seedToNumber(DEFAULT_SEED)
     local rng = Rng.new(seed)
     local world = World.generate(seed, rng)
-    world:spawnTrees(TREES_INITIAL)
+    world:spawnAllNodes(NODES_INITIAL)
     local jobs = Jobs.new()
+    for _, node in ipairs(world.nodes) do
+        if node.ready then jobs:postNode(node) end
+    end
     local scoring = Scoring.new(difficultyIndex)
     local workers = {}
     local spots = world:spawnTiles(3)
+    local reasons = {}
     for i = 1, DIFFICULTIES[difficultyIndex].workers do
         local s = spots[(i - 1) % #spots + 1]
-        workers[#workers + 1] = Worker.new(world, jobs, scoring, rng, { x = s.x, y = s.y, name = 'W' .. i, drain = scoring.drain })
+        local role = HIRE_ORDER[(i - 1) % #HIRE_ORDER + 1]
+        workers[#workers + 1] = Worker.new(world, jobs, scoring, rng, {
+            x = s.x, y = s.y, name = 'W' .. i, role = role, drain = scoring.drain,
+            onComplain = function(_, reason) reasons[reason] = (reasons[reason] or 0) + 1 end,
+        })
     end
     local clock = 0
     local dt = 1 / 30
@@ -144,7 +201,7 @@ local function simulateQuarter(difficultyIndex)
     while clock < QUARTER_SECONDS + 1 and not ended do
         clock = clock + dt
         jobs:update(dt)
-        world:update(dt, function(t) jobs:postHarvest(t) end)
+        world:update(dt, function(n) jobs:postNode(n) end)
         local count, sum = 0, 0
         for _, w in ipairs(workers) do
             w:update(dt, clock)
@@ -156,17 +213,20 @@ local function simulateQuarter(difficultyIndex)
     lu.assertTrue(ended)
     lu.assertTrue(elapsed < 20, 'quarter simulation took ' .. elapsed .. 's')
     local report = scoring:closeQuarter(#workers)
-    print('  ' .. DIFFICULTIES[difficultyIndex].name .. ' Q1 unaided on seed ' .. DEFAULT_SEED .. ': output ' .. report.output ..
-        ', complaints ' .. report.complaints .. ', quits ' .. report.attrition .. ', fed ' .. report.fedPct ..
-        '%, grade ' .. report.grade .. ' (' .. string.format('%.2f', elapsed) .. 's)')
+    local rs = ''
+    for k, v in pairs(reasons) do rs = rs .. k .. '=' .. v .. ' ' end
+    print(string.format('  %-14s Q1 unaided seed %s: food %d logs %d gold %d, complaints %d (%s), quits %d, fed %d%%, pantry %d, grade %s (%.2fs)',
+        DIFFICULTIES[difficultyIndex].name, DEFAULT_SEED, report.food, report.logs, report.gold, report.complaints, rs,
+        report.attrition, report.fedPct, world.breakroom.food, report.grade, elapsed))
     return report
 end
 function TestSimulation:testFullQuarterOnGeneratedWorld()
     for d = 1, #DIFFICULTIES do
         local report = simulateQuarter(d)
         if d == 2 then
-            lu.assertTrue(report.output >= 6, 'workers delivered only ' .. report.output)
-            lu.assertTrue(report.complaints <= 12, 'complaint spam: ' .. report.complaints)
+            lu.assertTrue(report.output >= 6, 'morphis delivered only ' .. report.output)
+            lu.assertTrue(report.logs >= 1 and report.gold >= 1 and report.food >= 1, 'every role should deliver')
+            lu.assertTrue(report.complaints <= 14, 'complaint spam: ' .. report.complaints)
             lu.assertTrue(report.attrition == 0, 'quits with nobody helping: ' .. report.attrition)
         end
     end

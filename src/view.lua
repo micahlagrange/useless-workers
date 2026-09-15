@@ -14,15 +14,13 @@ function View.new(world)
     self.canvas = love.graphics.newCanvas(world.w * TILE_SIZE, world.h * TILE_SIZE)
     self.canvas:setFilter('nearest', 'nearest')
     self.canvasVersion = -1
-    self.images = {
-        side = love.graphics.newImage('assets/images/guys/whitecollarwalk.png'),
-        up = love.graphics.newImage('assets/images/guys/upwalk.png'),
-        down = love.graphics.newImage('assets/images/guys/downwalk.png'),
-    }
-    self.frames = {}
-    for name, img in pairs(self.images) do
+    -- one sheet per morphi species, all 16 px frames facing right
+    self.sheets = {}
+    for key, _ in pairs(MORPHI_SHEET_NAMES) do
+        local img = love.graphics.newImage('assets/images/morphis/' .. key .. '-worker-walk.png')
+        local frames = math.floor(img:getWidth() / 16)
         local grid = anim8.newGrid(16, 16, img:getWidth(), img:getHeight())
-        self.frames[name] = grid('1-4', 1)
+        self.sheets[key] = { image = img, quads = grid('1-' .. frames, 1), frames = frames }
     end
     self.fruitImages = {}
     local files = love.filesystem.getDirectoryItems('assets/images/fruit')
@@ -121,9 +119,20 @@ function View:drawBreakroom()
     love.graphics.rectangle('fill', px + 20, py + 5, 8, 9)
     love.graphics.setColor(0.9, 0.5, 0.3)
     love.graphics.rectangle('fill', px + 22, py + 7, 4, 2)
-    -- table
+    -- table with the pantry stock on it
     love.graphics.setColor(0.55, 0.42, 0.25)
     love.graphics.rectangle('fill', px + 6, py + 20, 20, 8)
+    local stock = math.min(br.food or 0, 5)
+    for i = 1, stock do
+        local img = self:fruitImage(i * 37)
+        if img then
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(img, px + 6 + i * 3, py + 22, 0, 0.4, 0.4, 8, 8)
+        end
+    end
+    if (br.food or 0) > 5 then
+        love.graphics.setColor(1, 1, 1, 1)
+    end
     -- sign
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
@@ -137,27 +146,52 @@ function View:drawBreakroom()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function View:drawTrees(clock)
-    for _, tree in ipairs(self.world.trees) do
-        local px, py = (tree.x - 1) * TILE_SIZE, (tree.y - 1) * TILE_SIZE
-        love.graphics.setColor(0.42, 0.3, 0.16)
-        love.graphics.rectangle('fill', px + 6, py + 9, 4, 6)
-        if tree.ripe then
-            love.graphics.setColor(0.3, 0.56, 0.24)
-        else
-            love.graphics.setColor(0.25, 0.4, 0.2)
-        end
-        love.graphics.circle('fill', px + 8, py + 7, 6)
-        love.graphics.setColor(0.2, 0.32, 0.15)
-        love.graphics.circle('line', px + 8, py + 7, 6)
-        if tree.ripe then
-            local img = self:fruitImage(tree.fruit or 1)
-            if img then
-                local bob = math.sin((clock or 0) * 4 + tree.id) * 1
-                love.graphics.setColor(1, 1, 1, 1)
-                love.graphics.draw(img, px + 8, py + bob, 0, 0.6, 0.6, 8, 8)
+function View:drawNodes(clock)
+    for _, node in ipairs(self.world.nodes) do
+        local px, py = (node.x - 1) * TILE_SIZE, (node.y - 1) * TILE_SIZE
+        if node.kind == NODE_BUSH then
+            love.graphics.setColor(0.27, 0.48, 0.22)
+            love.graphics.ellipse('fill', px + 8, py + 11, 7, 4.5)
+            love.graphics.setColor(0.36, 0.6, 0.28)
+            love.graphics.ellipse('fill', px + 6, py + 9, 4, 3.5)
+            love.graphics.ellipse('fill', px + 10, py + 10, 4, 3)
+            if node.ready then
+                local img = self:fruitImage(node.fruit or 1)
+                if img then
+                    love.graphics.setColor(1, 1, 1, 1)
+                    love.graphics.draw(img, px + 8, py + 7, 0, 0.5, 0.5, 8, 8)
+                end
             end
-        elseif tree.memo then
+        elseif node.kind == NODE_TREE then
+            if node.ready then
+                love.graphics.setColor(0.42, 0.3, 0.16)
+                love.graphics.rectangle('fill', px + 6, py + 8, 4, 8)
+                love.graphics.setColor(0.24, 0.45, 0.2)
+                love.graphics.circle('fill', px + 8, py + 5, 7)
+                love.graphics.setColor(0.32, 0.56, 0.26)
+                love.graphics.circle('fill', px + 6, py + 3, 4)
+                love.graphics.setColor(0.18, 0.32, 0.14)
+                love.graphics.circle('line', px + 8, py + 5, 7)
+            else
+                -- stump
+                love.graphics.setColor(0.45, 0.32, 0.18)
+                love.graphics.rectangle('fill', px + 5, py + 9, 6, 5)
+                love.graphics.setColor(0.7, 0.55, 0.32)
+                love.graphics.ellipse('fill', px + 8, py + 9, 3.5, 2)
+                love.graphics.setColor(0.45, 0.32, 0.18)
+                love.graphics.ellipse('line', px + 8, py + 9, 2, 1)
+            end
+        elseif node.kind == NODE_ORE then
+            local glint = 0.75 + 0.25 * math.sin((clock or 0) * 3 + node.id)
+            love.graphics.setColor(0.95 * glint, 0.8 * glint, 0.2)
+            love.graphics.rectangle('fill', px + 3, py + 4, 3, 3)
+            love.graphics.rectangle('fill', px + 9, py + 7, 4, 3)
+            love.graphics.rectangle('fill', px + 5, py + 11, 3, 2)
+            love.graphics.setColor(1, 0.95, 0.6)
+            love.graphics.rectangle('fill', px + 10, py + 7, 1, 1)
+            love.graphics.rectangle('fill', px + 4, py + 4, 1, 1)
+        end
+        if node.memo and not node.ready then
             love.graphics.setColor(1, 0.95, 0.5)
             love.graphics.rectangle('fill', px + 11, py + 1, 4, 4)
         end
@@ -194,18 +228,12 @@ function View:drawBubble(x, y, text, color)
 end
 
 function View:drawWorker(w, clock, selected)
+    local sheet = self.sheets[w.sheet] or self.sheets.pupper
     local frameIndex = 1
     if w.moving then
-        frameIndex = math.floor(w.animTime / FRAME_TIME) % 4 + 1
+        frameIndex = math.floor(w.animTime / FRAME_TIME) % sheet.frames + 1
     end
-    local sheet, quads, sx = self.images.side, self.frames.side, 1
-    if w.facing == 'right' then
-        sx = -1
-    elseif w.facing == 'up' then
-        sheet, quads = self.images.up, self.frames.up
-    elseif w.facing == 'down' then
-        sheet, quads = self.images.down, self.frames.down
-    end
+    local sx = (w.facing == 'left') and -1 or 1
     local feetY = w.y + 4
     love.graphics.setColor(0, 0, 0, 0.25)
     love.graphics.ellipse('fill', w.x, feetY, 6, 2.5)
@@ -216,15 +244,28 @@ function View:drawWorker(w, clock, selected)
     if w.state == 'quitting' then
         love.graphics.setColor(0.6, 0.6, 0.6, 1)
     else
-        love.graphics.setColor(w.tint[1], w.tint[2], w.tint[3], 1)
+        love.graphics.setColor(1, 1, 1, 1)
     end
-    love.graphics.draw(sheet, quads[frameIndex], w.x, feetY, 0, sx, 1, 8, 16)
+    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx, 1, 8, 16)
     if w.carrying then
-        local img = self:fruitImage(w.carrying)
-        if img then
-            local bob = math.sin((clock or 0) * 6 + w.id) * 1
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(img, w.x, w.y - 15 + bob, 0, 0.7, 0.7, 8, 8)
+        local bob = math.sin((clock or 0) * 6 + w.id) * 1
+        local cy = w.y - 15 + bob
+        if w.carrying == CARGO_FOOD then
+            local img = self:fruitImage(w.carryingFruit or 1)
+            if img then
+                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.draw(img, w.x, cy, 0, 0.7, 0.7, 8, 8)
+            end
+        elseif w.carrying == CARGO_LOGS then
+            love.graphics.setColor(0.5, 0.35, 0.18)
+            love.graphics.rectangle('fill', w.x - 6, cy - 2, 12, 4)
+            love.graphics.setColor(0.75, 0.58, 0.32)
+            love.graphics.rectangle('fill', w.x + 4, cy - 2, 2, 4)
+        else
+            love.graphics.setColor(0.95, 0.8, 0.2)
+            love.graphics.rectangle('fill', w.x - 3, cy - 3, 6, 5)
+            love.graphics.setColor(1, 0.95, 0.6)
+            love.graphics.rectangle('fill', w.x - 2, cy - 2, 2, 1)
         end
     end
     if w:isWorking() and w.hunger < 40 then

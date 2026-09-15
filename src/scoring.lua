@@ -11,6 +11,8 @@ function Scoring.new(difficultyIndex)
     self.quarter = 1
     self.quarterTimer = QUARTER_SECONDS
     self.output = 0
+    self.delivered = { food = 0, logs = 0, gold = 0 }
+    self.lifetimeDelivered = { food = 0, logs = 0, gold = 0 }
     self.complaints = 0
     self.quits = 0
     self.fedSum = 0
@@ -28,6 +30,21 @@ end
 function Scoring:addOutput()
     self.output = self.output + 1
     self.lifetimeOutput = self.lifetimeOutput + 1
+end
+
+function Scoring:addDelivery(kind)
+    self:addOutput()
+    self.delivered[kind] = (self.delivered[kind] or 0) + 1
+    self.lifetimeDelivered[kind] = (self.lifetimeDelivered[kind] or 0) + 1
+end
+
+-- Deliveries weighted by CARGO_VALUE
+function Scoring:lifetimeValue()
+    local v = 0
+    for kind, n in pairs(self.lifetimeDelivered) do
+        v = v + n * (CARGO_VALUE[kind] or 1)
+    end
+    return v
 end
 
 function Scoring:addComplaint()
@@ -93,6 +110,9 @@ function Scoring:closeQuarter(workerCount)
     local report = {
         quarter = self.quarter,
         output = self.output,
+        food = self.delivered.food,
+        logs = self.delivered.logs,
+        gold = self.delivered.gold,
         fedPct = self:fedPercent(),
         complaints = self.complaints,
         attrition = self.quits,
@@ -103,6 +123,7 @@ function Scoring:closeQuarter(workerCount)
     self.reports[#self.reports + 1] = report
     self.budget = self.budget + report.budgetAdded
     self.output = 0
+    self.delivered = { food = 0, logs = 0, gold = 0 }
     self.complaints = 0
     self.quits = 0
     self.fedSum, self.fedCount, self.fedTimer = 0, 0, 0
@@ -123,7 +144,7 @@ function Scoring:startEndless()
 end
 
 function Scoring:finalScore()
-    local raw = (self.lifetimeOutput - QUIT_PENALTY * self.totalQuits) * self.difficulty.multiplier
+    local raw = (self:lifetimeValue() - QUIT_PENALTY * self.totalQuits) * self.difficulty.multiplier
     return math.max(0, math.floor(raw))
 end
 

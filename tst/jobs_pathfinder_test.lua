@@ -6,36 +6,43 @@ local Jobs = require('src.jobs')
 local Pathfinder = require('src.pathfinder')
 
 TestJobs = {}
+local function bush(x, y, ready) return { kind = NODE_BUSH, x = x, y = y, ready = ready ~= false } end
+local function tree(x, y) return { kind = NODE_TREE, x = x, y = y, ready = true } end
 function TestJobs:testFifoAndDuplicates()
     local jobs = Jobs.new()
-    local t1, t2 = { x = 1, y = 1, ripe = true }, { x = 2, y = 2, ripe = true }
-    lu.assertTrue(jobs:postHarvest(t1))
-    lu.assertTrue(jobs:postHarvest(t2))
-    lu.assertFalse(jobs:postHarvest(t1))
+    local t1, t2 = bush(1, 1), bush(2, 2)
+    lu.assertTrue(jobs:postNode(t1))
+    lu.assertTrue(jobs:postNode(t2))
+    lu.assertFalse(jobs:postNode(t1))
     lu.assertEquals(jobs:count(), 2)
-    local j = jobs:take()
-    lu.assertEquals(j.tree, t1)
+    local j = jobs:take('forage')
+    lu.assertEquals(j.node, t1)
+    lu.assertEquals(j.type, 'forage')
     lu.assertEquals(jobs:count(), 1)
 end
-function TestJobs:testTakeSkipsStaleAndPredicate()
+function TestJobs:testTakeByTypeSkipsStaleAndPredicate()
     local jobs = Jobs.new()
-    local stale, good, other = { x = 1, y = 1, ripe = false }, { x = 2, y = 2, ripe = true }, { x = 3, y = 3, ripe = true }
-    jobs:post({ type = 'harvest', x = 1, y = 1, tree = stale })
-    jobs:postHarvest(good)
-    jobs:postHarvest(other)
-    local j = jobs:take(function(job) return job.x == 3 end)
-    lu.assertEquals(j.tree, other)
-    lu.assertEquals(jobs:count(), 1) -- stale dropped, good remains
-    lu.assertEquals(jobs:take().tree, good)
-    lu.assertNil(jobs:take())
+    local stale, good, other, wood = bush(1, 1, false), bush(2, 2), bush(3, 3), tree(4, 4)
+    jobs:postNode(stale)
+    jobs:postNode(good)
+    jobs:postNode(wood)
+    jobs:postNode(other)
+    lu.assertNil(jobs:take('mine'))
+    local j = jobs:take('forage', function(job) return job.x == 3 end)
+    lu.assertEquals(j.node, other)
+    lu.assertEquals(jobs:count(), 2) -- stale dropped, good and the tree remain
+    lu.assertEquals(jobs:count('chop'), 1)
+    lu.assertEquals(jobs:take('chop').node, wood)
+    lu.assertEquals(jobs:take('forage').node, good)
+    lu.assertNil(jobs:take('forage'))
 end
 function TestJobs:testPrioritize()
     local jobs = Jobs.new()
-    local a, b = { x = 1, y = 1, ripe = true }, { x = 2, y = 2, ripe = true }
-    jobs:postHarvest(a)
-    jobs:postHarvest(b)
-    jobs:postHarvest(b, true)
-    lu.assertEquals(jobs:take().tree, b)
+    local a, b = bush(1, 1), bush(2, 2)
+    jobs:postNode(a)
+    jobs:postNode(b)
+    jobs:postNode(b, true)
+    lu.assertEquals(jobs:take('forage').node, b)
 end
 
 TestPathfinder = {}

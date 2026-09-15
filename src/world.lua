@@ -14,8 +14,8 @@ function World.new(w, h, rng)
     self.w, self.h = w or WORLD_W, h or WORLD_H
     self.rng = rng
     self.tiles = {}
-    self.trees = {}
-    self.nextTreeId = 1
+    self.nodes = {}
+    self.nextNodeId = 1
     self.version = 0
     self.breakroom = nil
     self.reachCache = nil
@@ -77,21 +77,25 @@ function World.generate(seedNumber, rng, w, h)
     return self
 end
 
--- Hand built worlds for tests. '.' grass  '#' stone  '~' water  'B' break room  'T' grass with a ripe tree
+-- Hand built worlds for tests.
+-- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
     local self = World.new(w, h, rng)
     local breakroomTiles = {}
-    local treeTiles = {}
+    local nodeTiles = {}
     for y = 1, h do
         for x = 1, w do
             local ch = rows[y]:sub(x, x)
             local kind = TILE_GRASS
-            if ch == '#' then kind = TILE_STONE
+            if ch == '#' or ch == 'G' then kind = TILE_STONE
             elseif ch == '~' then kind = TILE_WATER
             elseif ch == 'B' then kind = TILE_BREAKROOM; breakroomTiles[#breakroomTiles + 1] = { x = x, y = y }
-            elseif ch == 'T' then treeTiles[#treeTiles + 1] = { x = x, y = y }
+            end
+            if ch == 'b' then nodeTiles[#nodeTiles + 1] = { kind = NODE_BUSH, x = x, y = y }
+            elseif ch == 'T' then nodeTiles[#nodeTiles + 1] = { kind = NODE_TREE, x = x, y = y }
+            elseif ch == 'G' then nodeTiles[#nodeTiles + 1] = { kind = NODE_ORE, x = x, y = y }
             end
             local t = self.tiles[x][y]
             t.type = kind
@@ -100,13 +104,13 @@ function World.fromGrid(rows, rng)
     end
     if #breakroomTiles > 0 then
         local first = breakroomTiles[1]
-        self.breakroom = { x = first.x, y = first.y, tiles = breakroomTiles }
+        self.breakroom = { x = first.x, y = first.y, tiles = breakroomTiles, food = 0 }
         self.breakroom.cx = (first.x - 1) * TILE_SIZE + TILE_SIZE
         self.breakroom.cy = (first.y - 1) * TILE_SIZE + TILE_SIZE
     end
-    for _, tt in ipairs(treeTiles) do
-        local tree = self:addTree(tt.x, tt.y)
-        tree.ripe = true
+    for _, n in ipairs(nodeTiles) do
+        local node = self:addNode(n.kind, n.x, n.y)
+        node.ready = true
     end
     self.version = self.version + 1
     return self
@@ -297,7 +301,7 @@ function World:placeBreakroom()
 end
 
 function World:setBreakroom(x, y)
-    self.breakroom = { x = x, y = y, tiles = {} }
+    self.breakroom = { x = x, y = y, tiles = {}, food = 0 }
     self.breakroom.cx = (x - 1) * TILE_SIZE + TILE_SIZE
     self.breakroom.cy = (y - 1) * TILE_SIZE + TILE_SIZE
     for dx = 0, 1 do
@@ -305,7 +309,7 @@ function World:setBreakroom(x, y)
             local t = self.tiles[x + dx][y + dy]
             t.type = TILE_BREAKROOM
             t.passable = true
-            if t.tree then self:removeTree(t.tree) end
+            if t.node then self:removeNode(t.node) end
             table.insert(self.breakroom.tiles, { x = x + dx, y = y + dy })
         end
     end
@@ -358,55 +362,95 @@ function World:randomNearbyPassable(rng, x, y, radius)
     return nil
 end
 
--- Trees ------------------------------------------------------------------
+-- Resource nodes ---------------------------------------------------------
+-- bush: grows food on grass, ripens again after it is picked
+-- tree: stands on grass, a lumberjack cuts it for logs, regrows from a stump
+-- ore:  gold inside a stone tile, a miner works it from a neighbouring tile,
+--       the tile turns to dirt when it is mined out
 
-function World:addTree(x, y)
-    local tree = {
-        id = self.nextTreeId, x = x, y = y, ripe = false,
-        timer = TREE_RIPEN_SECONDS, claimedBy = nil, memo = false,
+function World:addNode(kind, x, y)
+    local node = {
+        id = self.nextNodeId, kind = kind, x = x, y = y,
+        ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil, memo = false,
         fruit = self.rng and self.rng:int(1, 999) or 1,
     }
-    self.nextTreeId = self.nextTreeId + 1
-    self.trees[#self.trees + 1] = tree
-    self.tiles[x][y].tree = tree
-    return tree
+    if kind == NODE_BUSH then node.timer = BUSH_RIPEN_SECONDS end
+    self.nextNodeId = self.nextNodeId + 1
+    self.nodes[#self.nodes + 1] = node
+    self.tiles[x][y].node = node
+    return node
 end
 
-function World:removeTree(tree)
-    for i = #self.trees, 1, -1 do
-        if self.trees[i] == tree then table.remove(self.trees, i) end
+function World:removeNode(node)
+    for i = #self.nodes, 1, -1 do
+        if self.nodes[i] == node then table.remove(self.nodes, i) end
     end
-    local t = self:get(tree.x, tree.y)
-    if t and t.tree == tree then t.tree = nil end
+    local t = self:get(node.x, node.y)
+    if t and t.node == node then t.node = nil end
 end
 
-local function farFromOtherTrees(self, x, y)
-    for _, tree in ipairs(self.trees) do
-        if Util.manhattan(tree.x, tree.y, x, y) < TREE_MIN_SPACING then return false end
+function World:nodesOfKind(kind)
+    local out = {}
+    for _, n in ipairs(self.nodes) do
+        if n.kind == kind then out[#out + 1] = n end
+    end
+    return out
+end
+
+local function farFromOtherNodes(self, x, y)
+    for _, node in ipairs(self.nodes) do
+        if Util.manhattan(node.x, node.y, x, y) < NODE_MIN_SPACING then return false end
     end
     return true
 end
 
--- Plants up to `count` trees on grass. A share of them lands in pockets the
--- workers cannot reach so the player always has something to fix.
-function World:spawnTrees(count, enclosedFraction)
-    enclosedFraction = enclosedFraction or TREE_ENCLOSED_FRACTION
+-- The passable, reachable tile a morphi stands on to work this node.
+-- Bushes and trees are worked in place; ore from a neighbouring tile.
+function World:approachTile(node)
+    if node.kind ~= NODE_ORE then
+        if self:isReachable(node.x, node.y) then return { x = node.x, y = node.y } end
+        return nil
+    end
+    local reach = self:reachableFromBreakroom()
+    local candidates = { { node.x + 1, node.y }, { node.x - 1, node.y }, { node.x, node.y + 1 }, { node.x, node.y - 1 } }
+    for _, c in ipairs(candidates) do
+        if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
+            return { x = c[1], y = c[2] }
+        end
+    end
+    return nil
+end
+
+function World:nodeReachable(node)
+    return self:approachTile(node) ~= nil
+end
+
+-- Plants up to `count` nodes of a kind. A share lands where the morphis
+-- cannot reach yet, so the player always has something to dig toward.
+function World:spawnNodes(kind, count, enclosedFraction)
+    enclosedFraction = enclosedFraction or NODE_ENCLOSED_FRACTION
     local rng = self.rng
     local reach = self:reachableFromBreakroom()
     local reachable, enclosed = {}, {}
     for x = 1, self.w do
         for y = 1, self.h do
             local t = self.tiles[x][y]
-            if t.type == TILE_GRASS and not t.tree then
-                if reach[x][y] then
-                    reachable[#reachable + 1] = { x = x, y = y }
-                else
-                    enclosed[#enclosed + 1] = { x = x, y = y }
+            if not t.node then
+                if kind == NODE_ORE then
+                    if t.type == TILE_STONE then
+                        local open = false
+                        for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
+                            if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then open = true end
+                        end
+                        if open then reachable[#reachable + 1] = { x = x, y = y } else enclosed[#enclosed + 1] = { x = x, y = y } end
+                    end
+                elseif t.type == TILE_GRASS then
+                    if reach[x][y] then reachable[#reachable + 1] = { x = x, y = y } else enclosed[#enclosed + 1] = { x = x, y = y } end
                 end
             end
         end
     end
-    local room = MAX_TREES - #self.trees
+    local room = MAX_NODES_PER_KIND - #self:nodesOfKind(kind)
     if count > room then count = room end
     if count <= 0 then return {} end
     local wantEnclosed = math.floor(count * enclosedFraction + 0.5)
@@ -418,10 +462,12 @@ function World:spawnTrees(count, enclosedFraction)
         local i = 1
         while want > 0 and i <= #list do
             local p = list[i]
-            if farFromOtherTrees(self, p.x, p.y) and not self.tiles[p.x][p.y].tree then
-                local tree = self:addTree(p.x, p.y)
-                tree.timer = rng:int(TREE_FIRST_RIPEN_MIN, TREE_FIRST_RIPEN_MAX)
-                planted[#planted + 1] = tree
+            if farFromOtherNodes(self, p.x, p.y) and not self.tiles[p.x][p.y].node then
+                local node = self:addNode(kind, p.x, p.y)
+                if kind == NODE_BUSH then
+                    node.timer = rng:int(BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX)
+                end
+                planted[#planted + 1] = node
                 want = want - 1
             end
             i = i + 1
@@ -432,28 +478,49 @@ function World:spawnTrees(count, enclosedFraction)
     return planted
 end
 
-function World:update(dt, onRipe)
-    for _, tree in ipairs(self.trees) do
-        if not tree.ripe then
-            tree.timer = tree.timer - dt
-            if tree.timer <= 0 then
-                tree.ripe = true
-                if onRipe then onRipe(tree) end
+function World:spawnAllNodes(counts)
+    local planted = {}
+    for _, kind in ipairs(NODE_KINDS) do
+        for _, n in ipairs(self:spawnNodes(kind, counts[kind] or 0)) do planted[#planted + 1] = n end
+    end
+    return planted
+end
+
+-- Bushes ripen and stumps regrow. onReady(node) fires when a node becomes workable.
+function World:update(dt, onReady)
+    for _, node in ipairs(self.nodes) do
+        if not node.ready then
+            node.timer = node.timer - dt
+            if node.timer <= 0 then
+                node.ready = true
+                if onReady then onReady(node) end
             end
         end
     end
 end
 
-function World:harvest(tree)
-    tree.ripe = false
-    tree.timer = TREE_RIPEN_SECONDS
-    tree.claimedBy = nil
+-- A morphi finished working the node. Returns the cargo kind it yields.
+function World:harvestNode(node)
+    node.claimedBy = nil
+    if node.kind == NODE_BUSH then
+        node.ready = false
+        node.timer = BUSH_RIPEN_SECONDS
+        return CARGO_FOOD
+    elseif node.kind == NODE_TREE then
+        node.ready = false
+        node.timer = TREE_REGROW_SECONDS
+        return CARGO_LOGS
+    else
+        self:removeNode(node)
+        self:setType(node.x, node.y, TILE_DIRT)
+        return CARGO_GOLD
+    end
 end
 
-function World:ripeTreeCount()
+function World:readyNodeCount(kind)
     local n = 0
-    for _, tree in ipairs(self.trees) do
-        if tree.ripe then n = n + 1 end
+    for _, node in ipairs(self.nodes) do
+        if node.ready and (kind == nil or node.kind == kind) then n = n + 1 end
     end
     return n
 end

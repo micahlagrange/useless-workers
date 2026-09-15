@@ -22,20 +22,37 @@ WORLD_MIX       = { water = 0.12, grass = 0.55, stone = 0.30, snow = 0.03 }
 NOISE_BASE_FREQUENCY = 1 / 11
 NOISE_OCTAVES   = 3
 
--- Trees
-TREES_INITIAL          = 12
-TREES_PER_QUARTER      = 3
-MAX_TREES              = 24
-TREE_ENCLOSED_FRACTION = 0.34   -- share of trees planted in pockets the workers cannot reach yet
-TREE_RIPEN_SECONDS     = 20
-TREE_FIRST_RIPEN_MIN   = 2
-TREE_FIRST_RIPEN_MAX   = 10
-TREE_MIN_SPACING       = 3
+-- Resource nodes: bushes grow food, trees give logs, ore in stone gives gold
+NODE_BUSH = 'bush'
+NODE_TREE = 'tree'
+NODE_ORE  = 'ore'
+NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
+NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
+NODES_PER_QUARTER  = { bush = 2, tree = 2, ore = 3 }
+MAX_NODES_PER_KIND = 16
+NODE_ENCLOSED_FRACTION = 0.34   -- share of nodes placed where morphis cannot reach yet
+NODE_MIN_SPACING   = 3
+BUSH_RIPEN_SECONDS = 20
+BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX = 2, 10
+TREE_REGROW_SECONDS = 45
+-- ore never regrows; a mined tile turns to dirt and opens the tunnel further
+CARGO_FOOD, CARGO_LOGS, CARGO_GOLD = 'food', 'logs', 'gold'
+CARGO_VALUE = { food = 1, logs = 2, gold = 3 }   -- weight in the final score
+
+-- Morphis and their roles
+ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
+ROLES = {
+    forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
+    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins' } },
+    miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
+}
+HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
+MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', cwab = 'Cwab', blue = 'Blob' }
 
 -- Workers (section 5)
 HUNGER_MAX             = 100
 HUNGER_EAT_THRESHOLD   = 30
-HUNGER_STARVING        = 12     -- a carrier this hungry eats the fruit instead of delivering it
+HUNGER_STARVING        = 12     -- a starving carrier eats its food or drops its cargo
 FRUIT_HUNGER_VALUE     = 55
 WORKER_SPEED           = 72     -- pixels per second, 4.5 tiles per second
 WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving up
@@ -94,15 +111,7 @@ TILE_PALETTE     = {
     snow = SNOW_COLORS, bridge = BRIDGE_COLORS, breakroom = BREAKROOM_COLORS,
 }
 
-WORKER_NAMES = {
+MORPHI_NAMES = {
     'Dave', 'Priya', 'Kenji', 'Marisol', 'Tobias', 'Ngozi', 'Hank', 'Lupe',
     'Sven', 'Aiko', 'Bartholomew', 'Deb', 'Gus', 'Fatima', 'Rex', 'Wanda',
-}
-WORKER_TINTS = {
-    '#7fb3e6', '#f0a35e', '#8fd18f', '#e68ac2', '#f2e07a', '#b39ddb',
-    '#ff8a80', '#80deea', '#c5e1a5', '#ffcc80', '#bcaaa4', '#eeeeee',
-}
-WORKER_TINT_NAMES = {
-    'blue', 'orange', 'green', 'pink', 'yellow', 'purple',
-    'red', 'teal', 'lime', 'peach', 'brown', 'white',
 }
