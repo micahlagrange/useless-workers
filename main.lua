@@ -105,7 +105,11 @@ local function onEffect(name, data)
         ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for mining')
     elseif name == 'unmark' then
         Audio.playSFX('click')
-        ui:toast(data.count .. ' mark' .. (data.count == 1 and '' or 's') .. ' cleared')
+        if data.kind then
+            ui:toast((ABILITY_LABEL[data.kind] or data.kind:upper()) .. ' designation cancelled')
+        else
+            ui:toast(data.count .. ' mark' .. (data.count == 1 and '' or 's') .. ' cleared')
+        end
     elseif name == 'site' then
         Audio.playSFX('line')
     end

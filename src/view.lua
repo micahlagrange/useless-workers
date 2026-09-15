@@ -185,39 +185,71 @@ function View:drawNodes(clock)
 end
 
 -- Built storage tiles: a wooden pallet on the ground.
--- Floor storage is a chalked square on the ground. Bins are drawn 2.5D so
--- they read as bins: a front face, a right side, a light rim and a dark
--- open top. Items delivered to a bin show inside it, quadrant by quadrant.
+-- Buildings, drawn top down. Each takes an alpha so a designation can be
+-- shown as a faded ghost of what it will become.
+
+-- Floor storage: a chalked square on the ground.
+function View:drawFloorSpot(px, py, a)
+    love.graphics.setColor(0, 0, 0, 0.18 * a)
+    love.graphics.rectangle('fill', px + 2, py + 2, 12, 12)
+    love.graphics.setColor(0.9, 0.85, 0.65, 0.8 * a)
+    love.graphics.rectangle('line', px + 2.5, py + 2.5, 11, 11)
+    love.graphics.line(px + 2.5, py + 2.5, px + 6, py + 2.5)
+    love.graphics.line(px + 2.5, py + 2.5, px + 2.5, py + 6)
+    love.graphics.line(px + 13.5, py + 13.5, px + 10, py + 13.5)
+    love.graphics.line(px + 13.5, py + 13.5, px + 13.5, py + 10)
+end
+
+-- A bin seen from above: a wooden frame with a dark open inside, lit from
+-- the top left. Items sit in the four quadrants of the opening.
+function View:drawBin(px, py, a)
+    love.graphics.setColor(0, 0, 0, 0.2 * a)
+    love.graphics.rectangle('fill', px + 2, py + 2, 14, 14)
+    love.graphics.setColor(0.55, 0.42, 0.24, a)
+    love.graphics.rectangle('fill', px + 1, py + 1, 14, 14)
+    love.graphics.setColor(0.16, 0.12, 0.06, a)
+    love.graphics.rectangle('fill', px + 3, py + 3, 10, 10)
+    love.graphics.setColor(0.8, 0.64, 0.38, a)
+    love.graphics.rectangle('fill', px + 1, py + 1, 14, 1)
+    love.graphics.rectangle('fill', px + 1, py + 1, 1, 14)
+    love.graphics.setColor(0.36, 0.26, 0.14, a)
+    love.graphics.rectangle('fill', px + 1, py + 14, 14, 1)
+    love.graphics.rectangle('fill', px + 14, py + 1, 1, 14)
+    love.graphics.setColor(0.42, 0.31, 0.17, a)
+    for _, c in ipairs({ { 1, 1 }, { 13, 1 }, { 1, 13 }, { 13, 13 } }) do
+        love.graphics.rectangle('fill', px + c[1], py + c[2], 2, 2)
+    end
+end
+
+function View:drawBed(px, py, a)
+    love.graphics.setColor(0.4, 0.28, 0.16, a)
+    love.graphics.rectangle('fill', px + 2, py + 1, 12, 14)
+    love.graphics.setColor(0.93, 0.9, 0.8, a)
+    love.graphics.rectangle('fill', px + 3, py + 2, 10, 12)
+    love.graphics.setColor(1, 1, 1, a)
+    love.graphics.rectangle('fill', px + 4, py + 3, 8, 3)
+    love.graphics.setColor(0.3, 0.45, 0.75, a)
+    love.graphics.rectangle('fill', px + 3, py + 7, 10, 7)
+    love.graphics.setColor(0.24, 0.36, 0.62, a)
+    love.graphics.rectangle('fill', px + 3, py + 7, 10, 1)
+end
+
+function View:drawBridgePlanks(px, py, a)
+    love.graphics.setColor(0.62, 0.47, 0.27, a)
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
+    love.graphics.setColor(0.35, 0.26, 0.14, a)
+    love.graphics.rectangle('fill', px, py + 3, TILE_SIZE, 1)
+    love.graphics.rectangle('fill', px, py + 8, TILE_SIZE, 1)
+    love.graphics.rectangle('fill', px, py + 13, TILE_SIZE, 1)
+end
+
 function View:drawStorage()
     for _, st in ipairs(self.world:storageTiles()) do
         local px, py = (st.x - 1) * TILE_SIZE, (st.y - 1) * TILE_SIZE
         if st.capacity <= STORAGE_FLOOR_CAPACITY then
-            love.graphics.setColor(0, 0, 0, 0.18)
-            love.graphics.rectangle('fill', px + 2, py + 2, 12, 12)
-            love.graphics.setColor(0.9, 0.85, 0.65, 0.8)
-            love.graphics.rectangle('line', px + 2.5, py + 2.5, 11, 11)
-            love.graphics.line(px + 2.5, py + 2.5, px + 6, py + 2.5)
-            love.graphics.line(px + 2.5, py + 2.5, px + 2.5, py + 6)
-            love.graphics.line(px + 13.5, py + 13.5, px + 10, py + 13.5)
-            love.graphics.line(px + 13.5, py + 13.5, px + 13.5, py + 10)
+            self:drawFloorSpot(px, py, 1)
         else
-            love.graphics.setColor(0, 0, 0, 0.2)
-            love.graphics.ellipse('fill', px + 8, py + 15, 8, 2)
-            -- front face
-            love.graphics.setColor(0.55, 0.42, 0.24)
-            love.graphics.rectangle('fill', px + 1, py + 6, 12, 9)
-            -- right side, darker
-            love.graphics.setColor(0.36, 0.26, 0.14)
-            love.graphics.polygon('fill', px + 13, py + 6, px + 15.5, py + 3.5, px + 15.5, py + 12.5, px + 13, py + 15)
-            -- rim and open top
-            love.graphics.setColor(0.82, 0.66, 0.4)
-            love.graphics.polygon('fill', px + 1, py + 6, px + 3.5, py + 3.5, px + 15.5, py + 3.5, px + 13, py + 6)
-            love.graphics.setColor(0.18, 0.13, 0.07)
-            love.graphics.polygon('fill', px + 3, py + 5.5, px + 4.5, py + 4.2, px + 14, py + 4.2, px + 12.5, py + 5.5)
-            -- front slats
-            love.graphics.setColor(0.42, 0.31, 0.17)
-            love.graphics.line(px + 7, py + 6, px + 7, py + 15)
-            love.graphics.line(px + 1, py + 10.5, px + 13, py + 10.5)
+            self:drawBin(px, py, 1)
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
@@ -225,22 +257,13 @@ end
 
 function View:drawBeds()
     for _, b in ipairs(self.world.beds) do
-        local px, py = (b.x - 1) * TILE_SIZE, (b.y - 1) * TILE_SIZE
-        love.graphics.setColor(0.4, 0.28, 0.16)
-        love.graphics.rectangle('fill', px + 2, py + 1, 12, 14)
-        love.graphics.setColor(0.93, 0.9, 0.8)
-        love.graphics.rectangle('fill', px + 3, py + 2, 10, 12)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.rectangle('fill', px + 4, py + 3, 8, 3)
-        love.graphics.setColor(0.3, 0.45, 0.75)
-        love.graphics.rectangle('fill', px + 3, py + 7, 10, 7)
-        love.graphics.setColor(0.24, 0.36, 0.62)
-        love.graphics.rectangle('fill', px + 3, py + 7, 10, 1)
+        self:drawBed((b.x - 1) * TILE_SIZE, (b.y - 1) * TILE_SIZE, 1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Designations: orange marks on stone to mine, dashed frames on build sites.
+-- Designations. Mine marks are an orange X; every building shows as a
+-- faded ghost of what it will be, a little brighter once someone is on it.
 function View:drawSites(clock)
     local pulse = 0.55 + 0.25 * math.sin((clock or 0) * 4)
     love.graphics.setLineWidth(1)
@@ -252,17 +275,19 @@ function View:drawSites(clock)
             love.graphics.line(px + 4, py + 4, px + 12, py + 12)
             love.graphics.line(px + 12, py + 4, px + 4, py + 12)
         else
-            love.graphics.setColor(0.95, 0.9, 0.5, site.claimedBy and 0.95 or pulse)
-            love.graphics.rectangle('line', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
-            love.graphics.rectangle('fill', px + 6, py + 6, 4, 4)
+            local a = site.claimedBy and 0.7 or (0.3 + 0.15 * pulse)
+            if site.kind == SITE_STORAGE then self:drawFloorSpot(px, py, a)
+            elseif site.kind == SITE_BIN then self:drawBin(px, py, a)
+            elseif site.kind == SITE_BED then self:drawBed(px, py, a)
+            elseif site.kind == SITE_BRIDGE then self:drawBridgePlanks(px, py, a)
+            end
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Stored food sits on the ground near the break room, one item per tile.
 -- Quadrant offsets inside a bin, in the order items were stored.
-local BIN_SLOTS = { { 4, 8.5 }, { 10, 8.5 }, { 4, 13 }, { 10, 13 } }
+local BIN_SLOTS = { { 5.5, 5.5 }, { 10.5, 5.5 }, { 5.5, 10.5 }, { 10.5, 10.5 } }
 
 function View:drawItems(clock)
     for _, item in ipairs(self.world.items) do

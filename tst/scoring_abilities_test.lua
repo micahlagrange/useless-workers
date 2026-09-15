@@ -103,8 +103,10 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     lu.assertEquals(self.world.stock.logs, 4)                -- floor spots are free
     lu.assertEquals(self.jobs:count('build'), 1)
     lu.assertEquals(self.world:get(3, 4).site.kind, SITE_STORAGE)
-    local ok, why = self.abilities:use(3, 4)                 -- already marked
-    lu.assertFalse(ok)
+    lu.assertTrue((self.abilities:use(3, 4)))                -- same tool again cancels
+    lu.assertNil(self.world:get(3, 4).site)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    local ok, why
     self.abilities:select(ABILITY_BIN)
     lu.assertTrue((self.abilities:use(6, 1)))
     lu.assertEquals(self.world.stock.logs, 4 - COSTS.bin.logs)
@@ -115,6 +117,47 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     lu.assertStrContains(why, 'logs')
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
     lu.assertFalse(ok)
+end
+function TestAbilities:testDesignationsCancelAndSwap()
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    local floor = self.world:get(3, 4).site
+    lu.assertEquals(floor.kind, SITE_STORAGE)
+    -- the bin tool on a floor mark turns it into a bin mark and charges the log
+    self.abilities:select(ABILITY_BIN)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    local bin = self.world:get(3, 4).site
+    lu.assertEquals(bin.kind, SITE_BIN)
+    lu.assertTrue(floor.done)
+    lu.assertFalse(self.jobs:hasJobForSite(floor))
+    lu.assertTrue(self.jobs:hasJobForSite(bin))
+    lu.assertEquals(self.world.stock.logs, 3)
+    -- the same tool on its own mark cancels it and refunds
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertNil(self.world:get(3, 4).site)
+    lu.assertFalse(self.jobs:hasJobForSite(bin))
+    lu.assertEquals(self.world.stock.logs, 4)
+    lu.assertEquals(#self.world.sites, 0)
+    -- a bridge mark is cancelled by a click (no drag) with the bridge tool
+    self.abilities:select(ABILITY_BRIDGE)
+    lu.assertTrue((self.abilities:useLine(4, 4, 5, 4)))
+    lu.assertEquals(self.world.stock.logs, 2)
+    lu.assertTrue((self.abilities:useLine(4, 4, 4, 4)))
+    lu.assertNil(self.world:get(4, 4).site)
+    lu.assertNotNil(self.world:get(5, 4).site)
+    lu.assertEquals(self.world.stock.logs, 3)
+    -- no refund once someone is building it
+    self.abilities:select(ABILITY_BED)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    self.world:get(3, 4).site.working = true
+    lu.assertEquals(self.world.stock.logs, 1)
+    self.abilities:select(ABILITY_BIN)
+    local ok, why = self.abilities:use(3, 4)
+    lu.assertFalse(ok)
+    lu.assertStrContains(why, 'already building')
+    self.abilities:select(ABILITY_BED)
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals(self.world.stock.logs, 1)
 end
 function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     self.abilities:select(ABILITY_BED)

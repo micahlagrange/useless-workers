@@ -179,19 +179,21 @@ function UI:iconComplaint(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.56, y + s * 0.6, s * 0.14, s * 0.1)
 end
 
--- An open-topped bin drawn 2.5D: front face, right side, light rim, dark inside.
+-- A bin from above: wooden frame, dark open inside, lit from the top left.
 function UI:iconBin(x, y, s)
     love.graphics.setColor(0.55, 0.42, 0.24)
-    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.4, s * 0.6, s * 0.5)
-    love.graphics.setColor(0.38, 0.28, 0.15)
-    love.graphics.polygon('fill', x + s * 0.7, y + s * 0.4, x + s * 0.9, y + s * 0.2, x + s * 0.9, y + s * 0.7, x + s * 0.7, y + s * 0.9)
+    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84)
+    love.graphics.setColor(0.16, 0.12, 0.06)
+    love.graphics.rectangle('fill', x + s * 0.22, y + s * 0.22, s * 0.56, s * 0.56)
     love.graphics.setColor(0.8, 0.64, 0.38)
-    love.graphics.polygon('fill', x + s * 0.1, y + s * 0.4, x + s * 0.3, y + s * 0.2, x + s * 0.9, y + s * 0.2, x + s * 0.7, y + s * 0.4)
-    love.graphics.setColor(0.2, 0.14, 0.08)
-    love.graphics.polygon('fill', x + s * 0.2, y + s * 0.38, x + s * 0.34, y + s * 0.25, x + s * 0.82, y + s * 0.25, x + s * 0.66, y + s * 0.38)
-    love.graphics.setColor(0.72, 0.56, 0.32)
-    love.graphics.rectangle('fill', x + s * 0.14, y + s * 0.55, s * 0.52, s * 0.06)
-    love.graphics.rectangle('fill', x + s * 0.14, y + s * 0.72, s * 0.52, s * 0.06)
+    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.07)
+    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.07, s * 0.84)
+    love.graphics.setColor(0.36, 0.26, 0.14)
+    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.85, s * 0.84, s * 0.07)
+    love.graphics.rectangle('fill', x + s * 0.85, y + s * 0.08, s * 0.07, s * 0.84)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self.foodIcon, x + s * 0.26, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.52, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
 end
 
 -- A floor storage spot: a chalked square with a corner mark.

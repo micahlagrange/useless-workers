@@ -43,6 +43,20 @@ local function stoneOrSnow(t)
     return t and (t.type == TILE_STONE or t.type == TILE_SNOW)
 end
 
+local BUILD_KINDS = { [SITE_STORAGE] = true, [SITE_BIN] = true, [SITE_BED] = true, [SITE_BRIDGE] = true }
+
+-- Take a designation back. Logs come back unless someone has started on it.
+function Abilities:cancelSite(site)
+    local refund = not site.working
+    self.jobs:removeSite(site)
+    self.world:removeSite(site)
+    if refund then
+        for k, n in pairs(COSTS[site.kind] or {}) do self.world:addStock(k, n) end
+    end
+    self:effect('unmark', { count = 1, kind = site.kind })
+    return true
+end
+
 -- Click tools. Returns true when something was placed, else false and a reason.
 function Abilities:use(tx, ty)
     local tool = self.selected
@@ -51,6 +65,15 @@ function Abilities:use(tx, ty)
         local cost = COSTS[kind]
         local t = self.world:get(tx, ty)
         if not t then return false, nil end
+        -- clicking a designation with its own tool cancels it; with another
+        -- build tool it becomes that kind instead
+        if t.site and t.site.kind == kind then return self:cancelSite(t.site) end
+        if t.site and BUILD_KINDS[t.site.kind] and t.site.kind ~= SITE_BRIDGE then
+            if t.site.working then return false, 'Someone is already building that' end
+            local refund = (COSTS[t.site.kind] or {}).logs or 0
+            if self.world.stock.logs + refund < cost.logs then return false, 'Need ' .. cost.logs .. ' logs in the stockpile' end
+            self:cancelSite(t.site)
+        end
         if not self.world:canAfford(cost) then return false, 'Need ' .. cost.logs .. ' logs in the stockpile' end
         local site, why = self.world:addSite(kind, tx, ty)
         if not site then return false, why and (kind:sub(1, 1):upper() .. kind:sub(2) .. ' ' .. why) or nil end
@@ -101,6 +124,10 @@ end
 -- Bridge tool: a drag from one tile to another marks every water tile on
 -- the straight line as a bridge site. Costs logs per tile, all or nothing.
 function Abilities:useLine(x1, y1, x2, y2)
+    if x1 == x2 and y1 == y2 then
+        local t = self.world:get(x1, y1)
+        if t and t.site and t.site.kind == SITE_BRIDGE then return self:cancelSite(t.site) end
+    end
     local tiles = self.world:lineTiles(x1, y1, x2, y2)
     local water = {}
     for _, p in ipairs(tiles) do
