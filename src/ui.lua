@@ -133,7 +133,8 @@ function UI:drawTopBar(game)
     local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
     item('FED', fed .. '%', fed < 35 and C.warn or C.text)
     item('OUTPUT', tostring(s.output))
-    item('PANTRY', tostring(game.world.breakroom.food or 0), (game.world.breakroom.food or 0) == 0 and C.warn or C.text)
+    local stored = game.world:storedCount(ITEM_FOOD)
+    item('STORED FOOD', tostring(stored), stored == 0 and C.warn or C.text)
     item('COMPLAINTS', tostring(s.complaints), s.complaints > 0 and C.warn or C.text)
     item('BUDGET', tostring(s.budget), s.budget == 0 and C.warn or C.good)
     local right = 'SEED ' .. tostring(game.seedString) .. '   M mute'
@@ -198,7 +199,9 @@ function UI:drawBottomBar(game)
         love.graphics.print('the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), px + self.fonts.hud:getWidth(w.name) + 12, py + 3)
         setColor(C.text)
         love.graphics.print(w:describeState(), px, py + 22)
-        love.graphics.print('delivered ' .. w.delivered .. '   complaints ' .. w.complaintCount, px, py + 38)
+        local work = w.slots[SLOT_WORK] and w.slots[SLOT_WORK].kind or 'empty'
+        local pocket = w.slots[SLOT_PERSONAL] and w.slots[SLOT_PERSONAL].kind or 'empty'
+        love.graphics.print('slot 1: ' .. work .. '   slot 2: ' .. pocket .. '   delivered ' .. w.delivered, px, py + 38)
         setColor(C.dim)
         love.graphics.print('HUNGER', px + 260, py + 22)
         love.graphics.setColor(0, 0, 0, 0.6)
@@ -288,9 +291,9 @@ end
 function UI:drawTitle(title, highScore)
     love.graphics.setColor(0.09, 0.1, 0.08, 1)
     love.graphics.rectangle('fill', 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-    self:centered('HUMAN RESOURCES', 120, self.fonts.title)
+    self:centered('MORPHIS', 120, self.fonts.title)
     self:centered('Control the environment.', 190, self.fonts.hud, C.dim)
-    self:centered('The employees will manage themselves. Badly.', 212, self.fonts.hud, C.dim)
+    self:centered('The morphis will manage themselves. Badly.', 212, self.fonts.hud, C.dim)
     local diff = DIFFICULTIES[title.difficultyIndex]
     self:centered('<  DIFFICULTY: ' .. diff.name .. '  >', 300, self.fonts.big)
     self:centered(diff.workers .. ' starting staff, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, 340, self.fonts.small, C.dim)

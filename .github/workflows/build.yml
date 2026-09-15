@@ -1,16 +1,15 @@
 name: continuous-integration
 on: [push]
 env:
-  GAME_NAME: human-resources
+  GAME_NAME: morphis
   # unfortunately we need to also hardcode game name here in env since definitions in env can't reference eachother
-  ARTIFACT_PATH_LOVE: main/makelove-build/love/human-resources.love
-  ARTIFACT_PATH_APPIMAGE: main/makelove-build/appimage/human-resources.AppImage
-  ARTIFACT_PATH_WIN64: main/makelove-build/win64/human-resources-win64.zip
-  ARTIFACT_PATH_MACOS: main/makelove-build/macos/human-resources-macos.zip
-  ARTIFACT_PATH_LOVEJS: main/makelove-build/lovejs/human-resources-lovejs.zip
+  ARTIFACT_PATH_LOVE: main/makelove-build/love/morphis.love
+  ARTIFACT_PATH_APPIMAGE: main/makelove-build/appimage/morphis.AppImage
+  ARTIFACT_PATH_WIN64: main/makelove-build/win64/morphis-win64.zip
+  ARTIFACT_PATH_MACOS: main/makelove-build/macos/morphis-macos.zip
+  ARTIFACT_PATH_LOVEJS: main/makelove-build/lovejs/morphis-lovejs.zip
   ITCH_USER: multivoxmuse
-  # The itch page this repo has always published to. Create a new page and change
-  # this value when Human Resources gets its own page.
+  # The itch page this repo has always published to.
   ITCH_GAME: morphi
 
 jobs:

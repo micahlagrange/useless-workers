@@ -21,6 +21,6 @@ fi
 
 cleanup
 makelove lovejs
-unzip -o "makelove-build/lovejs/human-resources-lovejs.zip" -d makelove-build/html/
-echo "http://localhost:8000/makelove-build/html/human-resources/"
+unzip -o "makelove-build/lovejs/morphis-lovejs.zip" -d makelove-build/html/
+echo "http://localhost:8000/makelove-build/html/morphis/"
 python3 -m http.server

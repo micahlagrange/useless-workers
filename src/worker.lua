@@ -1,5 +1,7 @@
 -- A morphi. Has a role (forager, lumberjack, miner), gets hungry, takes jobs
--- of its own type off the shared queue, complains when it cannot reach them.
+-- of its own type off the shared queue, complains when it cannot reach them,
+-- carries a work item in slot 1 and a personal snack in slot 2, and takes a
+-- break in the break room after enough work.
 require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
@@ -22,7 +24,7 @@ function Worker.new(world, jobs, scoring, rng, opts)
     local c = Util.tileCenter(opts.x or 1, opts.y or 1)
     self.x, self.y = c.x, c.y
     self.hunger = HUNGER_MAX
-    self.drain = opts.drain or 1.5
+    self.drain = opts.drain or 0.7
     self.speed = opts.speed or WORKER_SPEED
     self.state = 'idle'
     self.stateTimer = 0
@@ -31,8 +33,14 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.goal = nil
     self.job = nil
     self.targetNode = nil
-    self.carrying = nil      -- CARGO_FOOD, CARGO_LOGS or CARGO_GOLD
-    self.carryingFruit = nil -- which food sprite, for the view
+    self.targetItem = nil
+    self.targetTile = nil
+    self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
+    self.resume = nil         -- what to go back to after a snack
+    self.eatingSlot = nil
+    self.workTime = 0         -- accumulated work since the last break
+    self.wantsBreak = false
+    self.breaksTaken = 0
     self.walkTime = 0
     self.icks = {}
     self.facing = 'right'
@@ -46,6 +54,22 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.onComplain = opts.onComplain
     self.onEvent = opts.onEvent
     return self
+end
+
+-- Inventory -------------------------------------------------------------
+
+function Worker:carrying()
+    return self.slots[SLOT_WORK]
+end
+
+function Worker:snackInPocket()
+    local s = self.slots[SLOT_PERSONAL]
+    return s ~= nil and s.kind == ITEM_FOOD
+end
+
+function Worker:hasFoodInSlot(i)
+    local s = self.slots[i]
+    return s ~= nil and s.kind == ITEM_FOOD
 end
 
 function Worker:tile()
@@ -77,7 +101,6 @@ function Worker:ick(x, y)
     self.icks[Util.key(x, y)] = self.clock + ICK_SECONDS
 end
 
--- Somebody already complained about this node recently.
 function Worker:recentlyReported(node)
     return node.complainedAt ~= nil and (self.clock - node.complainedAt) < COMPLAINT_COOLDOWN
 end
@@ -97,6 +120,20 @@ function Worker:releaseNode()
     self.targetNode = nil
 end
 
+function Worker:releaseItem()
+    if self.targetItem and self.targetItem.claimedBy == self then
+        self.targetItem.claimedBy = nil
+    end
+    self.targetItem = nil
+end
+
+function Worker:releaseTile()
+    if self.targetTile then
+        self.world:releaseReservations(self)
+        self.targetTile = nil
+    end
+end
+
 -- Put the current job back on the queue and forget the path.
 function Worker:dropJob()
     if self.job then
@@ -105,8 +142,11 @@ function Worker:dropJob()
         if job.node.ready then self.jobs:post(job) end
     end
     self:releaseNode()
+    self:releaseItem()
+    self:releaseTile()
     self.path = nil
     self.goal = nil
+    self.resume = nil
 end
 
 function Worker:complain(reason, node)
@@ -124,7 +164,7 @@ end
 
 function Worker:quit()
     self:dropJob()
-    self.carrying = nil
+    self.slots = {}
     self.scoring:addQuit()
     self:say('I QUIT', 6)
     self:emit('quit')
@@ -139,6 +179,8 @@ function Worker:quit()
     table.sort(choices, function(a, b) return a.d < b.d end)
     self.exitDir = choices[1]
 end
+
+-- Movement --------------------------------------------------------------
 
 function Worker:setPath(path, goal)
     self.path = path
@@ -164,6 +206,64 @@ function Worker:pathToBreakroom()
     return br and self:pathTo(br.x, br.y)
 end
 
+-- After idling on top of a stored item or the furniture, move one tile over.
+function Worker:stepOff()
+    local t = self:tile()
+    local tile = self.world:get(t.x, t.y)
+    if not tile or (not tile.item and tile.type ~= TILE_BREAKROOM) then return false end
+    local spot = self.world:freeNeighbour(t.x, t.y)
+    if not spot then return false end
+    local path = self:pathTo(spot.x, spot.y)
+    if not path then return false end
+    self:setPath(path, 'wander')
+    return true
+end
+
+-- Eating ----------------------------------------------------------------
+
+-- Stop whatever is happening and eat from a slot. Resumes afterwards.
+function Worker:snack(slot)
+    if self.state == 'eating' or self.state == 'quitting' then return false end
+    if not self:hasFoodInSlot(slot) then return false end
+    self.resume = {
+        state = self.state, goal = self.goal, path = self.path, pathIndex = self.pathIndex,
+        stateTimer = self.stateTimer, walkTime = self.walkTime,
+    }
+    self.eatingSlot = slot
+    self.state = 'eating'
+    self.stateTimer = EAT_SECONDS
+    self.moving = false
+    return true
+end
+
+function Worker:finishEating()
+    if self.eatingSlot then
+        if self:hasFoodInSlot(self.eatingSlot) then
+            self.slots[self.eatingSlot] = nil
+            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+            self:emit('eat')
+        end
+        self.eatingSlot = nil
+    elseif self.targetNode and self.targetNode.ready then
+        -- eating straight off a bush
+        self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+        self.world:harvestNode(self.targetNode)
+        self:emit('eat')
+        self:releaseNode()
+    end
+    local r = self.resume
+    self.resume = nil
+    if r and r.state ~= 'idle' and r.state ~= 'sulking' then
+        self.state, self.goal, self.path, self.pathIndex = r.state, r.goal, r.path, r.pathIndex
+        self.stateTimer, self.walkTime = r.stateTimer, r.walkTime
+        if self.state == 'walking' and not self.path then self.state = 'idle' end
+    else
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
+    end
+end
+
 -- Nearest ripe, unclaimed, not icked bush the morphi can reach. Second return
 -- value is the nearest such bush that is walled off, if any.
 function Worker:nearestRipeBush()
@@ -183,17 +283,23 @@ function Worker:nearestRipeBush()
     return best, blocked
 end
 
+-- Walk to a stored food item and put it in the personal slot.
+function Worker:fetchFood()
+    if self.slots[SLOT_PERSONAL] then return false end
+    local t = self:tile()
+    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y)
+    if not item then return false end
+    local path = self:pathTo(item.x, item.y)
+    if not path then return false end
+    item.claimedBy = self
+    self.targetItem = item
+    self:setPath(path, 'fetch')
+    return true
+end
+
 function Worker:eatSomething()
-    -- 1. the pantry in the break room
-    local br = self.world.breakroom
-    if br and br.food > 0 then
-        local path = self:pathToBreakroom()
-        if path then
-            self:setPath(path, 'eatstock')
-            return true
-        end
-    end
-    -- 2. a bush
+    if self:snackInPocket() then return self:snack(SLOT_PERSONAL) end
+    if self:fetchFood() then return true end
     local bush, blocked = self:nearestRipeBush()
     if bush then
         local path = self:pathTo(bush.x, bush.y)
@@ -210,12 +316,33 @@ function Worker:eatSomething()
     return false
 end
 
+-- Head for the break room, grabbing a snack from storage on the way if the
+-- pocket is empty.
+function Worker:startBreak()
+    self.wantsBreak = true
+    if not self.slots[SLOT_PERSONAL] and self:fetchFood() then return true end
+    local path = self:pathToBreakroom()
+    if path then
+        self:setPath(path, 'break')
+        return true
+    end
+    self.wantsBreak = false
+    self.workTime = 0
+    return false
+end
+
+-- Decisions ---------------------------------------------------------------
+
 function Worker:decide()
     -- 1. Survival beats output
     if self.hunger < HUNGER_EAT_THRESHOLD then
         if self:eatSomething() then return end
     end
-    -- 2. Oldest job of my type
+    -- 2. Earned a break
+    if self.workTime >= BREAK_AFTER_SECONDS or self.wantsBreak then
+        if self:startBreak() then return end
+    end
+    -- 3. Oldest job of my type
     local job = self.jobs:take(self.roleInfo.jobType, function(j)
         if not j.node.ready or j.node.claimedBy ~= nil or self:isIcked(j.x, j.y) then return false end
         if self:recentlyReported(j.node) and not self.world:nodeReachable(j.node) then return false end
@@ -238,7 +365,9 @@ function Worker:decide()
         end
         return
     end
-    -- 3. Wander
+    -- 4. Do not loiter on the pantry
+    if self:stepOff() then return end
+    -- 5. Wander
     local t = self:tile()
     local target = self.rng and self.world:randomNearbyPassable(self.rng, t.x, t.y, WANDER_RADIUS)
     if target then
@@ -252,13 +381,20 @@ function Worker:decide()
 end
 
 function Worker:followPath(dt)
-    -- The node we were walking to got used by somebody else
     if (self.goal == 'work' or self.goal == 'eat') and self.targetNode and not self.targetNode.ready then
         self:releaseNode()
         self.job = nil
         self.path = nil
         self.goal = nil
         self.state = 'idle'
+        return
+    end
+    if self.goal == 'fetch' and self.targetItem and self.world:get(self.targetItem.x, self.targetItem.y).item ~= self.targetItem then
+        self:releaseItem()
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
         return
     end
     self.walkTime = self.walkTime + dt
@@ -287,36 +423,90 @@ function Worker:followPath(dt)
     end
 end
 
+-- Carry the work item home: food goes onto a storage tile, logs and gold
+-- are handed in at the break room.
+function Worker:goDeliver()
+    local cargo = self:carrying()
+    if not cargo then return false end
+    local path
+    if cargo.kind == CARGO_FOOD then
+        local spot = self.world:nearestFreeStorageTile(self)
+        if not spot then
+            self:say('no room!')
+            return false
+        end
+        self.world:reserveTile(spot.x, spot.y, self)
+        self.targetTile = spot
+        path = self:pathTo(spot.x, spot.y)
+    else
+        path = self:pathToBreakroom()
+    end
+    if path then
+        self:setPath(path, 'deliver')
+        return true
+    end
+    self:releaseTile()
+    return false
+end
+
+function Worker:deliverHere()
+    local cargo = self:carrying()
+    if not cargo then return end
+    local t = self:tile()
+    if cargo.kind == CARGO_FOOD then
+        local tile = self.world:get(t.x, t.y)
+        if tile.item or not tile.passable then
+            -- somebody got here first, find another tile
+            self:releaseTile()
+            if self:goDeliver() then return end
+            return
+        end
+        self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.fruit)
+        self:releaseTile()
+    end
+    self.slots[SLOT_WORK] = nil
+    self.scoring:addDelivery(cargo.kind)
+    self.delivered = self.delivered + 1
+    self:emit('deliver', cargo.kind)
+    self.goal = nil
+    self.state = 'idle'
+    self.decideTimer = 0
+    if cargo.kind == CARGO_FOOD then self:stepOff() end
+end
+
 function Worker:arrive()
     self.path = nil
     self.moving = false
     if self.goal == 'eat' then
         self.state = 'eating'
         self.stateTimer = EAT_SECONDS
-    elseif self.goal == 'eatstock' then
-        local br = self.world.breakroom
-        if br.food > 0 then
-            br.food = br.food - 1
-            self.state = 'eating'
-            self.stateTimer = EAT_SECONDS
-            self.eatingFromStock = true
-        else
-            self.goal = nil
-            self.state = 'idle'
+    elseif self.goal == 'fetch' then
+        local t = self:tile()
+        local tile = self.world:get(t.x, t.y)
+        if tile.item and tile.item == self.targetItem then
+            local item = self.world:takeItem(t.x, t.y)
+            self.slots[SLOT_PERSONAL] = { kind = item.kind, fruit = item.fruit }
+            self:emit('pickup', item.kind)
         end
+        self:releaseItem()
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
+        if self.hunger < HUNGER_EAT_THRESHOLD and self:snackInPocket() then
+            self:snack(SLOT_PERSONAL)
+        elseif self.wantsBreak then
+            local path = self:pathToBreakroom()
+            if path then self:setPath(path, 'break') else self.wantsBreak = false; self.workTime = 0 end
+        end
+    elseif self.goal == 'break' then
+        self.state = 'breaking'
+        self.stateTimer = BREAK_SECONDS
+        self:say('break', 2)
     elseif self.goal == 'work' then
         self.state = 'working'
         self.stateTimer = self.roleInfo.actionSeconds
     elseif self.goal == 'deliver' then
-        self.scoring:addDelivery(self.carrying)
-        self.delivered = self.delivered + 1
-        if self.carrying == CARGO_FOOD then
-            self.world.breakroom.food = self.world.breakroom.food + 1
-        end
-        self:emit('deliver', self.carrying)
-        self.carrying = nil
-        self.goal = nil
-        self.state = 'idle'
+        self:deliverHere()
     else
         self.goal = nil
         self.state = 'idle'
@@ -325,45 +515,38 @@ end
 
 function Worker:finishAction()
     if self.state == 'eating' then
-        if self.eatingFromStock then
-            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
-            self:emit('eat')
-            self.eatingFromStock = nil
-        elseif self.targetNode and self.targetNode.ready then
-            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
-            self.world:harvestNode(self.targetNode)
-            self:emit('eat')
-        end
-        self:releaseNode()
-        self.goal = nil
+        self:finishEating()
+    elseif self.state == 'breaking' then
+        self.workTime = 0
+        self.wantsBreak = false
+        self.breaksTaken = self.breaksTaken + 1
+        self:emit('break')
         self.state = 'idle'
+        self.decideTimer = 0
+        self:stepOff()
     elseif self.state == 'working' then
         local cargo = nil
         if self.targetNode and self.targetNode.ready then
             local node = self.targetNode
-            cargo = self.world:harvestNode(node)
-            self.carryingFruit = node.fruit
+            local kind = self.world:harvestNode(node)
+            cargo = { kind = kind, fruit = node.fruit }
             self:emit('work', node.kind)
-            if cargo == CARGO_FOOD and self.hunger < HUNGER_EAT_THRESHOLD then
-                -- too hungry to carry it back, eat it on the spot
-                self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
-                self:emit('eat')
-                cargo = nil
-            end
         end
         self:releaseNode()
         self.job = nil
         if cargo then
-            self.carrying = cargo
-            local path = self:pathToBreakroom()
-            if path then
-                self:setPath(path, 'deliver')
-                return
-            end
-            self.carrying = nil
+            self.slots[SLOT_WORK] = cargo
+            if self:goDeliver() then return end
+            self.slots[SLOT_WORK] = nil
         end
         self.goal = nil
         self.state = 'idle'
+    end
+end
+
+function Worker:accumulateWork(dt)
+    if self.state == 'working' or (self.state == 'walking' and (self.goal == 'work' or self.goal == 'deliver')) then
+        self.workTime = self.workTime + dt
     end
 end
 
@@ -386,26 +569,33 @@ function Worker:update(dt, clock)
         return
     end
     self.hunger = self.hunger - self.drain * dt
-    if self.carrying and self.hunger < HUNGER_STARVING then
-        if self.carrying == CARGO_FOOD then
-            -- eats the delivery rather than starve
-            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
-            self:emit('eat')
+    -- Hungry with a snack in the pocket: stop and eat, whatever is going on
+    if self.hunger < HUNGER_EAT_THRESHOLD and self.state ~= 'eating' and self.state ~= 'sulking' then
+        if self:snackInPocket() then
+            self:snack(SLOT_PERSONAL)
+        elseif self.hunger < HUNGER_STARVING and self:hasFoodInSlot(SLOT_WORK) then
             self:say('mine now')
-        else
+            self:releaseTile()
+            self.slots[SLOT_WORK].kind = ITEM_FOOD
+            self:snack(SLOT_WORK)
+            self.resume = nil
+        elseif self.hunger < HUNGER_STARVING and self:carrying() then
+            -- drops the log or nugget and goes looking for food
             self:say('too hungry')
+            self.slots[SLOT_WORK] = nil
+            self:releaseTile()
+            self.path = nil
+            self.goal = nil
+            self.state = 'idle'
+            self.decideTimer = 0
         end
-        self.carrying = nil
-        self.path = nil
-        self.goal = nil
-        self.state = 'idle'
-        self.decideTimer = 0
     end
     if self.hunger <= 0 then
         self.hunger = 0
         self:quit()
         return
     end
+    self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
         self.decideTimer = self.decideTimer - dt
@@ -418,7 +608,7 @@ function Worker:update(dt, clock)
         if self.stateTimer <= 0 then self.state = 'idle' end
     elseif self.state == 'walking' then
         self:followPath(dt)
-    elseif self.state == 'eating' or self.state == 'working' then
+    elseif self.state == 'eating' or self.state == 'working' or self.state == 'breaking' then
         self.stateTimer = self.stateTimer - dt
         if self.stateTimer <= 0 then self:finishAction() end
     end
@@ -428,11 +618,16 @@ function Worker:describeState()
     if self.state == 'quitting' then return 'Quitting' end
     if self.state == 'sulking' then return 'Complaining' end
     if self.state == 'eating' then return 'Eating' end
+    if self.state == 'breaking' then return 'On a break' end
     if self.state == 'working' then return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2) end
     if self.state == 'walking' then
-        if self.goal == 'deliver' then return 'Carrying ' .. self.carrying .. ' to the break room' end
+        if self.goal == 'deliver' then
+            local c = self:carrying()
+            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to the break room')
+        end
         if self.goal == 'eat' then return 'Going to eat' end
-        if self.goal == 'eatstock' then return 'Going to the pantry' end
+        if self.goal == 'fetch' then return 'Fetching a snack from storage' end
+        if self.goal == 'break' then return 'Heading to the break room' end
         if self.goal == 'work' then return 'Going ' .. self.roleInfo.verb end
         return 'Wandering'
     end

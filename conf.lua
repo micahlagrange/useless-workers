@@ -8,7 +8,7 @@ WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 800
 
 function love.conf(t)
-    t.title = "Human Resources"
+    t.title = "Morphis"
     t.version = "11.4" -- 11.4 keeps makelove and love.js happy, the API we use is identical in 11.5
     t.console = false
     t.window.width = WINDOW_WIDTH

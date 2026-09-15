@@ -60,12 +60,43 @@ function TestWorker:testForagerPicksAndStocksThePantry()
     run({ w }, self.world, self.jobs, 12)
     lu.assertEquals(self.scoring.output, 1)
     lu.assertEquals(self.scoring.delivered.food, 1)
-    lu.assertEquals(self.world.breakroom.food, 1)
+    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
+    local item = self.world.items[1]
+    lu.assertEquals(item.kind, ITEM_FOOD)
+    -- stored on the closest free tile to the break room, not on the furniture
+    lu.assertNotEquals(self.world:get(item.x, item.y).type, TILE_BREAKROOM)
+    lu.assertTrue(math.abs(item.x - 5.5) <= 1.5 and math.abs(item.y - 4.5) <= 1.5, 'stored at ' .. item.x .. ',' .. item.y)
     lu.assertFalse(self.bush.ready)
-    lu.assertNil(w.carrying)
+    lu.assertNil(w:carrying())
     lu.assertEquals(self.events[1], 'work:bush')
     lu.assertEquals(self.events[2], 'deliver:food')
     lu.assertEquals(#self.complaints, 0)
+    -- the forager stepped off the food it just dropped
+    local t = w:tile()
+    lu.assertNil(self.world:get(t.x, t.y).item)
+end
+
+function TestWorker:testOneFoodPerTileClosestFirst()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    local extra = self.world:addNode(NODE_BUSH, 8, 1); extra.ready = true
+    local extra2 = self.world:addNode(NODE_BUSH, 1, 5); extra2.ready = true
+    self.jobs:postNode(self.bush)
+    self.jobs:postNode(extra)
+    self.jobs:postNode(extra2)
+    run({ w }, self.world, self.jobs, 45)
+    local count = self.world:storedCount(ITEM_FOOD)
+    lu.assertTrue(count >= 3, 'stored only ' .. count) -- bushes ripen again, so possibly more
+    local seen = {}
+    local ring = self.world:storageTiles()
+    for _, item in ipairs(self.world.items) do
+        local key = item.x .. ':' .. item.y
+        lu.assertNil(seen[key], 'two items on one tile')
+        seen[key] = true
+        -- items fill the closest storage tiles first, so every item's rank is within the count
+        local rank
+        for i, st in ipairs(ring) do if st.x == item.x and st.y == item.y then rank = i end end
+        lu.assertTrue(rank ~= nil and rank <= count, 'item at rank ' .. tostring(rank) .. ' of ' .. count)
+    end
 end
 
 function TestWorker:testLumberjackChopsTreeIntoStump()
@@ -91,18 +122,77 @@ function TestWorker:testMinerWorksOreFromNextDoorAndOpensTheTile()
     lu.assertEquals(#self.world:nodesOfKind(NODE_ORE), 0)
 end
 
-function TestWorker:testHungryMorphiEatsFromThePantryFirst()
+function TestWorker:testHungryMorphiFetchesFromStorageIntoSlot2()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
-    self.world.breakroom.food = 2
+    self.world:storeItem(ITEM_FOOD, 7, 4, 3)
+    self.world:storeItem(ITEM_FOOD, 7, 5, 4)
     w.hunger = 20
-    run({ w }, self.world, self.jobs, 4)
-    lu.assertEquals(self.world.breakroom.food, 1)
+    run({ w }, self.world, self.jobs, 5)
+    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
     lu.assertTrue(w.hunger > 50, 'hunger was ' .. w.hunger)
     lu.assertTrue(self.bush.ready) -- left the bush alone
-    lu.assertEquals(self.events[1], 'eat')
+    lu.assertEquals(self.events[1], 'pickup:food')
+    lu.assertEquals(self.events[2], 'eat')
+    lu.assertNil(w.slots[SLOT_PERSONAL])
 end
 
-function TestWorker:testHungryMorphiEatsFromABushWhenPantryIsEmpty()
+function TestWorker:testSnackInterruptsWorkAndResumes()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
+    w.slots[SLOT_PERSONAL] = { kind = ITEM_FOOD, fruit = 1 }
+    self.jobs:postNode(self.tree)
+    run({ w }, self.world, self.jobs, 0.6)
+    lu.assertEquals(w.state, 'walking')
+    lu.assertEquals(w.goal, 'work')
+    w.hunger = HUNGER_EAT_THRESHOLD - 1
+    run({ w }, self.world, self.jobs, 0.1)
+    lu.assertEquals(w.state, 'eating')
+    lu.assertNotNil(w.resume)
+    run({ w }, self.world, self.jobs, EAT_SECONDS + 0.1)
+    lu.assertNil(w.slots[SLOT_PERSONAL])
+    lu.assertTrue(w.hunger > 60)
+    lu.assertEquals(w.state, 'walking') -- back on the job
+    lu.assertEquals(w.goal, 'work')
+    run({ w }, self.world, self.jobs, 14)
+    lu.assertEquals(self.scoring.delivered.logs, 1)
+end
+
+function TestWorker:testTakesABreakAfterEnoughWork()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 6, 5))
+    w.workTime = BREAK_AFTER_SECONDS
+    self.world:storeItem(ITEM_FOOD, 7, 5, 2)
+    self.jobs:postNode(self.tree)
+    run({ w }, self.world, self.jobs, 6)
+    -- grabbed a snack from storage first, then rested in the break room
+    lu.assertEquals(self.events[1], 'pickup:food')
+    lu.assertEquals(w.slots[SLOT_PERSONAL].kind, ITEM_FOOD)
+    local sawBreak = false
+    for _ = 1, 200 do
+        run({ w }, self.world, self.jobs, 0.1)
+        if w.state == 'breaking' then
+            sawBreak = true
+            local t = w:tile()
+            lu.assertEquals(self.world:get(t.x, t.y).type, TILE_BREAKROOM)
+            break
+        end
+    end
+    lu.assertTrue(sawBreak, 'never took the break')
+    run({ w }, self.world, self.jobs, BREAK_SECONDS + 15)
+    lu.assertEquals(w.breaksTaken, 1)
+    lu.assertEquals(w.workTime < BREAK_AFTER_SECONDS, true)
+    lu.assertTrue(self.jobs:hasJobFor(self.tree) or self.scoring.delivered.logs == 1 or w.targetNode == self.tree)
+end
+
+function TestWorker:testStarvingForagerEatsItsWorkItem()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER))
+    w.slots[SLOT_WORK] = { kind = CARGO_FOOD, fruit = 1 }
+    w.hunger = HUNGER_STARVING - 1
+    run({ w }, self.world, self.jobs, EAT_SECONDS + 0.2)
+    lu.assertNil(w.slots[SLOT_WORK])
+    lu.assertTrue(w.hunger > 40)
+    lu.assertEquals(self.scoring.delivered.food, 0)
+end
+
+function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     w.hunger = 20
     run({ w }, self.world, self.jobs, 8)
@@ -215,9 +305,9 @@ local function simulateQuarter(difficultyIndex)
     local report = scoring:closeQuarter(#workers)
     local rs = ''
     for k, v in pairs(reasons) do rs = rs .. k .. '=' .. v .. ' ' end
-    print(string.format('  %-14s Q1 unaided seed %s: food %d logs %d gold %d, complaints %d (%s), quits %d, fed %d%%, pantry %d, grade %s (%.2fs)',
+    print(string.format('  %-14s Q1 unaided seed %s: food %d logs %d gold %d, complaints %d (%s), quits %d, fed %d%%, stored %d, grade %s (%.2fs)',
         DIFFICULTIES[difficultyIndex].name, DEFAULT_SEED, report.food, report.logs, report.gold, report.complaints, rs,
-        report.attrition, report.fedPct, world.breakroom.food, report.grade, elapsed))
+        report.attrition, report.fedPct, world:storedCount(ITEM_FOOD), report.grade, elapsed))
     return report
 end
 function TestSimulation:testFullQuarterOnGeneratedWorld()

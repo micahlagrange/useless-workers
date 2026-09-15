@@ -39,6 +39,20 @@ TREE_REGROW_SECONDS = 45
 CARGO_FOOD, CARGO_LOGS, CARGO_GOLD = 'food', 'logs', 'gold'
 CARGO_VALUE = { food = 1, logs = 2, gold = 3 }   -- weight in the final score
 
+-- Storage: delivered food is a real item on a tile near the break room,
+-- one per tile, closest free tile first. Logs and gold are counted on delivery.
+STORAGE_RADIUS   = 8
+ITEM_FOOD        = 'food'
+
+-- Inventory: slot 1 carries the work item (a pick, a log, a nugget),
+-- slot 2 is personal (food picked up from storage). Two slots for now.
+INVENTORY_SLOTS  = 2
+SLOT_WORK, SLOT_PERSONAL = 1, 2
+
+-- Breaks: after this much accumulated work a morphi heads to the break room
+BREAK_AFTER_SECONDS = 45
+BREAK_SECONDS       = 8
+
 -- Morphis and their roles
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLES = {
@@ -52,7 +66,7 @@ MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', 
 -- Workers (section 5)
 HUNGER_MAX             = 100
 HUNGER_EAT_THRESHOLD   = 30
-HUNGER_STARVING        = 12     -- a starving carrier eats its food or drops its cargo
+HUNGER_STARVING        = 12     -- a starving morphi eats even its work item if it is food, or drops its cargo
 FRUIT_HUNGER_VALUE     = 55
 WORKER_SPEED           = 72     -- pixels per second, 4.5 tiles per second
 WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving up
@@ -90,10 +104,10 @@ ENDLESS_DRAIN_STEP  = 0.1
 GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
 
 DIFFICULTIES = {
-    { name = 'Intern',        drain = 0.9, workers = 5, multiplier = 0.5 },
-    { name = 'Manager',       drain = 1.2, workers = 4, multiplier = 1.0 },
-    { name = 'Director',      drain = 1.6, workers = 3, multiplier = 1.5 },
-    { name = 'Unlimited PTO', drain = 2.0, workers = 2, multiplier = 2.0 },
+    { name = 'Intern',        drain = 0.5, workers = 5, multiplier = 0.5 },
+    { name = 'Manager',       drain = 0.7, workers = 4, multiplier = 1.0 },
+    { name = 'Director',      drain = 0.95, workers = 3, multiplier = 1.5 },
+    { name = 'Unlimited PTO', drain = 1.2, workers = 2, multiplier = 2.0 },
 }
 DEFAULT_DIFFICULTY = 2
 DEFAULT_SEED       = '987'

@@ -1,4 +1,4 @@
-name = "human-resources"
+name = "morphis"
 love_version = "11.4"
 default_targets = ["lovejs", "win64", "macos", "appimage"]
 build_directory = "makelove-build"
@@ -14,7 +14,7 @@ love_files = [
 ]
 
 [lovejs]
-title = "Human Resources"
+title = "Morphis"
 memory = "200000000"  # starting memory of the webpage (default is 20 MB)
 
 [macos]
@@ -22,8 +22,8 @@ memory = "200000000"  # starting memory of the webpage (default is 20 MB)
 #icon_file = "macIcon.png"  # or macIcon.icns
 
 [macos.app_metadata]
-CFBundleName = "Human Resources"
-CFBundleIdentifier = "dev.micahturner.human-resources"
+CFBundleName = "Morphis"
+CFBundleIdentifier = "dev.micahturner.morphis"
 NSHumanReadableCopyright = "Copyright © 2026 Micah Turner"
 CFBundleShortVersionString = "0.1.0"
 
@@ -34,4 +34,4 @@ CompanyName = "Micah Turner"
 LegalCopyright = "Copyright © 2026 Micah Turner"
 ProductName = "{name}"
 ProductVersion = "{version}"
-OriginalFilename = "human-resources.exe"
+OriginalFilename = "morphis.exe"

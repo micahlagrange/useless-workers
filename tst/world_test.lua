@@ -154,6 +154,37 @@ function TestWorldTools:testLineAndBridge()
     lu.assertEquals(#vertical, 8) -- clipped to the map
     lu.assertEquals(vertical[2].y, 2)
 end
+function TestWorldTools:testStorageTilesRingTheBreakroom()
+    local ring = self.world:storageTiles()
+    lu.assertTrue(#ring > 8)
+    for i, st in ipairs(ring) do
+        lu.assertNotEquals(self.world:get(st.x, st.y).type, TILE_BREAKROOM)
+        lu.assertTrue(self.world:isReachable(st.x, st.y))
+        if i > 1 then lu.assertTrue(ring[i - 1].d <= st.d) end
+    end
+    local first = self.world:nearestFreeStorageTile()
+    lu.assertEquals(first, { x = ring[1].x, y = ring[1].y })
+    lu.assertNotNil(self.world:storeItem(ITEM_FOOD, first.x, first.y, 1))
+    lu.assertNil(self.world:storeItem(ITEM_FOOD, first.x, first.y, 1)) -- one per tile
+    local second = self.world:nearestFreeStorageTile()
+    lu.assertNotEquals(second, first)
+    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
+    local item = self.world:takeItem(first.x, first.y)
+    lu.assertEquals(item.kind, ITEM_FOOD)
+    lu.assertEquals(self.world:storedCount(), 0)
+    -- reservations hold a tile for one carrier
+    local me, other = {}, {}
+    self.world:reserveTile(first.x, first.y, me)
+    lu.assertNotEquals(self.world:nearestFreeStorageTile(other), first)
+    lu.assertEquals(self.world:nearestFreeStorageTile(me), first)
+    self.world:releaseReservations(me)
+    lu.assertEquals(self.world:nearestFreeStorageTile(other), first)
+    -- idle spots avoid items
+    self.world:storeItem(ITEM_FOOD, first.x, first.y, 1)
+    local spot = self.world:freeNeighbour(first.x, first.y)
+    lu.assertNotNil(spot)
+    lu.assertNil(self.world:get(spot.x, spot.y).item)
+end
 function TestWorldTools:testSpawnTilesNearBreakroom()
     local spots = self.world:spawnTiles(2)
     lu.assertTrue(#spots >= 4)

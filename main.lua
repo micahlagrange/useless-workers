@@ -56,6 +56,8 @@ end
 local function onWorkerEvent(worker, name, data)
     if name == 'eat' then Audio.playSFX('eat')
     elseif name == 'deliver' then Audio.playSFX('deliver')
+    elseif name == 'pickup' then Audio.playSFX('click')
+    elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
     elseif name == 'quit' then
         Audio.playSFX('quit')
@@ -272,6 +274,7 @@ local function drawWorld()
     game.view:drawWorld()
     game.view:drawBreakroom()
     game.view:drawNodes(game.clock)
+    game.view:drawItems(game.clock)
     -- tiles the alerts are pointing at
     local pulse = 0.4 + 0.4 * math.abs(math.sin(game.clock * 6))
     for _, t in ipairs(ui:alertTiles()) do

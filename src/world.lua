@@ -6,7 +6,7 @@ local World = {}
 World.__index = World
 
 local function newTile(kind, altitude)
-    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, tree = nil, colorSeed = 0.5 }
+    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, item = nil, reservedBy = nil, colorSeed = 0.5 }
 end
 
 function World.new(w, h, rng)
@@ -16,6 +16,8 @@ function World.new(w, h, rng)
     self.tiles = {}
     self.nodes = {}
     self.nextNodeId = 1
+    self.items = {}
+    self.nextItemId = 1
     self.version = 0
     self.breakroom = nil
     self.reachCache = nil
@@ -104,7 +106,7 @@ function World.fromGrid(rows, rng)
     end
     if #breakroomTiles > 0 then
         local first = breakroomTiles[1]
-        self.breakroom = { x = first.x, y = first.y, tiles = breakroomTiles, food = 0 }
+        self.breakroom = { x = first.x, y = first.y, tiles = breakroomTiles }
         self.breakroom.cx = (first.x - 1) * TILE_SIZE + TILE_SIZE
         self.breakroom.cy = (first.y - 1) * TILE_SIZE + TILE_SIZE
     end
@@ -301,7 +303,7 @@ function World:placeBreakroom()
 end
 
 function World:setBreakroom(x, y)
-    self.breakroom = { x = x, y = y, tiles = {}, food = 0 }
+    self.breakroom = { x = x, y = y, tiles = {} }
     self.breakroom.cx = (x - 1) * TILE_SIZE + TILE_SIZE
     self.breakroom.cy = (y - 1) * TILE_SIZE + TILE_SIZE
     for dx = 0, 1 do
@@ -350,13 +352,32 @@ function World:spawnTiles(radius)
     return out
 end
 
+-- A random reachable tile nearby. Tiles with a stored item or break room
+-- furniture are avoided so nobody idles on top of the pantry.
 function World:randomNearbyPassable(rng, x, y, radius)
     local reach = self:reachableFromBreakroom()
-    for _ = 1, 8 do
+    local fallback = nil
+    for _ = 1, 12 do
         local nx = x + rng:int(-radius, radius)
         local ny = y + rng:int(-radius, radius)
         if (nx ~= x or ny ~= y) and self:inBounds(nx, ny) and reach[nx][ny] then
-            return { x = nx, y = ny }
+            local t = self.tiles[nx][ny]
+            if not t.item and t.type ~= TILE_BREAKROOM then
+                return { x = nx, y = ny }
+            end
+            fallback = fallback or { x = nx, y = ny }
+        end
+    end
+    return fallback
+end
+
+-- Nearest free tile next to (x, y) to step off an item or the furniture.
+function World:freeNeighbour(x, y)
+    local reach = self:reachableFromBreakroom()
+    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
+        if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
+            local t = self.tiles[c[1]][c[2]]
+            if not t.item and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
         end
     end
     return nil
@@ -523,6 +544,104 @@ function World:readyNodeCount(kind)
         if node.ready and (kind == nil or node.kind == kind) then n = n + 1 end
     end
     return n
+end
+
+-- Storage --------------------------------------------------------------
+-- Food is stored as an item on a tile: the closest free reachable tile to
+-- the break room that is not break room furniture. One item per tile.
+-- Morphis walk over items freely; they just try not to idle on them.
+
+function World:storageTiles()
+    if self.storageCache and self.storageCacheVersion == self.version then
+        return self.storageCache
+    end
+    local out = {}
+    if self.breakroom then
+        local reach = self:reachableFromBreakroom()
+        local bx, by = self.breakroom.x + 0.5, self.breakroom.y + 0.5
+        for x = self.breakroom.x - STORAGE_RADIUS, self.breakroom.x + 1 + STORAGE_RADIUS do
+            for y = self.breakroom.y - STORAGE_RADIUS, self.breakroom.y + 1 + STORAGE_RADIUS do
+                if self:inBounds(x, y) and reach[x][y] and self.tiles[x][y].type ~= TILE_BREAKROOM then
+                    out[#out + 1] = { x = x, y = y, d = (x - bx) ^ 2 + (y - by) ^ 2 }
+                end
+            end
+        end
+        table.sort(out, function(a, b)
+            if a.d ~= b.d then return a.d < b.d end
+            if a.y ~= b.y then return a.y < b.y end
+            return a.x < b.x
+        end)
+    end
+    self.storageCache = out
+    self.storageCacheVersion = self.version
+    return out
+end
+
+-- Closest free storage tile to the break room. `reservedBy` lets a carrier
+-- hold a tile so two foragers do not race for the same one.
+function World:nearestFreeStorageTile(reservedBy)
+    for _, s in ipairs(self:storageTiles()) do
+        local t = self.tiles[s.x][s.y]
+        if not t.item and not t.node and (t.reservedBy == nil or t.reservedBy == reservedBy) then
+            return { x = s.x, y = s.y }
+        end
+    end
+    return nil
+end
+
+function World:reserveTile(x, y, worker)
+    local t = self:get(x, y)
+    if t then t.reservedBy = worker end
+end
+
+function World:releaseReservations(worker)
+    for _, s in ipairs(self:storageTiles()) do
+        local t = self.tiles[s.x][s.y]
+        if t.reservedBy == worker then t.reservedBy = nil end
+    end
+end
+
+function World:storeItem(kind, x, y, fruit)
+    local t = self:get(x, y)
+    if not t or t.item or not t.passable then return nil end
+    local item = { id = self.nextItemId, kind = kind, x = x, y = y, fruit = fruit or 1, claimedBy = nil }
+    self.nextItemId = self.nextItemId + 1
+    self.items[#self.items + 1] = item
+    t.item = item
+    t.reservedBy = nil
+    return item
+end
+
+function World:takeItem(x, y)
+    local t = self:get(x, y)
+    if not t or not t.item then return nil end
+    local item = t.item
+    t.item = nil
+    for i = #self.items, 1, -1 do
+        if self.items[i] == item then table.remove(self.items, i) end
+    end
+    item.claimedBy = nil
+    return item
+end
+
+function World:storedCount(kind)
+    local n = 0
+    for _, item in ipairs(self.items) do
+        if kind == nil or item.kind == kind then n = n + 1 end
+    end
+    return n
+end
+
+-- Nearest unclaimed stored item of a kind, by walking distance estimate.
+function World:nearestStoredItem(kind, fromX, fromY)
+    local best, bestD = nil, math.huge
+    for _, item in ipairs(self.items) do
+        if item.kind == kind and item.claimedBy == nil and self:isReachable(item.x, item.y) then
+            local d = Util.manhattan(fromX, fromY, item.x, item.y)
+            if d < bestD then best, bestD = item, d end
+        end
+    end
+    return best
 end
 
 function World:countTypes()

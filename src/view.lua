@@ -119,20 +119,9 @@ function View:drawBreakroom()
     love.graphics.rectangle('fill', px + 20, py + 5, 8, 9)
     love.graphics.setColor(0.9, 0.5, 0.3)
     love.graphics.rectangle('fill', px + 22, py + 7, 4, 2)
-    -- table with the pantry stock on it
+    -- table
     love.graphics.setColor(0.55, 0.42, 0.25)
     love.graphics.rectangle('fill', px + 6, py + 20, 20, 8)
-    local stock = math.min(br.food or 0, 5)
-    for i = 1, stock do
-        local img = self:fruitImage(i * 37)
-        if img then
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(img, px + 6 + i * 3, py + 22, 0, 0.4, 0.4, 8, 8)
-        end
-    end
-    if (br.food or 0) > 5 then
-        love.graphics.setColor(1, 1, 1, 1)
-    end
     -- sign
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
@@ -199,6 +188,23 @@ function View:drawNodes(clock)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Stored food sits on the ground near the break room, one item per tile.
+function View:drawItems(clock)
+    for _, item in ipairs(self.world.items) do
+        local px, py = (item.x - 1) * TILE_SIZE, (item.y - 1) * TILE_SIZE
+        love.graphics.setColor(0, 0, 0, 0.2)
+        love.graphics.ellipse('fill', px + 8, py + 12, 5, 2)
+        if item.kind == ITEM_FOOD then
+            local img = self:fruitImage(item.fruit or 1)
+            if img then
+                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.draw(img, px + 8, py + 8, 0, 0.6, 0.6, 8, 8)
+            end
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function View:drawTileOutline(tx, ty, color, size)
     size = size or 1
     local px, py = (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
@@ -247,16 +253,17 @@ function View:drawWorker(w, clock, selected)
         love.graphics.setColor(1, 1, 1, 1)
     end
     love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx, 1, 8, 16)
-    if w.carrying then
+    local cargo = w.slots[SLOT_WORK]
+    if cargo then
         local bob = math.sin((clock or 0) * 6 + w.id) * 1
         local cy = w.y - 15 + bob
-        if w.carrying == CARGO_FOOD then
-            local img = self:fruitImage(w.carryingFruit or 1)
+        if cargo.kind == CARGO_FOOD then
+            local img = self:fruitImage(cargo.fruit or 1)
             if img then
                 love.graphics.setColor(1, 1, 1, 1)
                 love.graphics.draw(img, w.x, cy, 0, 0.7, 0.7, 8, 8)
             end
-        elseif w.carrying == CARGO_LOGS then
+        elseif cargo.kind == CARGO_LOGS then
             love.graphics.setColor(0.5, 0.35, 0.18)
             love.graphics.rectangle('fill', w.x - 6, cy - 2, 12, 4)
             love.graphics.setColor(0.75, 0.58, 0.32)
@@ -267,6 +274,18 @@ function View:drawWorker(w, clock, selected)
             love.graphics.setColor(1, 0.95, 0.6)
             love.graphics.rectangle('fill', w.x - 2, cy - 2, 2, 1)
         end
+    end
+    local pocket = w.slots[SLOT_PERSONAL]
+    if pocket and pocket.kind == ITEM_FOOD then
+        local img = self:fruitImage(pocket.fruit or 1)
+        if img then
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(img, w.x + 7, feetY - 4, 0, 0.4, 0.4, 8, 8)
+        end
+    end
+    if w.state == 'breaking' then
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.print('z', w.x + 6, w.y - 14)
     end
     if w:isWorking() and w.hunger < 40 then
         local width = 12 * (w.hunger / HUNGER_MAX)
