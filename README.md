@@ -1,17 +1,19 @@
 # Morphis
 
-Control the environment. The employees will manage themselves. Badly.
+A small band settling the harsh wilds. They will look after themselves. Badly.
 
-A LÖVE2D jam game. You never control a morphi. You dig, blast and bridge a
-procedurally generated map so hungry morphis can reach their work and carry it
-to the break room. Every ninety seconds a Quarterly Report grades you on output,
-complaints and attrition. Keep them fed for four quarters.
+A LÖVE2D jam game. You never control a morphi. You mark stone to mine, lay
+bridges over the rivers and set out floor spots, bins and beds around the camp,
+and the morphis do the rest: forage the bushes, fell the trees, dig the gold,
+and carry it all home. Every ninety seconds a season ends and the wilds tally
+what was hauled in, who went hungry, and who was lost. Migrants join the band
+when the haul is good. Keep them fed through four seasons.
 
 ## The morphis
 
 | Morphi | Role | Works on | Delivers |
 |---|---|---|---|
-| Pupper, Woofoof | Forager | Bushes on the ground, ripen every 20 s | Food, stocks the break room pantry |
+| Pupper, Woofoof | Forager | Bushes on the ground, ripen every 20 s | Food, stored in floor spots and bins |
 | Twins | Lumberjack | Trees, cut to a stump that regrows | Logs |
 | Cwab, the blob | Miner | Gold ore inside stone, worked from the tile next to it | Gold, the mined tile turns to dirt |
 
@@ -21,8 +23,9 @@ Every morphi has two inventory slots: slot 1 holds the work item it is carrying,
 slot 2 a personal snack picked up from storage. Nothing interrupts a job: when
 a morphi is idle and hungry it eats the snack in its pocket, or fetches one from
 storage, or eats straight off a bush. After 45 seconds of work a morphi grabs a
-snack from storage if it has none and takes a break in the break room. Gold is worth 3, logs 2, food 1 in the final score. Hires cycle forager,
-lumberjack, miner.
+snack from storage if it has none and rests at camp, or in a bed if one is
+free. Gold is worth 3, logs 2, food 1 in the final score. Migrants arrive as
+forager, lumberjack, miner in turn.
 
 Design doc (written under the working title Human Resources): [docs/human-resources-design-doc.md](docs/human-resources-design-doc.md)
 

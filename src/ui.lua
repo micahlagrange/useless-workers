@@ -1,6 +1,7 @@
--- Screen space: bars, buttons, alerts, report card, title and end screens.
+-- Screen space: bars, buttons, alerts, the season's tally, title and end screens.
 require('src.constants')
 local Util = require('src.util')
+local Scoring = require('src.scoring')
 
 local UI = {}
 UI.__index = UI
@@ -249,7 +250,7 @@ function UI:drawTopBar(game)
         love.graphics.print(value, x, 12)
         x = x + self.fonts.hud:getWidth(value) + 26
     end
-    local qLabel = sc.endless and ('Q' .. sc.quarter) or ('Q' .. math.min(sc.quarter, QUARTERS_PER_GAME) .. '/' .. QUARTERS_PER_GAME)
+    local qLabel = sc:seasonLabel():upper()
     local timeColor = C.text
     if sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
     setColor(C.dim)
@@ -269,8 +270,8 @@ function UI:drawTopBar(game)
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
     icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text)
     setColor(C.dim)
-    love.graphics.print('OUT', x, 12)
-    x = x + self.fonts.hud:getWidth('OUT') + 8
+    love.graphics.print('HAUL', x, 12)
+    x = x + self.fonts.hud:getWidth('HAUL') + 8
     text(tostring(sc.output))
     -- right side: seed, follow, mute
     local right = 'seed ' .. tostring(game.seedString) .. '   M mute'
@@ -362,7 +363,7 @@ function UI:drawBottomBar(game)
         love.graphics.setFont(self.fonts.tiny)
         setColor(C.dim)
         love.graphics.print('work  pocket', px, py + 65 - 2)
-        self:printFit('delivered ' .. w.delivered .. '  complaints ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        self:printFit('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
         -- hunger bar
         setColor(C.dim)
         love.graphics.setFont(self.fonts.tiny)
@@ -521,17 +522,17 @@ end
 
 function UI:drawReport(report, scoring)
     local x, y = self:panel(700, 460)
-    self:centeredFit('QUARTERLY REPORT  Q' .. report.quarter, y + 24, 660, C.text, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('END OF ' .. Scoring.seasonName(report.quarter):upper(), y + 24, 660, C.text, { self.fonts.big, self.fonts.hud })
     love.graphics.setFont(self.fonts.hud)
     local rows = {
-        { 'Output', tostring(report.output) },
+        { 'Hauled in', tostring(report.output) },
         { 'Food stored', tostring(report.food), UI.iconFood },
         { 'Logs', tostring(report.logs), UI.iconLog },
         { 'Gold', tostring(report.gold), UI.iconGold },
         { 'Fed', report.fedPct .. '%' },
-        { 'Complaints', tostring(report.complaints), UI.iconComplaint },
-        { 'Attrition', tostring(report.attrition) },
-        { 'Hires next quarter', '+' .. report.hires, UI.iconMorphi },
+        { 'Hardships', tostring(report.complaints), UI.iconComplaint },
+        { 'Lost to the wilds', tostring(report.attrition) },
+        { 'Migrants arriving', '+' .. report.hires, UI.iconMorphi },
     }
     local ry = y + 80
     for _, row in ipairs(rows) do
@@ -550,9 +551,9 @@ function UI:drawReport(report, scoring)
     love.graphics.print(report.grade, x + 560, y + 120)
     local next_
     if scoring:yearComplete() then
-        next_ = 'SPACE or click: annual review'
+        next_ = 'SPACE or click: the year ends'
     else
-        next_ = 'SPACE or click: next quarter'
+        next_ = 'SPACE or click: next season'
     end
     self:centeredFit(next_, y + 420, 660, C.dim)
 end
@@ -561,11 +562,11 @@ function UI:drawTitle(title, highScore)
     love.graphics.setColor(0.09, 0.1, 0.08, 1)
     love.graphics.rectangle('fill', 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
     self:centered('MORPHIS', 120, self.fonts.title)
-    self:centered('Control the environment.', 190, self.fonts.hud, C.dim)
-    self:centered('The morphis will manage themselves. Badly.', 212, self.fonts.hud, C.dim)
+    self:centered('A small band settling the harsh wilds.', 190, self.fonts.hud, C.dim)
+    self:centered('They will look after themselves. Badly.', 212, self.fonts.hud, C.dim)
     local diff = DIFFICULTIES[title.difficultyIndex]
-    self:centered('<  DIFFICULTY: ' .. diff.name .. '  >', 300, self.fonts.big)
-    self:centered(diff.workers .. ' starting staff, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, 340, self.fonts.small, C.dim)
+    self:centered('<  ' .. diff.name:upper() .. '  >', 300, self.fonts.big)
+    self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, 340, self.fonts.small, C.dim)
     local seedText = 'SEED: ' .. title.seed
     if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
     self:centered(seedText, 400, self.fonts.big, title.editingSeed and C.good or C.text)
@@ -574,7 +575,7 @@ function UI:drawTitle(title, highScore)
     self:centered('ENTER or click to start', 570, self.fonts.big, C.good)
     self:centered('LEFT / RIGHT: difficulty     M: mute', 620, self.fonts.small, C.dim)
     self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine, bridge water, build bins and beds.', 660, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
-    self:centeredFit('You never control a morphi. That is the whole problem. Gold is worth 3, logs 2, food 1.', 682, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit('You never control a morphi. Keep them fed through four seasons. Gold is worth 3, logs 2, food 1.', 682, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
 end
 
 function UI:drawConfirmQuit()
@@ -587,8 +588,8 @@ end
 
 function UI:drawGameOver(scoring, highScore, isNew)
     local x, y = self:panel(720, 360)
-    self:centeredFit('Human Resources has been notified.', y + 40, 680, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('Everyone quit in Q' .. scoring.quarter, y + 100, 680, C.dim)
+    self:centeredFit('The wilds took them all.', y + 40, 680, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 100, 680, C.dim)
     self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + 160, 680, C.text, { self.fonts.big, self.fonts.hud })
     if isNew then
         self:centered('NEW HIGH SCORE', y + 210, self.fonts.hud, C.good)
@@ -600,14 +601,14 @@ end
 
 function UI:drawAnnual(scoring, highScore, isNew)
     local x, y = self:panel(720, 420)
-    self:centered('ANNUAL REVIEW', y + 30, self.fonts.big, C.good)
+    self:centered('THE YEAR IS OVER', y + 30, self.fonts.big, C.good)
     love.graphics.setFont(self.fonts.hud)
     local ry = y + 90
     for _, r in ipairs(scoring.reports) do
         setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
-        love.graphics.print('Q' .. r.quarter, x + 60, ry)
-        self:printFit('out ' .. r.output .. '  food ' .. r.food .. '  logs ' .. r.logs .. '  gold ' .. r.gold .. '  cmpl ' .. r.complaints .. '  quit ' .. r.attrition .. '  grade ' .. r.grade,
+        love.graphics.print(Scoring.seasonName(r.quarter):sub(1, 3):upper(), x + 60, ry)
+        self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  logs ' .. r.logs .. '  gold ' .. r.gold .. '  hard ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
             x + 120, ry + 2, 560, 'left', C.text, { self.fonts.small, self.fonts.tiny })
         ry = ry + 26
     end
@@ -617,7 +618,7 @@ function UI:drawAnnual(scoring, highScore, isNew)
     else
         self:centered('HIGH SCORE: ' .. highScore, y + 290, self.fonts.hud, C.dim)
     end
-    self:centeredFit('ENTER or click: keep going (endless)     T: title', y + 360, 680, C.dim)
+    self:centeredFit('ENTER or click: keep going, year after year     T: title', y + 360, 680, C.dim)
 end
 
 return UI

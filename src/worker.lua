@@ -201,7 +201,7 @@ function Worker:quit(reason)
     self:dropJob()
     self.slots = {}
     self.scoring:addQuit()
-    self:say('I QUIT', 6)
+    self:say('I AM DONE', 6)
     self:emit('quit', reason or 'starved')
     self.state = 'quitting'
     local t = self:tile()
@@ -790,10 +790,10 @@ function Worker:update(dt, clock)
 end
 
 function Worker:describeState()
-    if self.state == 'quitting' then return 'Quitting' end
-    if self.state == 'sulking' then return 'Complaining' end
+    if self.state == 'quitting' then return 'Leaving the band' end
+    if self.state == 'sulking' then return 'Grumbling' end
     if self.state == 'eating' then return 'Eating' end
-    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'On a break' end
+    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end
     if self.state == 'working' then
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
         return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
@@ -801,11 +801,11 @@ function Worker:describeState()
     if self.state == 'walking' then
         if self.goal == 'deliver' then
             local c = self:carrying()
-            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to the break room')
+            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to camp')
         end
         if self.goal == 'eat' then return 'Going to eat' end
         if self.goal == 'fetch' then return 'Fetching a snack from storage' end
-        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to the break room' end
+        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to camp' end
         if self.goal == 'work' then
             if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind end
             return 'Going ' .. self.roleInfo.verb

@@ -1,4 +1,4 @@
--- Human Resources. Control the environment, not the employees.
+-- Morphis. A small band settling the harsh wilds. You shape the land; they look after themselves.
 require('src.constants')
 local Util = require('src.util')
 local Rng = require('src.rng')
@@ -62,13 +62,13 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
     elseif name == 'lowmorale' then
-        ui:alert(worker.name .. ' is fed up and close to quitting.')
+        ui:alert(worker.name .. ' is fed up and close to leaving the band.')
     elseif name == 'quit' then
         Audio.playSFX('quit')
         if data == 'morale' then
-            ui:alert(worker.name .. ' quit. Too many complaints, too little care.')
+            ui:alert(worker.name .. ' left the band. Too many hardships, too little care.')
         else
-            ui:alert(worker.name .. ' quit. Starved on the job.')
+            ui:alert(worker.name .. ' starved and wandered off into the wilds.')
         end
     end
 end
@@ -198,7 +198,7 @@ local function continueFromReport()
     else
         state = 'playing'
         love.mouse.setVisible(false)
-        ui:alert('Q' .. game.scoring.quarter .. ' begins. ' .. game.report.hires .. ' new hire' .. (game.report.hires == 1 and '' or 's') .. ' arrived.')
+        ui:alert(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
     end
 end
 

@@ -122,6 +122,18 @@ function Scoring:closeQuarter(workerCount)
     return report
 end
 
+-- 'Spring', 'Winter 2' and so on.
+function Scoring.seasonName(quarter)
+    local name = SEASON_NAMES[(quarter - 1) % #SEASON_NAMES + 1]
+    local year = math.floor((quarter - 1) / #SEASON_NAMES) + 1
+    if year > 1 then return name .. ' ' .. year end
+    return name
+end
+
+function Scoring:seasonLabel()
+    return Scoring.seasonName(math.min(self.quarter, self.endless and self.quarter or QUARTERS_PER_GAME))
+end
+
 function Scoring:yearComplete()
     return not self.endless and self.quarter > QUARTERS_PER_GAME
 end

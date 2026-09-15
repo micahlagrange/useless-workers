@@ -1,4 +1,4 @@
--- Human Resources: every tunable number lives here.
+-- Morphis: every tunable number lives here.
 -- Section numbers refer to docs/human-resources-design-doc.md
 
 -- World (section 4)
@@ -83,7 +83,7 @@ WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving u
 WORKER_SULK_SECONDS    = 3
 ICK_SECONDS            = 30
 COMPLAINT_COOLDOWN     = 40     -- seconds before anyone complains about the same tree again
--- Morale: complaints and hunger wear a morphi down; at zero it quits.
+-- Morale: hardships and hunger wear a morphi down; at zero it leaves the band.
 -- Fed morphis recover slowly, and a break restores a chunk (more in a bed).
 MORALE_MAX             = 100
 MORALE_COMPLAINT_HIT   = 20
@@ -129,9 +129,11 @@ SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'b
 SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED }
 SITE_CAPACITY = { storage = STORAGE_FLOOR_CAPACITY, bin = STORAGE_BIN_CAPACITY }
 
--- Economy and scoring (section 7)
+-- Seasons and the tally. A year is four seasons; the wilds grade each one.
+-- Internally a season is still a 'quarter' and migrants are 'hires'.
 QUARTER_SECONDS     = 90
 QUARTERS_PER_GAME   = 4
+SEASON_NAMES        = { 'Spring', 'Summer', 'Autumn', 'Winter' }
 HIRE_OUTPUT_DIVISOR = 5
 QUIT_PENALTY        = 3
 FED_SAMPLE_SECONDS  = 1
@@ -139,10 +141,10 @@ ENDLESS_DRAIN_STEP  = 0.1
 GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
 
 DIFFICULTIES = {
-    { name = 'Intern',        drain = 0.5, workers = 5, multiplier = 0.5 },
-    { name = 'Manager',       drain = 0.7, workers = 4, multiplier = 1.0 },
-    { name = 'Director',      drain = 0.95, workers = 3, multiplier = 1.5 },
-    { name = 'Unlimited PTO', drain = 1.2, workers = 2, multiplier = 2.0 },
+    { name = 'Mild wilds',   drain = 0.5, workers = 5, multiplier = 0.5 },
+    { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0 },
+    { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5 },
+    { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0 },
 }
 DEFAULT_DIFFICULTY = 2
 DEFAULT_SEED       = 'PUPPER'

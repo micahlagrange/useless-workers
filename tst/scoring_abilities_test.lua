@@ -15,6 +15,18 @@ function TestScoring:testGrades()
     lu.assertEquals(Scoring.grade(5, 3, 0), 'C')
     lu.assertEquals(Scoring.grade(2, 3, 1), 'F')
 end
+function TestScoring:testSeasonNames()
+    lu.assertEquals(Scoring.seasonName(1), 'Spring')
+    lu.assertEquals(Scoring.seasonName(4), 'Winter')
+    lu.assertEquals(Scoring.seasonName(5), 'Spring 2')
+    lu.assertEquals(Scoring.seasonName(8), 'Winter 2')
+    local s = Scoring.new(2)
+    lu.assertEquals(s:seasonLabel(), 'Spring')
+    s.quarter = 5
+    lu.assertEquals(s:seasonLabel(), 'Winter')      -- year over, the label stops at winter
+    s:startEndless()
+    lu.assertEquals(s:seasonLabel(), 'Spring 2')
+end
 function TestScoring:testQuarterCloseAndHires()
     local s = Scoring.new(2)
     for _ = 1, 10 do s:addDelivery(CARGO_FOOD) end
