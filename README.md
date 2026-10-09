@@ -75,6 +75,9 @@ do the rest.
 ## Controls
 
 - WASD or right-drag to pan, mouse wheel to zoom
+- The window can be any size; the HUD scales to fit. F11 toggles fullscreen.
+- On a phone or tablet: drag to pan with the SELECT tool, pinch to zoom, and
+  use the UNITS, FOLLOW, zoom, MUTE and MENU buttons at the top right.
 - 1 to 6 pick a tool: select, mine, floor, bin, bed, bridge
 - Select then click a morphi to see who is complaining, F to follow them
 - U opens the units list with a follow button per morphi

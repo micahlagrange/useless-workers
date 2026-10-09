@@ -16,6 +16,11 @@ function Camera.new(worldW, worldH, viewW, viewH)
     return self
 end
 
+function Camera:setView(w, h)
+    self.viewW, self.viewH = w, h
+    self:clamp()
+end
+
 function Camera:clamp()
     local visibleW = self.viewW / self.scale
     local visibleH = self.viewH / self.scale

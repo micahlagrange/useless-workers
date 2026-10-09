@@ -56,6 +56,9 @@ jobs:
       if: failure()
       run: cat main/build_output.log
 
+    - name: Make the web page fill the screen
+      run: python3 main/tools/patch_lovejs.py "$ARTIFACT_PATH_LOVEJS"
+
     - name: list artifacts
       run: find main/makelove-build -maxdepth 2 -type f -exec ls -l {} \;
 

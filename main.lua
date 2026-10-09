@@ -19,13 +19,23 @@ love.graphics.setDefaultFilter('nearest', 'nearest')
 local state = 'title'
 local ui
 local game = {}
-local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false }
+local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false }
+-- touch: every finger on the screen, by id. Two fingers pinch to zoom and pan.
+local touches = {}
+local touchCount = 0
+local pinch = nil
 local reportTimer = 0
 local musicStarted = false
 local PAN_SPEED = 700
 
 local function isWeb()
     return love.system.getOS() == 'Web'
+end
+
+-- No pointer to hide on a touch screen, and hiding it on a laptop with a
+-- touch screen would be rude.
+local function hideCursor()
+    if not (ui and ui.touch) then love.mouse.setVisible(false) end
 end
 
 local function startMusic()
@@ -137,7 +147,7 @@ local function newGame(seedString, difficultyIndex)
     game.averageHunger = 100
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
-    game.camera = Camera.new(game.world.w, game.world.h, WINDOW_WIDTH, WINDOW_HEIGHT)
+    game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
     game.camera.scale = 2
     game.camera:centerOn(game.world.breakroom.cx, game.world.breakroom.cy)
     game.selectedWorker = nil
@@ -152,7 +162,7 @@ local function newGame(seedString, difficultyIndex)
     hire(DIFFICULTIES[difficultyIndex].workers)
     ui:alert('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
     state = 'playing'
-    love.mouse.setVisible(false)
+    hideCursor()
 end
 
 local function staffStats()
@@ -197,7 +207,7 @@ local function continueFromReport()
         finishGame('annual')
     else
         state = 'playing'
-        love.mouse.setVisible(false)
+        hideCursor()
         ui:alert(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
     end
 end
@@ -223,10 +233,15 @@ end
 -- LOVE callbacks -----------------------------------------------------------
 
 function love.load()
-    love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT)
     ui = UI.new()
     love.keyboard.setKeyRepeat(true)
 end
+
+function love.resize(w, h)
+    ui:layout(w, h)
+    if game and game.camera then game.camera:setView(w, h) end
+end
+
 
 local function updatePlaying(dt)
     game.clock = game.clock + dt
@@ -338,10 +353,15 @@ end
 
 function love.draw()
     if state == 'title' then
+        title.muted = Audio.isMuted()
+        ui:beginScaled()
         ui:drawTitle(title, Highscore.load(title.difficultyIndex))
+        ui:endScaled()
         return
     end
     drawWorld()
+    game.muted = Audio.isMuted()
+    ui:beginScaled()
     ui:drawHUD(game)
     if state == 'report' then
         ui:drawReport(game.report, game.scoring)
@@ -353,7 +373,9 @@ function love.draw()
         ui:drawConfirmQuit()
     elseif state == 'units' then
         ui:drawUnits(game, game.view)
-    elseif state == 'playing' then
+    end
+    ui:endScaled()
+    if state == 'playing' then
         local mx, my = love.mouse.getPosition()
         if game.lineStart and game.lineCost and game.abilities.selected == ABILITY_BRIDGE then
             love.graphics.setFont(ui.fonts.small)
@@ -375,12 +397,64 @@ end
 
 function closeUnits()
     state = 'playing'
-    love.mouse.setVisible(false)
+    hideCursor()
 end
 
-function love.mousepressed(x, y, button)
+local function toggleFollow()
+    if game.selectedWorker and game.selectedWorker.alive then
+        game.follow = not game.follow
+        ui:toast(game.follow and ('Following ' .. game.selectedWorker.name) or 'Camera free')
+    else
+        ui:toast('Select a morphi first (SELECT tool, then tap one)')
+    end
+end
+
+local function openUnits()
+    state = 'units'
+    love.mouse.setVisible(true)
+end
+
+local function openMenu()
+    state = 'confirmquit'
+    love.mouse.setVisible(true)
+end
+
+local function zoomBy(factor)
+    local w, h = love.graphics.getDimensions()
+    game.camera:zoomAt(factor, w / 2, h / 2)
+end
+
+local function pressTopButton(id)
+    if id == 'units' then openUnits()
+    elseif id == 'follow' then toggleFollow()
+    elseif id == 'zoomin' then zoomBy(1.25)
+    elseif id == 'zoomout' then zoomBy(1 / 1.25)
+    elseif id == 'mute' then Audio.toggleMute()
+    elseif id == 'menu' then openMenu()
+    end
+    Audio.playSFX('click')
+end
+
+function love.mousepressed(x, y, button, istouch)
+    if istouch then ui.touch = true; love.mouse.setVisible(true) end
+    if pinch then return end
+    local vx, vy = ui:toVirtual(x, y)
     if state == 'title' then
-        if button == 1 then startFromTitle() end
+        if button ~= 1 then return end
+        local id = ui:titleButtonAt(vx, vy)
+        if id == 'left' then
+            title.difficultyIndex = (title.difficultyIndex - 2) % #DIFFICULTIES + 1
+        elseif id == 'right' then
+            title.difficultyIndex = title.difficultyIndex % #DIFFICULTIES + 1
+        elseif id == 'seed' then
+            title.editingSeed = not title.editingSeed
+            love.keyboard.setTextInput(title.editingSeed)
+        elseif id == 'mute' then
+            Audio.toggleMute()
+        elseif id == 'start' or not istouch then
+            -- a click anywhere starts; a finger has to hit the box
+            startFromTitle()
+        end
         return
     elseif state == 'report' then
         if button == 1 then continueFromReport() end
@@ -392,16 +466,20 @@ function love.mousepressed(x, y, button)
         if button == 1 then
             game.scoring:startEndless()
             state = 'playing'
-            love.mouse.setVisible(false)
+            hideCursor()
         end
         return
     elseif state == 'confirmquit' then
-        state = 'playing'
-        love.mouse.setVisible(false)
+        if ui:confirmButtonAt(vx, vy) == 'yes' then
+            goToTitle()
+        else
+            state = 'playing'
+            hideCursor()
+        end
         return
     elseif state == 'units' then
         if button == 1 then
-            local w = ui:unitButtonAt(x, y)
+            local w = ui:unitButtonAt(vx, vy)
             if w then
                 game.selectedWorker = w
                 game.follow = true
@@ -409,7 +487,7 @@ function love.mousepressed(x, y, button)
                 ui:toast('Following ' .. w.name)
                 Audio.playSFX('click')
                 closeUnits()
-            elseif not ui:insideUnitPanel(x, y) then
+            elseif not ui:insideUnitPanel(vx, vy) then
                 closeUnits()
             end
         end
@@ -421,9 +499,13 @@ function love.mousepressed(x, y, button)
         return
     end
     if button ~= 1 then return end
-    if y < TOP_BAR_H then return end
-    if y > WINDOW_HEIGHT - BOTTOM_BAR_H then
-        local tool = ui:buttonAt(x, y)
+    if vy < TOP_BAR_H then
+        local id = ui:topButtonAt(vx, vy)
+        if id then pressTopButton(id) end
+        return
+    end
+    if vy > ui.vh - BOTTOM_BAR_H then
+        local tool = ui:buttonAt(vx, vy)
         if tool then
             game.abilities:select(tool)
             Audio.playSFX('click')
@@ -439,7 +521,8 @@ function love.mousepressed(x, y, button)
             love.graphics.getWidth(), love.graphics.getHeight()))
     end
     if tool == ABILITY_SELECT then
-        game.selectedWorker = workerAt(tile)
+        -- a tap selects, a drag pans; decided on release
+        game.panStart = { x = x, y = y, moved = false, tile = tile }
     elseif tool == ABILITY_BRIDGE or tool == ABILITY_MINE then
         game.lineStart = tile
         game.lineCost = nil
@@ -453,8 +536,11 @@ function love.mousereleased(x, y, button)
     if state ~= 'playing' then return end
     if button == 2 then
         game.dragging = false
+    elseif button == 1 and game.panStart then
+        if not game.panStart.moved then game.selectedWorker = workerAt(game.panStart.tile) end
+        game.panStart = nil
     elseif button == 1 and game.lineStart then
-        if not ui:isOverBars(x, y) then
+        if not ui:isOverBars(ui:toVirtual(x, y)) then
             local tile = game.camera:toTile(x, y)
             local ok, why
             if game.abilities.selected == ABILITY_MINE then
@@ -470,10 +556,64 @@ function love.mousereleased(x, y, button)
 end
 
 function love.mousemoved(x, y, dx, dy)
-    if state == 'playing' and game.dragging then
+    if state ~= 'playing' or pinch then return end
+    if game.dragging then
         game.follow = false
         game.camera:pan(-dx, -dy)
+    elseif game.panStart then
+        local p = game.panStart
+        if not p.moved and math.abs(x - p.x) + math.abs(y - p.y) > 10 then p.moved = true end
+        if p.moved then
+            game.follow = false
+            game.camera:pan(-dx, -dy)
+        end
     end
+end
+
+-- Two fingers: pinch to zoom around the midpoint and drag to pan. One finger
+-- arrives as ordinary mouse events, so taps and drags need nothing special.
+local function pinchState()
+    local ids = {}
+    for id in pairs(touches) do ids[#ids + 1] = id end
+    if #ids < 2 then return nil end
+    local a, b = touches[ids[1]], touches[ids[2]]
+    local dist = math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
+    return { dist = math.max(dist, 1), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 }
+end
+
+function love.touchpressed(id, x, y)
+    ui.touch = true
+    touches[id] = { x = x, y = y }
+    touchCount = touchCount + 1
+    if touchCount >= 2 and state == 'playing' then
+        pinch = pinchState()
+        game.panStart = nil
+        game.lineStart = nil
+        game.lineCost = nil
+        game.dragging = false
+    end
+end
+
+function love.touchmoved(id, x, y)
+    if not touches[id] then return end
+    touches[id].x, touches[id].y = x, y
+    if pinch and state == 'playing' then
+        local now = pinchState()
+        if now then
+            game.follow = false
+            game.camera:zoomAt(now.dist / pinch.dist, now.mx, now.my)
+            game.camera:pan(pinch.mx - now.mx, pinch.my - now.my)
+            pinch = now
+        end
+    end
+end
+
+function love.touchreleased(id)
+    if touches[id] then
+        touches[id] = nil
+        touchCount = math.max(0, touchCount - 1)
+    end
+    if touchCount < 2 then pinch = nil end
 end
 
 function love.wheelmoved(_, y)
@@ -483,6 +623,10 @@ function love.wheelmoved(_, y)
 end
 
 function love.keypressed(key)
+    if key == 'f11' and not isWeb() then
+        love.window.setFullscreen(not love.window.getFullscreen())
+        return
+    end
     if key == 'm' and not (state == 'title' and title.editingSeed) then
         Audio.toggleMute()
         return
@@ -513,18 +657,15 @@ function love.keypressed(key)
             game.abilities:select(ABILITY_ORDER[n])
             Audio.playSFX('click')
         elseif key == 'f' then
-            if game.selectedWorker and game.selectedWorker.alive then
-                game.follow = not game.follow
-                ui:toast(game.follow and ('Following ' .. game.selectedWorker.name) or 'Camera free')
-            else
-                ui:toast('Select a morphi first (SELECT tool, then click one)')
-            end
+            toggleFollow()
         elseif key == 'u' then
-            state = 'units'
-            love.mouse.setVisible(true)
+            openUnits()
+        elseif key == '=' or key == '+' or key == 'kp+' then
+            zoomBy(1.25)
+        elseif key == '-' or key == 'kp-' then
+            zoomBy(1 / 1.25)
         elseif key == 'escape' then
-            state = 'confirmquit'
-            love.mouse.setVisible(true)
+            openMenu()
         end
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
@@ -533,7 +674,7 @@ function love.keypressed(key)
             goToTitle()
         else
             state = 'playing'
-            love.mouse.setVisible(false)
+            hideCursor()
         end
     elseif state == 'report' then
         if key == 'return' or key == 'kpenter' or key == 'space' then
@@ -547,7 +688,7 @@ function love.keypressed(key)
         if key == 'return' or key == 'kpenter' or key == 'space' then
             game.scoring:startEndless()
             state = 'playing'
-            love.mouse.setVisible(false)
+            hideCursor()
         elseif key == 't' or key == 'escape' then
             goToTitle()
         end

@@ -21,6 +21,7 @@ fi
 
 cleanup
 makelove lovejs
+python3 tools/patch_lovejs.py makelove-build/lovejs/morphis-lovejs.zip
 unzip -o "makelove-build/lovejs/morphis-lovejs.zip" -d makelove-build/html/
 echo "http://localhost:8000/makelove-build/html/morphis/"
 python3 -m http.server

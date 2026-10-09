@@ -51,13 +51,92 @@ function UI.new()
     self.toastText, self.toastTtl = nil, 0
     self.unitButtons = {}
     self.buttons = {}
-    local bw, bh, gap = 110, 60, 8
-    local y = WINDOW_HEIGHT - BOTTOM_BAR_H + 10
-    for i, tool in ipairs(ABILITY_ORDER) do
-        self.buttons[#self.buttons + 1] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = y, w = bw, h = bh, key = tostring(i) }
-    end
+    self.topButtons = {}
+    self.titleButtons = {}
+    self.confirmButtons = {}
+    self.touch = false -- true once a finger has touched the screen: no mouse cursor, bigger targets
+    self:layout(love.graphics.getDimensions())
     return self
 end
+
+-- Layout ----------------------------------------------------------------
+-- The HUD is drawn in a virtual space (vw x vh) scaled to the window, so a
+-- phone gets readable text and big targets and a 4K screen is not a postage
+-- stamp. Every hit test takes virtual coordinates: see toVirtual.
+
+local function hit(r, x, y)
+    return r and x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h
+end
+
+function UI:layout(w, h)
+    self.winW, self.winH = w, h
+    self.scale = Util.clamp(h / 800, 0.8, 2.0)
+    self.vw, self.vh = w / self.scale, h / self.scale
+    self.narrow = self.vw < 980
+    -- tool buttons along the bottom
+    local n = #ABILITY_ORDER
+    local gap = 8
+    self.panelW = self.narrow and 0 or Util.clamp(math.floor(self.vw * 0.33), 260, 414)
+    local avail = self.vw - 32 - self.panelW - (self.panelW > 0 and 16 or 0) - (n - 1) * gap
+    local bw = Util.clamp(math.floor(avail / n), 52, 110)
+    self.compactButtons = bw < 96
+    local y = self.vh - BOTTOM_BAR_H + 10
+    self.buttons = {}
+    for i, tool in ipairs(ABILITY_ORDER) do
+        self.buttons[i] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = y, w = bw, h = 60, key = tostring(i) }
+    end
+    -- quick buttons at the right of the top bar, for fingers and for people who forget keys
+    local defs = {
+        { id = 'menu', label = 'MENU' }, { id = 'mute', label = 'MUTE' },
+        { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
+        { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' },
+    }
+    self.topButtons = {}
+    local x = self.vw - 8
+    for _, d in ipairs(defs) do
+        local bwid = self.fonts.small:getWidth(d.label) + 16
+        x = x - bwid
+        self.topButtons[#self.topButtons + 1] = { id = d.id, label = d.label, x = x, y = 6, w = bwid, h = TOP_BAR_H - 12 }
+        x = x - 6
+    end
+    self.topButtonsLeft = x
+end
+
+function UI:toVirtual(x, y)
+    return x / self.scale, y / self.scale
+end
+
+function UI:beginScaled()
+    love.graphics.push()
+    love.graphics.scale(self.scale)
+end
+
+function UI:endScaled()
+    love.graphics.pop()
+end
+
+function UI:topButtonAt(mx, my)
+    for _, b in ipairs(self.topButtons) do
+        if hit(b, mx, my) then return b.id end
+    end
+    return nil
+end
+
+function UI:titleButtonAt(mx, my)
+    for id, r in pairs(self.titleButtons) do
+        if hit(r, mx, my) then return id end
+    end
+    return nil
+end
+
+function UI:confirmButtonAt(mx, my)
+    for id, r in pairs(self.confirmButtons) do
+        if hit(r, mx, my) then return id end
+    end
+    return nil
+end
+
+
 
 function UI:alert(text, tile)
     table.insert(self.alerts, 1, { text = text, ttl = ALERT_TTL, tile = tile })
@@ -93,7 +172,7 @@ function UI:alertTiles()
 end
 
 function UI:isOverBars(_, my)
-    return my < TOP_BAR_H or my > WINDOW_HEIGHT - BOTTOM_BAR_H
+    return my < TOP_BAR_H or my > self.vh - BOTTOM_BAR_H
 end
 
 function UI:buttonAt(mx, my)
@@ -111,7 +190,7 @@ function UI:centered(text, y, font, color)
     love.graphics.setFont(font)
     setColor(color or C.text)
     local w = font:getWidth(text)
-    love.graphics.print(text, math.floor(WINDOW_WIDTH / 2 - w / 2), y)
+    love.graphics.print(text, math.floor(self.vw / 2 - w / 2), y)
 end
 
 -- The C64 face is wide. Pick the largest of the given fonts that fits the
@@ -137,7 +216,7 @@ function UI:printFit(text, x, y, maxWidth, align, color, fonts)
 end
 
 function UI:centeredFit(text, y, maxWidth, color, fonts)
-    return self:printFit(text, (WINDOW_WIDTH - maxWidth) / 2, y, maxWidth, 'center', color, fonts)
+    return self:printFit(text, (self.vw - maxWidth) / 2, y, maxWidth, 'center', color, fonts)
 end
 
 -- Small resource icons for the bars. s is the pixel size of the icon.
@@ -229,78 +308,116 @@ end
 
 -- HUD -------------------------------------------------------------------
 
+-- A small labelled button. Returns nothing; the rect is whatever was passed.
+function UI:button(r, label, active, color)
+    if active then love.graphics.setColor(0.28, 0.32, 0.2, 1) else love.graphics.setColor(0.16, 0.17, 0.14, 1) end
+    love.graphics.rectangle('fill', r.x, r.y, r.w, r.h)
+    setColor(active and C.accent or C.dim)
+    love.graphics.rectangle('line', r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1)
+    self:printFit(label, r.x, r.y + math.floor((r.h - self.fonts.small:getHeight()) / 2), r.w, 'center', color or (active and C.good or C.text), { self.fonts.small, self.fonts.tiny })
+end
+
 function UI:drawTopBar(game)
     local sc = game.scoring
     setColor(C.bar)
-    love.graphics.rectangle('fill', 0, 0, WINDOW_WIDTH, TOP_BAR_H)
+    love.graphics.rectangle('fill', 0, 0, self.vw, TOP_BAR_H)
     love.graphics.setFont(self.fonts.hud)
     local x = 16
     local ICON = 22
+    local limit = self.topButtonsLeft - 10
     local function text(value, color)
         love.graphics.setFont(self.fonts.hud)
         setColor(color or C.text)
         love.graphics.print(value, x, 12)
-        x = x + self.fonts.hud:getWidth(value) + 26
+        x = x + self.fonts.hud:getWidth(value) + (self.narrow and 14 or 26)
     end
     local function icon(draw, value, color)
+        if x + ICON + 40 > limit then return end
         draw(self, x, 9, ICON)
         x = x + ICON + 6
+        text(value, color)
+    end
+    local function label(word)
+        if x + 60 > limit then return false end
+        setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
-        setColor(color or C.text)
-        love.graphics.print(value, x, 12)
-        x = x + self.fonts.hud:getWidth(value) + 26
+        love.graphics.print(word, x, 12)
+        x = x + self.fonts.hud:getWidth(word) + 8
+        return true
     end
     local qLabel = sc:seasonLabel():upper()
     local timeColor = C.text
     if sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
-    setColor(C.dim)
-    love.graphics.print(qLabel, x, 12)
-    x = x + self.fonts.hud:getWidth(qLabel) + 8
+    label(self.narrow and qLabel:sub(1, 3) or qLabel)
     text(Util.formatTime(sc.quarterTimer), timeColor)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
     local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
-    setColor(C.dim)
-    love.graphics.setFont(self.fonts.hud)
-    love.graphics.print('FED', x, 12)
-    x = x + self.fonts.hud:getWidth('FED') + 8
-    text(fed .. '%', fed < 35 and C.warn or C.text)
+    if label('FED') then text(fed .. '%', fed < 35 and C.warn or C.text) end
     local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
     icon(UI.iconFood, stored .. '/' .. cap, cap == 0 and C.warn or C.text)
     icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
     icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text)
-    setColor(C.dim)
-    love.graphics.print('HAUL', x, 12)
-    x = x + self.fonts.hud:getWidth('HAUL') + 8
-    text(tostring(sc.output))
-    -- right side: seed, follow, mute
-    local right = 'seed ' .. tostring(game.seedString) .. '   M mute'
-    if game.follow and game.selectedWorker then
-        right = 'following ' .. game.selectedWorker.name .. ' (F)   ' .. right
+    if not self.narrow and label('HAUL') then text(tostring(sc.output)) end
+    -- following / seed, in whatever room is left before the buttons
+    local right = ''
+    if game.follow and game.selectedWorker then right = 'following ' .. game.selectedWorker.name end
+    if limit - x > 220 and not self.narrow then right = right .. (right ~= '' and '   ' or '') .. 'seed ' .. tostring(game.seedString) end
+    if right ~= '' and limit - x > 60 then
+        self:printFit(right, x, 14, limit - x, 'right', C.dim, { self.fonts.small, self.fonts.tiny })
     end
-    self:printFit(right, x, 14, WINDOW_WIDTH - 16 - x, 'right', C.dim, { self.fonts.small, self.fonts.tiny })
+    for _, b in ipairs(self.topButtons) do
+        local active = (b.id == 'follow' and game.follow) or (b.id == 'mute' and game.muted)
+        self:button(b, b.label, active)
+    end
 end
 
 function UI:drawAlerts()
     love.graphics.setFont(self.fonts.small)
     local y = TOP_BAR_H + 8
-    local maxW = WINDOW_WIDTH - 40
+    local maxW = self.vw - 40
     for _, a in ipairs(self.alerts) do
         local alpha = math.min(1, a.ttl / 1.5)
+        local _, lines = self.fonts.small:getWrap(a.text, maxW)
+        local h = #lines * self.fonts.small:getHeight() + 6
         local w = math.min(self.fonts.small:getWidth(a.text), maxW) + 12
         love.graphics.setColor(0, 0, 0, 0.6 * alpha)
-        love.graphics.rectangle('fill', 12, y, w, 18)
+        love.graphics.rectangle('fill', 12, y, w, h)
         love.graphics.setColor(C.warn[1], C.warn[2], C.warn[3], alpha)
         love.graphics.setFont(self.fonts.small)
         love.graphics.printf(a.text, 18, y + 3, maxW, 'left')
-        y = y + 22
+        y = y + h + 4
+    end
+end
+
+-- Cost text on one line: drop the detail after the comma when it will not fit.
+function UI:fitLine(text, width)
+    if self.fonts.tiny:getWidth(text) > width then text = text:gsub(',.*', '') end
+    if self.fonts.tiny:getWidth(text) > width then text = text:gsub(' logs?', '') end
+    return text
+end
+
+function UI:drawToolIcon(tool, x, y, size, affordable)
+    local icon = self.icons[tool]
+    if icon then
+        if affordable then love.graphics.setColor(1, 1, 1, 1) else love.graphics.setColor(0.4, 0.4, 0.4, 1) end
+        love.graphics.draw(icon, x, y, 0, size / 16, size / 16)
+        return
+    end
+    if tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
+    elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
+    elseif tool == ABILITY_BED then self:iconBed(x, y, size)
+    end
+    if not affordable then
+        love.graphics.setColor(0.1, 0.1, 0.1, 0.55)
+        love.graphics.rectangle('fill', x, y, size, size)
     end
 end
 
 function UI:drawBottomBar(game)
     local abilities = game.abilities
     setColor(C.bar)
-    love.graphics.rectangle('fill', 0, WINDOW_HEIGHT - BOTTOM_BAR_H, WINDOW_WIDTH, BOTTOM_BAR_H)
+    love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     for _, b in ipairs(self.buttons) do
         local selected = abilities.selected == b.tool
         local affordable = abilities:canAfford(b.tool)
@@ -314,90 +431,100 @@ function UI:drawBottomBar(game)
             setColor(C.accent)
             love.graphics.rectangle('line', b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1)
         end
-        local icon = self.icons[b.tool]
-        local IS = 26
-        if icon then
-            if affordable then love.graphics.setColor(1, 1, 1, 1) else love.graphics.setColor(0.4, 0.4, 0.4, 1) end
-            love.graphics.draw(icon, b.x + 5, b.y + 8, 0, IS / 16, IS / 16)
-        elseif b.tool == ABILITY_STORAGE then
-            self:iconFloor(b.x + 5, b.y + 8, IS)
-        elseif b.tool == ABILITY_BIN then
-            self:iconBin(b.x + 5, b.y + 8, IS)
-        elseif b.tool == ABILITY_BED then
-            self:iconBed(b.x + 5, b.y + 8, IS)
+        if self.compactButtons then
+            -- icon on top, label under it, cost only when affordable is in doubt
+            local IS = 24
+            self:drawToolIcon(b.tool, b.x + math.floor((b.w - IS) / 2), b.y + 5, IS, affordable)
+            self:printFit(ABILITY_LABEL[b.tool], b.x, b.y + 32, b.w, 'center', affordable and C.text or C.dim, { self.fonts.tiny })
+            self:printFit((abilities:costText(b.tool):gsub(',.*', '')), b.x, b.y + 44, b.w, 'center', C.dim, { self.fonts.tiny })
+        else
+            local IS = 26
+            self:drawToolIcon(b.tool, b.x + 5, b.y + 8, IS, affordable)
+            local lx = b.x + 5 + IS + 4
+            self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
+            self:printFit(self:fitLine(abilities:costText(b.tool), b.x + b.w - lx - 4), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            love.graphics.setFont(self.fonts.small)
+            setColor(C.dim)
+            love.graphics.print('[' .. b.key .. ']', lx, b.y + 44)
         end
-        if not affordable and not icon then
-            love.graphics.setColor(0.1, 0.1, 0.1, 0.55)
-            love.graphics.rectangle('fill', b.x + 5, b.y + 8, IS, IS)
-        end
-        local lx = b.x + 5 + IS + 4
-        self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
-        self:printFit(abilities:costText(b.tool), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        love.graphics.setFont(self.fonts.small)
-        setColor(C.dim)
-        love.graphics.print('[' .. b.key .. ']', lx, b.y + 44)
     end
     -- right side: selected worker or hints
-    local px = WINDOW_WIDTH - 430
-    local pw = 414
-    local py = WINDOW_HEIGHT - BOTTOM_BAR_H + 8
     local w = game.selectedWorker
-    if w and w.alive then
-        love.graphics.setFont(self.fonts.hud)
-        setColor(C.good)
-        love.graphics.print(w.name, px, py)
-        local nx = px + self.fonts.hud:getWidth(w.name) + 10
-        self:printFit('the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), nx, py + 3, px + pw - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        self:printFit(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-        -- inventory slots as boxes with icons
-        local sx = px
-        for i = 1, INVENTORY_SLOTS do
-            love.graphics.setColor(0, 0, 0, 0.5)
-            love.graphics.rectangle('fill', sx, py + 40, 24, 24)
-            setColor(i == SLOT_WORK and C.accent or C.dim)
-            love.graphics.rectangle('line', sx + 0.5, py + 40.5, 23, 23)
-            local item = w.slots[i]
-            if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
-            sx = sx + 30
+    if self.panelW > 0 then
+        local pw = self.panelW
+        local px = self.vw - pw - 16
+        local py = self.vh - BOTTOM_BAR_H + 8
+        if w and w.alive then
+            love.graphics.setFont(self.fonts.hud)
+            setColor(C.good)
+            love.graphics.print(w.name, px, py)
+            local nx = px + self.fonts.hud:getWidth(w.name) + 10
+            self:printFit('the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), nx, py + 3, px + pw - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printFit(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+            local sx = px
+            for i = 1, INVENTORY_SLOTS do
+                love.graphics.setColor(0, 0, 0, 0.5)
+                love.graphics.rectangle('fill', sx, py + 40, 24, 24)
+                setColor(i == SLOT_WORK and C.accent or C.dim)
+                love.graphics.rectangle('line', sx + 0.5, py + 40.5, 23, 23)
+                local item = w.slots[i]
+                if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
+                sx = sx + 30
+            end
+            love.graphics.setFont(self.fonts.tiny)
+            setColor(C.dim)
+            love.graphics.print('work  pocket', px, py + 65 - 2)
+            self:printFit('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            local bx = px + pw - 140
+            setColor(C.dim)
+            love.graphics.setFont(self.fonts.tiny)
+            love.graphics.print('HUNGER', bx, py + 22)
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle('fill', bx, py + 36, 140, 10)
+            if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
+            love.graphics.rectangle('fill', bx, py + 36, 140 * (w.hunger / HUNGER_MAX), 10)
+            setColor(C.dim)
+            love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle('fill', bx, py + 61, 140, 6)
+            if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
+            love.graphics.rectangle('fill', bx, py + 61, 140 * (w.morale / MORALE_MAX), 6)
+            setColor(C.dim)
+            love.graphics.print(self.touch and 'FOLLOW and UNITS are up top' or 'F: follow  U: units', bx, py + 70)
+        else
+            local lines
+            if self.touch then
+                lines = {
+                    'SELECT: drag pans, tap picks a morphi.',
+                    'Pinch to zoom. FOLLOW and UNITS up top.',
+                    'FLOOR free, BIN 1 log, BED 2 logs.',
+                }
+            else
+                lines = {
+                    'WASD / drag pan, wheel zoom, 1-6 tools, U units',
+                    'FLOOR spot: free, 1 item. BIN: 1 log, 4 items. BED: 2 logs.',
+                    'SELECT a morphi, then F to follow it. ESC asks.',
+                }
+            end
+            local ly = py + 4
+            for _, line in ipairs(lines) do
+                ly = ly + self:printFit(line, px, ly, pw, 'left', C.dim, { self.fonts.small, self.fonts.tiny }) + 4
+            end
         end
-        love.graphics.setFont(self.fonts.tiny)
-        setColor(C.dim)
-        love.graphics.print('work  pocket', px, py + 65 - 2)
-        self:printFit('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        -- hunger bar
-        setColor(C.dim)
-        love.graphics.setFont(self.fonts.tiny)
-        love.graphics.print('HUNGER', px + pw - 140, py + 22)
+    elseif w and w.alive then
+        -- narrow: one line above the bar
+        local line = w.name .. ': ' .. w:describeState() .. '  hunger ' .. math.floor(w.hunger + 0.5) .. '%  ' .. w:mood()
+        local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle('fill', px + pw - 140, py + 36, 140, 10)
-        local fill = 140 * (w.hunger / HUNGER_MAX)
-        if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
-        love.graphics.rectangle('fill', px + pw - 140, py + 36, fill, 10)
-        setColor(C.dim)
-        love.graphics.print('MORALE ' .. w:mood(), px + pw - 140, py + 50)
-        love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle('fill', px + pw - 140, py + 61, 140, 6)
-        if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
-        love.graphics.rectangle('fill', px + pw - 140, py + 61, 140 * (w.morale / MORALE_MAX), 6)
-        setColor(C.dim)
-        love.graphics.print('F: follow  U: units', px + pw - 140, py + 70)
-    else
-        local lines = {
-            'WASD / right-drag pan, wheel zoom, 1-6 tools, U units',
-            'FLOOR spot: free, 1 item. BIN: 1 log, 4 items. BED: 2 logs.',
-            'SELECT a morphi, then F to follow it. ESC asks.',
-        }
-        local ly = py + 4
-        for _, line in ipairs(lines) do
-            ly = ly + self:printFit(line, px, ly, pw, 'left', C.dim, { self.fonts.small, self.fonts.tiny }) + 4
-        end
+        love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
+        self:printFit(line, 14, ty + 4, self.vw - 28, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     end
     if self.toastText then
         love.graphics.setFont(self.fonts.hud)
-        if self.fonts.hud:getWidth(self.toastText) > WINDOW_WIDTH - 80 then love.graphics.setFont(self.fonts.small) end
-        local tw = love.graphics.getFont():getWidth(self.toastText) + 20
-        local tx = WINDOW_WIDTH / 2 - tw / 2
-        local ty = WINDOW_HEIGHT - BOTTOM_BAR_H - 40
+        if self.fonts.hud:getWidth(self.toastText) > self.vw - 80 then love.graphics.setFont(self.fonts.small) end
+        local tw = math.min(love.graphics.getFont():getWidth(self.toastText) + 20, self.vw - 16)
+        local tx = self.vw / 2 - tw / 2
+        local ty = self.vh - BOTTOM_BAR_H - (self.panelW > 0 and 40 or 52)
         love.graphics.setColor(0, 0, 0, 0.75)
         love.graphics.rectangle('fill', tx, ty, tw, 26)
         setColor(C.warn)
@@ -413,116 +540,126 @@ function UI:drawHUD(game)
     self:drawBottomBar(game)
 end
 
+-- Drawn in window space, not the scaled HUD space.
 function UI:drawCursor(tool, mx, my)
+    if self.touch then return end
     local img = self.cursors[tool] or self.cursors.select
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(img, mx, my, 0, 2, 2)
+    love.graphics.draw(img, mx, my, 0, 2 * self.scale, 2 * self.scale)
 end
 
 -- Units menu ------------------------------------------------------------
 
-local UNIT_ROW_H = 54
-
 -- Every living morphi at a glance: picture, name, species, role, task, hunger,
--- and a FOLLOW button. Button rects are kept in self.unitButtons for hit tests.
+-- morale and a FOLLOW button. Rows shrink to fit the screen.
 function UI:drawUnits(game, view)
     local units = {}
     for _, w in ipairs(game.workers) do
         if w.alive then units[#units + 1] = w end
     end
-    local pw = 1000
-    local ph = 74 + #units * UNIT_ROW_H + 30
+    local pw = math.min(1000, self.vw - 24)
+    local rowH = Util.clamp(math.floor((self.vh - 120) / math.max(#units, 1)), 30, 54)
+    local ph = 74 + #units * rowH + 30
     local x, y = self:panel(pw, ph)
     self.unitPanel = { x = x, y = y, w = pw, h = ph }
     self:centeredFit('UNITS  (' .. #units .. ' morphis)', y + 16, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    local cName, cTask, cHunger, cMorale = x + 18 + rowH, x + math.floor(pw * 0.34), x + math.floor(pw * 0.62), x + math.floor(pw * 0.76)
+    local wide = pw >= 760
     love.graphics.setFont(self.fonts.tiny)
     setColor(C.dim)
-    love.graphics.print('MORPHI', x + 74, y + 56)
-    love.graphics.print('TASK', x + 330, y + 56)
-    love.graphics.print('HUNGER', x + 640, y + 56)
-    love.graphics.print('MORALE', x + 770, y + 56)
+    love.graphics.print('MORPHI', cName, y + 56)
+    love.graphics.print('TASK', cTask, y + 56)
+    love.graphics.print('HUNGER', cHunger, y + 56)
+    if wide then love.graphics.print('MORALE', cMorale, y + 56) end
     self.unitButtons = {}
     local ry = y + 70
+    local spriteScale = (rowH - 6) / 16
     for _, w in ipairs(units) do
         local selected = game.selectedWorker == w
         if selected then
             love.graphics.setColor(0.2, 0.23, 0.15, 1)
-            love.graphics.rectangle('fill', x + 12, ry, pw - 24, UNIT_ROW_H - 4)
+            love.graphics.rectangle('fill', x + 12, ry, pw - 24, rowH - 4)
         end
-        -- picture
         local sheet = view and view.sheets[w.sheet]
         if sheet then
             love.graphics.setColor(0, 0, 0, 0.5)
-            love.graphics.rectangle('fill', x + 18, ry + 2, 48, 46)
+            love.graphics.rectangle('fill', x + 18, ry + 2, rowH - 6, rowH - 6)
             love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(sheet.image, sheet.quads[1], x + 18, ry - 1, 0, 3, 3)
+            love.graphics.draw(sheet.image, sheet.quads[1], x + 18, ry - 1, 0, spriteScale, spriteScale)
         end
-        -- name, species, role
-        love.graphics.setFont(self.fonts.hud)
+        local nameFont = rowH >= 44 and self.fonts.hud or self.fonts.small
+        love.graphics.setFont(nameFont)
         setColor(C.good)
-        love.graphics.print(w.name, x + 74, ry + 4)
-        self:printFit(w.species .. ', ' .. w.roleInfo.label:lower(), x + 74, ry + 26, 246, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        -- task
-        self:printFit(w:describeState(), x + 330, ry + 8, 296, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-        -- hunger
+        love.graphics.print(w.name, cName, ry + 4)
+        if rowH >= 44 then
+            self:printFit(w.species .. ', ' .. w.roleInfo.label:lower(), cName, ry + 26, cTask - cName - 8, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        else
+            local nw = nameFont:getWidth(w.name) + 8
+            self:printFit(w.roleInfo.label:lower(), cName + nw, ry + 6, cTask - cName - nw - 8, 'left', C.dim, { self.fonts.tiny })
+        end
+        self:printFit(w:describeState(), cTask, ry + 8, cHunger - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        local barW = (wide and cMorale or (x + pw - 140)) - cHunger - 12
         love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle('fill', x + 640, ry + 12, 120, 12)
+        love.graphics.rectangle('fill', cHunger, ry + 10, barW, 10)
         local frac = w.hunger / HUNGER_MAX
         if frac > 0.6 then setColor(C.good)
         elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then love.graphics.setColor(0.95, 0.75, 0.3)
         else setColor(C.warn) end
-        love.graphics.rectangle('fill', x + 640, ry + 12, 120 * frac, 12)
-        self:printFit(math.floor(w.hunger + 0.5) .. '%', x + 640, ry + 28, 120, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        -- morale
-        love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle('fill', x + 770, ry + 12, 80, 12)
-        local mf = w.morale / MORALE_MAX
-        if mf > 0.6 then setColor(C.good) elseif mf > MORALE_LOW / MORALE_MAX then love.graphics.setColor(0.95, 0.75, 0.3) else setColor(C.warn) end
-        love.graphics.rectangle('fill', x + 770, ry + 12, 80 * mf, 12)
-        self:printFit(w:mood(), x + 770, ry + 28, 80, 'left', mf > MORALE_LOW / MORALE_MAX and C.dim or C.warn, { self.fonts.small, self.fonts.tiny })
-        -- follow button
+        love.graphics.rectangle('fill', cHunger, ry + 10, barW * frac, 10)
+        if rowH >= 40 then
+            self:printFit(math.floor(w.hunger + 0.5) .. '%', cHunger, ry + 24, barW, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        end
+        if wide then
+            local mw = (x + pw - 140) - cMorale - 12
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle('fill', cMorale, ry + 10, mw, 10)
+            local mf = w.morale / MORALE_MAX
+            if mf > 0.6 then setColor(C.good) elseif mf > MORALE_LOW / MORALE_MAX then love.graphics.setColor(0.95, 0.75, 0.3) else setColor(C.warn) end
+            love.graphics.rectangle('fill', cMorale, ry + 10, mw * mf, 10)
+            if rowH >= 40 then
+                self:printFit(w:mood(), cMorale, ry + 24, mw, 'left', mf > MORALE_LOW / MORALE_MAX and C.dim or C.warn, { self.fonts.small, self.fonts.tiny })
+            end
+        end
         local following = game.follow and selected
-        local bx, by, bw, bh = x + pw - 130, ry + 8, 112, 30
-        if following then love.graphics.setColor(0.28, 0.32, 0.2, 1) else love.graphics.setColor(0.16, 0.17, 0.14, 1) end
-        love.graphics.rectangle('fill', bx, by, bw, bh)
-        setColor(following and C.accent or C.dim)
-        love.graphics.rectangle('line', bx + 0.5, by + 0.5, bw - 1, bh - 1)
-        self:printFit(following and 'FOLLOWING' or 'FOLLOW', bx, by + 8, bw, 'center', following and C.good or C.text, { self.fonts.small, self.fonts.tiny })
-        self.unitButtons[#self.unitButtons + 1] = { worker = w, x = bx, y = by, w = bw, h = bh }
-        ry = ry + UNIT_ROW_H
+        local r = { x = x + pw - 130, y = ry + math.floor((rowH - 4 - 28) / 2), w = 112, h = 28 }
+        self:button(r, following and 'FOLLOWING' or 'FOLLOW', following)
+        self.unitButtons[#self.unitButtons + 1] = { worker = w, x = r.x, y = r.y, w = r.w, h = r.h }
+        ry = ry + rowH
     end
-    self:centeredFit('U or ESC: close     click FOLLOW to watch a morphi', y + ph - 24, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit(self.touch and 'tap outside to close     tap FOLLOW to watch a morphi' or 'U or ESC: close     click FOLLOW to watch a morphi', y + ph - 24, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     love.graphics.setColor(1, 1, 1, 1)
 end
 
 function UI:unitButtonAt(mx, my)
     for _, b in ipairs(self.unitButtons) do
-        if mx >= b.x and mx <= b.x + b.w and my >= b.y and my <= b.y + b.h then return b.worker end
+        if hit(b, mx, my) then return b.worker end
     end
     return nil
 end
 
 function UI:insideUnitPanel(mx, my)
-    local p = self.unitPanel
-    return p and mx >= p.x and mx <= p.x + p.w and my >= p.y and my <= p.y + p.h
+    return hit(self.unitPanel, mx, my)
 end
 
 -- Panels ----------------------------------------------------------------
 
+-- A centred panel no bigger than the screen. Returns x, y, w, h.
 function UI:panel(w, h)
-    local x, y = WINDOW_WIDTH / 2 - w / 2, WINDOW_HEIGHT / 2 - h / 2
+    w = math.min(w, self.vw - 16)
+    h = math.min(h, self.vh - 16)
+    local x, y = math.floor(self.vw / 2 - w / 2), math.floor(self.vh / 2 - h / 2)
     love.graphics.setColor(0, 0, 0, 0.45)
-    love.graphics.rectangle('fill', 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+    love.graphics.rectangle('fill', 0, 0, self.vw, self.vh)
     setColor(C.panel)
     love.graphics.rectangle('fill', x, y, w, h)
     setColor(C.accent)
     love.graphics.rectangle('line', x + 0.5, y + 0.5, w - 1, h - 1)
-    return x, y
+    return x, y, w, h
 end
 
 function UI:drawReport(report, scoring)
-    local x, y = self:panel(700, 460)
-    self:centeredFit('END OF ' .. Scoring.seasonName(report.quarter):upper(), y + 24, 660, C.text, { self.fonts.big, self.fonts.hud })
+    local x, y, pw, ph = self:panel(700, 460)
+    self:centeredFit('END OF ' .. Scoring.seasonName(report.quarter):upper(), y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     love.graphics.setFont(self.fonts.hud)
     local rows = {
         { 'Hauled in', tostring(report.output) },
@@ -534,91 +671,131 @@ function UI:drawReport(report, scoring)
         { 'Lost to the wilds', tostring(report.attrition) },
         { 'Migrants arriving', '+' .. report.hires, UI.iconMorphi },
     }
-    local ry = y + 80
+    local rs = math.min(30, math.floor((ph - 130) / #rows))
+    local ry = y + 70
+    local lx, vx = x + math.floor(pw * 0.1), x + math.floor(pw * 0.55)
     for _, row in ipairs(rows) do
-        if row[3] then row[3](self, x + 60, ry - 3, 20) end
+        if row[3] then row[3](self, lx, ry - 3, 20) end
         setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
-        love.graphics.print(row[1], x + 90, ry)
+        love.graphics.print(row[1], lx + 30, ry)
         setColor(C.text)
-        love.graphics.print(row[2], x + 400, ry)
-        ry = ry + 30
+        love.graphics.print(row[2], vx, ry)
+        ry = ry + rs
     end
     local gradeColor = C.good
     if report.grade == 'F' or report.grade == 'C' then gradeColor = C.warn end
     love.graphics.setFont(self.fonts.title)
     setColor(gradeColor)
-    love.graphics.print(report.grade, x + 560, y + 120)
+    love.graphics.print(report.grade, x + pw - 110, y + 70 + rs)
     local next_
     if scoring:yearComplete() then
-        next_ = 'SPACE or click: the year ends'
+        next_ = (self.touch and 'tap' or 'SPACE or click') .. ': the year ends'
     else
-        next_ = 'SPACE or click: next season'
+        next_ = (self.touch and 'tap' or 'SPACE or click') .. ': next season'
     end
-    self:centeredFit(next_, y + 420, 660, C.dim)
+    self:centeredFit(next_, y + ph - 36, pw - 40, C.dim)
 end
 
 function UI:drawTitle(title, highScore)
     love.graphics.setColor(0.09, 0.1, 0.08, 1)
-    love.graphics.rectangle('fill', 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-    self:centered('MORPHIS', 120, self.fonts.title)
-    self:centered('A small band settling the harsh wilds.', 190, self.fonts.hud, C.dim)
-    self:centered('They will look after themselves. Badly.', 212, self.fonts.hud, C.dim)
+    love.graphics.rectangle('fill', 0, 0, self.vw, self.vh)
+    self.titleButtons = {}
+    local cx = self.vw / 2
+    local g = self.vh / 800            -- gaps shrink on short screens, fonts do not
+    local function gap(px) return math.floor(px * g) end
+    local y = gap(40)
+    self:centered('MORPHIS', y, self.fonts.title)
+    y = y + 46 + gap(14)
+    self:centered('A small band settling the harsh wilds.', y, self.fonts.hud, C.dim)
+    y = y + 17
+    self:centered('They will look after themselves. Badly.', y, self.fonts.hud, C.dim)
+    y = y + 15 + gap(36)
+    -- difficulty with tappable arrows
     local diff = DIFFICULTIES[title.difficultyIndex]
-    self:centered('<  ' .. diff.name:upper() .. '  >', 300, self.fonts.big)
-    self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, 340, self.fonts.small, C.dim)
+    local name = diff.name:upper()
+    local nw = self.fonts.big:getWidth(name)
+    self:centered(name, y, self.fonts.big)
+    local aw, ah = 44, 40
+    self.titleButtons.left = { x = cx - nw / 2 - 20 - aw, y = y - 7, w = aw, h = ah }
+    self.titleButtons.right = { x = cx + nw / 2 + 20, y = y - 7, w = aw, h = ah }
+    self:button(self.titleButtons.left, '<', false)
+    self:button(self.titleButtons.right, '>', false)
+    y = y + 26 + 8
+    self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, y, self.fonts.small, C.dim)
+    y = y + 11 + gap(30)
     local seedText = 'SEED: ' .. title.seed
     if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
-    self:centered(seedText, 400, self.fonts.big, title.editingSeed and C.good or C.text)
-    self:centered(title.editingSeed and 'type a seed, ENTER when done' or 'S to change the seed', 440, self.fonts.small, C.dim)
-    self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), 500, self.fonts.hud)
-    self:centered('ENTER or click to start', 570, self.fonts.big, C.good)
-    self:centered('LEFT / RIGHT: difficulty     M: mute', 620, self.fonts.small, C.dim)
-    self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine, bridge water, build bins and beds.', 660, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
-    self:centeredFit('You never control a morphi. Keep them fed through four seasons. Gold is worth 3, logs 2, food 1.', 682, WINDOW_WIDTH - 120, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
+    local sw = self.fonts.big:getWidth(seedText) + 40
+    self.titleButtons.seed = { x = cx - sw / 2, y = y - 8, w = sw, h = 42 }
+    y = y + 26 + 8
+    self:centered(title.editingSeed and 'type a seed, ENTER when done' or (self.touch and 'tap the seed to change it' or 'S to change the seed'), y, self.fonts.small, C.dim)
+    y = y + 11 + gap(24)
+    self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), y, self.fonts.hud)
+    y = y + 15 + gap(30)
+    local startText = self.touch and 'TAP TO START' or 'ENTER or click to start'
+    local stw = self.fonts.big:getWidth(startText) + 60
+    self.titleButtons.start = { x = cx - stw / 2, y = y, w = stw, h = 54 }
+    setColor(C.accent)
+    love.graphics.rectangle('line', self.titleButtons.start.x + 0.5, y + 0.5, stw - 1, 53)
+    self:centered(startText, y + 14, self.fonts.big, C.good)
+    y = y + 54 + gap(14)
+    if not self.touch then
+        self:centered('LEFT / RIGHT: difficulty     M: mute     F11: fullscreen', y, self.fonts.small, C.dim)
+        y = y + 11 + gap(14)
+    end
+    y = y + self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine, bridge water, build bins and beds.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
+    self:centeredFit('You never control a morphi. Keep them fed through four seasons. Gold is worth 3, logs 2, food 1.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
+    self.titleButtons.mute = { x = self.vw - 90, y = 10, w = 80, h = 28 }
+    self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
 end
 
 function UI:drawConfirmQuit()
-    local x, y = self:panel(720, 230)
-    self:centeredFit('Quit to the title screen?', y + 36, 680, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('This game will be lost.', y + 86, 680, C.dim)
-    self:centeredFit('Y or ENTER: quit', y + 130, 680)
-    self:centeredFit('any other key or click: keep playing', y + 160, 680, C.dim)
+    local x, y, pw, ph = self:panel(720, 230)
+    self:centeredFit('Quit to the title screen?', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('This game will be lost.', y + 76, pw - 40, C.dim)
+    local bw, bh = 180, 44
+    self.confirmButtons.yes = { x = x + pw / 2 - bw - 12, y = y + ph - 80, w = bw, h = bh }
+    self.confirmButtons.no = { x = x + pw / 2 + 12, y = y + ph - 80, w = bw, h = bh }
+    self:button(self.confirmButtons.yes, self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn)
+    self:button(self.confirmButtons.no, self.touch and 'KEEP PLAYING' or 'KEEP PLAYING (ESC)', true)
 end
 
 function UI:drawGameOver(scoring, highScore, isNew)
-    local x, y = self:panel(720, 360)
-    self:centeredFit('The wilds took them all.', y + 40, 680, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 100, 680, C.dim)
-    self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + 160, 680, C.text, { self.fonts.big, self.fonts.hud })
+    local x, y, pw, ph = self:panel(720, 360)
+    self:centeredFit('The wilds took them all.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 80, pw - 40, C.dim)
+    self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + math.floor(ph * 0.42), pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if isNew then
-        self:centered('NEW HIGH SCORE', y + 210, self.fonts.hud, C.good)
+        self:centered('NEW HIGH SCORE', y + math.floor(ph * 0.58), self.fonts.hud, C.good)
     else
-        self:centered('HIGH SCORE: ' .. highScore, y + 210, self.fonts.hud, C.dim)
+        self:centered('HIGH SCORE: ' .. highScore, y + math.floor(ph * 0.58), self.fonts.hud, C.dim)
     end
-    self:centeredFit('ENTER or click: back to the title', y + 300, 680, C.dim)
+    self:centeredFit((self.touch and 'tap' or 'ENTER or click') .. ': back to the title', y + ph - 40, pw - 40, C.dim)
 end
 
 function UI:drawAnnual(scoring, highScore, isNew)
-    local x, y = self:panel(720, 420)
-    self:centered('THE YEAR IS OVER', y + 30, self.fonts.big, C.good)
+    local x, y, pw, ph = self:panel(720, 420)
+    self:centered('THE YEAR IS OVER', y + 24, self.fonts.big, C.good)
     love.graphics.setFont(self.fonts.hud)
-    local ry = y + 90
+    local rs = math.min(26, math.floor((ph - 200) / math.max(#scoring.reports, 1)))
+    local ry = y + 70
     for _, r in ipairs(scoring.reports) do
         setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
-        love.graphics.print(Scoring.seasonName(r.quarter):sub(1, 3):upper(), x + 60, ry)
+        love.graphics.print(Scoring.seasonName(r.quarter):sub(1, 3):upper(), x + 30, ry)
         self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  logs ' .. r.logs .. '  gold ' .. r.gold .. '  hard ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
-            x + 120, ry + 2, 560, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-        ry = ry + 26
+            x + 90, ry + 2, pw - 110, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        ry = ry + rs
     end
-    self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + 240, 680, C.text, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), ry + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if isNew then
-        self:centered('NEW HIGH SCORE', y + 290, self.fonts.hud, C.good)
+        self:centered('NEW HIGH SCORE', ry + 66, self.fonts.hud, C.good)
     else
-        self:centered('HIGH SCORE: ' .. highScore, y + 290, self.fonts.hud, C.dim)
+        self:centered('HIGH SCORE: ' .. highScore, ry + 66, self.fonts.hud, C.dim)
     end
-    self:centeredFit('ENTER or click: keep going, year after year     T: title', y + 360, 680, C.dim)
+    self:centeredFit((self.touch and 'tap' or 'ENTER or click') .. ': keep going, year after year     ' .. (self.touch and 'MENU up top for the title' or 'T: title'), y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
 end
 
 return UI
