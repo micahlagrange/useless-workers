@@ -74,9 +74,14 @@ end
 
 function UI:layout(w, h)
     self.winW, self.winH = w, h
-    self.scale = Util.clamp(h / 800, 0.8, 2.0)
+    -- fit the 1280x800 design into the window on its tighter side, so a
+    -- phone gets a small HUD with room for the map, and a big monitor a
+    -- bigger one. Never below 0.55: text has to stay legible.
+    self.scale = Util.clamp(math.min(w / 1280, h / 800), 0.55, 2.0)
     self.vw, self.vh = w / self.scale, h / self.scale
     self.narrow = self.vw < 980
+    -- on a narrow screen the quick buttons get their own row under the stats
+    TOP_BAR_H = self.narrow and 70 or 40
     -- tool buttons along the bottom
     local n = #ABILITY_ORDER
     local gap = 8
@@ -97,13 +102,14 @@ function UI:layout(w, h)
     }
     self.topButtons = {}
     local x = self.vw - 8
+    local by = self.narrow and 38 or 6
     for _, d in ipairs(defs) do
         local bwid = self.fonts.small:getWidth(d.label) + 16
         x = x - bwid
-        self.topButtons[#self.topButtons + 1] = { id = d.id, label = d.label, x = x, y = 6, w = bwid, h = TOP_BAR_H - 12 }
+        self.topButtons[#self.topButtons + 1] = { id = d.id, label = d.label, x = x, y = by, w = bwid, h = 28 }
         x = x - 6
     end
-    self.topButtonsLeft = x
+    self.topButtonsLeft = self.narrow and self.vw or x
 end
 
 function UI:toVirtual(x, y)

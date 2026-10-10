@@ -11,9 +11,18 @@ function Camera.new(worldW, worldH, viewW, viewH)
     self.worldPxW = worldW * TILE_SIZE
     self.worldPxH = worldH * TILE_SIZE
     self.viewW, self.viewH = viewW, viewH
-    self.minScale = 0.8
+    self.minScale = 0.5
     self.maxScale = 4
     return self
+end
+
+-- Zoom so the whole world fits in the view with the HUD bars clear of
+-- it, then centre. For the hand built levels, which are small.
+function Camera:fitWorld(barsPx)
+    local availH = math.max(100, self.viewH - (barsPx or 0))
+    local s = math.min(self.viewW / self.worldPxW, availH / self.worldPxH)
+    self.scale = Util.clamp(math.floor(s * 4) / 4, self.minScale, self.maxScale)
+    self:centerOn(self.worldPxW / 2, self.worldPxH / 2)
 end
 
 function Camera:setView(w, h)

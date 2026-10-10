@@ -222,8 +222,7 @@ local function newLevel(index)
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
-    game.camera.scale = 2
-    game.camera:centerOn(game.world.breakroom.cx, game.world.breakroom.cy)
+    game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale)
     game.selectedWorker = nil
     game.follow = false
     game.lineStart = nil
@@ -358,7 +357,10 @@ end
 
 function love.resize(w, h)
     ui:layout(w, h)
-    if game and game.camera then game.camera:setView(w, h) end
+    if game and game.camera then
+        game.camera:setView(w, h)
+        if game.mode == 'level' and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+    end
 end
 
 
