@@ -25,6 +25,7 @@ function World.new(w, h, rng)
     self.storageList = {}
     self.beds = {}
     self.stock = { logs = 0, gold = 0 }
+    self.spent = 0 -- logs and gold spent on designations, net of refunds
     self.version = 0
     self.breakroom = nil
     self.reachCache = nil
@@ -112,7 +113,8 @@ function World:carveRivers(rng)
 end
 
 -- Hand built worlds for tests.
--- '.' grass  '#' stone  '~' water  'B' break room  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' floor storage (1 item)  'N' bin (4 items)  'd' bed
+-- '.' grass  '#' stone  '~' water  'B' camp  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' floor storage (1 item)  'N' bin (4 items)  'd' bed
+-- food bushes, ripe at the start: 'k' steak  'f' fish  'c' cheese  'h' chili  'y' candy
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
@@ -130,6 +132,7 @@ function World.fromGrid(rows, rng)
             elseif ch == 'B' then kind = TILE_BREAKROOM; breakroomTiles[#breakroomTiles + 1] = { x = x, y = y }
             end
             if ch == 'b' then nodeTiles[#nodeTiles + 1] = { kind = NODE_BUSH, x = x, y = y }
+            elseif FOOD_CHAR[ch] then nodeTiles[#nodeTiles + 1] = { kind = NODE_BUSH, x = x, y = y, food = FOOD_CHAR[ch] }
             elseif ch == 'T' then nodeTiles[#nodeTiles + 1] = { kind = NODE_TREE, x = x, y = y }
             elseif ch == 'G' then nodeTiles[#nodeTiles + 1] = { kind = NODE_ORE, x = x, y = y }
             end
@@ -148,7 +151,7 @@ function World.fromGrid(rows, rng)
         self.breakroom.cy = (first.y - 1) * TILE_SIZE + TILE_SIZE
     end
     for _, n in ipairs(nodeTiles) do
-        local node = self:addNode(n.kind, n.x, n.y)
+        local node = self:addNode(n.kind, n.x, n.y, n.food)
         node.ready = true
     end
     for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y, st.capacity) end
@@ -428,11 +431,16 @@ end
 -- ore:  gold inside a stone tile, a miner works it from a neighbouring tile,
 --       the tile turns to dirt when it is mined out
 
-function World:addNode(kind, x, y)
+function World:addNode(kind, x, y, food)
+    if kind == NODE_BUSH and not food then
+        -- spread the diets around so every morphi finds something
+        self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
+        food = FOOD_KINDS[self.foodCycle]
+    end
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
         ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil,
-        fruit = self.rng and self.rng:int(1, 999) or 1,
+        food = food,
     }
     if kind == NODE_BUSH then node.timer = BUSH_RIPEN_SECONDS end
     self.nextNodeId = self.nextNodeId + 1
@@ -644,8 +652,17 @@ function World:spend(cost)
     if not self:canAfford(cost) then return false end
     for kind, n in pairs(cost) do
         self.stock[kind] = self.stock[kind] - n
+        self.spent = self.spent + n
     end
     return true
+end
+
+-- A cancelled designation gives its cost back and does not count as spent.
+function World:refund(cost)
+    for kind, n in pairs(cost) do
+        self.stock[kind] = (self.stock[kind] or 0) + n
+        self.spent = math.max(0, self.spent - n)
+    end
 end
 
 -- Storage --------------------------------------------------------------
@@ -774,10 +791,10 @@ function World:releaseReservations(worker)
     end
 end
 
-function World:storeItem(kind, x, y, fruit)
+function World:storeItem(kind, x, y, food)
     local t = self:get(x, y)
     if not t or not t.passable or t.storage == 0 or #t.items >= t.storage then return nil end
-    local item = { id = self.nextItemId, kind = kind, x = x, y = y, fruit = fruit or 1, claimedBy = nil, slot = #t.items + 1 }
+    local item = { id = self.nextItemId, kind = kind, x = x, y = y, food = food, claimedBy = nil, slot = #t.items + 1 }
     self.nextItemId = self.nextItemId + 1
     self.items[#self.items + 1] = item
     t.items[#t.items + 1] = item
@@ -815,19 +832,20 @@ function World:takeItem(x, y, item)
     return item
 end
 
-function World:storedCount(kind)
+function World:storedCount(kind, food)
     local n = 0
     for _, item in ipairs(self.items) do
-        if kind == nil or item.kind == kind then n = n + 1 end
+        if (kind == nil or item.kind == kind) and (food == nil or item.food == food) then n = n + 1 end
     end
     return n
 end
 
--- Nearest unclaimed stored item of a kind, by walking distance estimate.
-function World:nearestStoredItem(kind, fromX, fromY)
+-- Nearest unclaimed stored item of a kind (and food, if given), by walking
+-- distance estimate.
+function World:nearestStoredItem(kind, fromX, fromY, food)
     local best, bestD = nil, math.huge
     for _, item in ipairs(self.items) do
-        if item.kind == kind and item.claimedBy == nil and self:isReachable(item.x, item.y) then
+        if item.kind == kind and (food == nil or item.food == food) and item.claimedBy == nil and self:isReachable(item.x, item.y) then
             local d = Util.manhattan(fromX, fromY, item.x, item.y)
             if d < bestD then best, bestD = item, d end
         end

@@ -4,18 +4,23 @@ A small band settling the harsh wilds. They will look after themselves. Badly.
 
 A LÖVE2D jam game. You never control a morphi. You mark stone to mine, lay
 bridges over the rivers and set out floor spots, bins and beds around the camp,
-and the morphis do the rest: forage the bushes, fell the trees, dig the gold,
-and carry it all home. Every ninety seconds a season ends and the wilds tally
-what was hauled in, who went hungry, and who was lost. Migrants join the band
-when the haul is good. Keep them fed through four seasons.
+and the morphis do the rest: forage, fell trees, dig gold, and carry it home.
+
+Five hand built levels add one morphi at a time, each with the one food it
+eats: Pupper (steak), Woofoof (fish), Twins (cheese), Cwab (chili), Blob (candy).
+Every level can be won by bridging straight across, but each map hides a
+cheaper way: a narrow crossing, a thin wall a miner opens for free, a grove of
+trees worth logs. Keep everyone fed to the end of the clock and spend as few
+points as you can; three stars at par. Free play keeps the random maps,
+seasons and migrants.
 
 ## The morphis
 
 | Morphi | Role | Works on | Delivers |
 |---|---|---|---|
-| Pupper, Woofoof | Forager | Bushes on the ground, ripen every 20 s | Food, stored in floor spots and bins |
-| Twins | Lumberjack | Trees, cut to a stump that regrows | Logs |
-| Cwab, the blob | Miner | Gold ore inside stone, worked from the tile next to it | Gold, the mined tile turns to dirt |
+| Pupper, Woofoof | Forager | Food bushes, ripen every 20 s | Any food, stored in floor spots and bins. Pupper eats steak, Woofoof fish |
+| Twins | Lumberjack | Trees, cut to a stump that regrows | Logs. Eats cheese |
+| Cwab, Blob | Miner | Gold ore inside stone, worked from the tile next to it | Gold, the mined tile turns to dirt. Cwab eats chili, Blob candy |
 
 Delivered food is a real item on the ground: the closest free tile to the break
 room, one per tile. Morphis walk over stored items but try not to idle on them.
@@ -78,6 +83,7 @@ do the rest.
 - The window can be any size; the HUD scales to fit. F11 toggles fullscreen.
 - On a phone or tablet: drag to pan with the SELECT tool, pinch to zoom, and
   use the UNITS, FOLLOW, zoom, MUTE and MENU buttons at the top right.
+- Title: LEFT / RIGHT pick a level or free play, UP / DOWN the free play difficulty
 - 1 to 6 pick a tool: select, mine, floor, bin, bed, bridge
 - Select then click a morphi to see who is complaining, F to follow them
 - U opens the units list with a follow button per morphi

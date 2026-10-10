@@ -21,10 +21,11 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.roleInfo = ROLES[self.role]
     self.sheet = opts.sheet or self.roleInfo.sheets[1]
     self.species = MORPHI_SHEET_NAMES[self.sheet] or self.sheet
+    self.diet = opts.diet or MORPHI_DIET[self.sheet] or FOOD_KINDS[1]
     self.name = opts.name or ('Morphi ' .. self.id)
     local c = Util.tileCenter(opts.x or 1, opts.y or 1)
     self.x, self.y = c.x, c.y
-    self.hunger = HUNGER_MAX
+    self.hunger = opts.hunger or HUNGER_MAX
     self.drain = opts.drain or 0.7
     self.speed = opts.speed or WORKER_SPEED
     self.state = 'idle'
@@ -40,7 +41,7 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.mineLimit = opts.mineLimit or MINE_TILES_PER_TRIP
     self.targetItem = nil
     self.targetTile = nil
-    self.slots = {}           -- [SLOT_WORK] = {kind, fruit}, [SLOT_PERSONAL] = {kind, fruit}
+    self.slots = {}           -- [SLOT_WORK] = {kind, food}, [SLOT_PERSONAL] = {kind, food}
     self.eatingSlot = nil
     self.workTime = 0         -- accumulated work since the last break
     self.breakAfter = BREAK_AFTER_SECONDS
@@ -70,14 +71,18 @@ function Worker:carrying()
     return self.slots[SLOT_WORK]
 end
 
+-- Something I would actually eat: food of my own kind.
+function Worker:edible(item)
+    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and item.food == self.diet
+end
+
 function Worker:snackInPocket()
-    local s = self.slots[SLOT_PERSONAL]
-    return s ~= nil and s.kind == ITEM_FOOD
+    return self:edible(self.slots[SLOT_PERSONAL])
 end
 
 function Worker:hasFoodInSlot(i)
     local s = self.slots[i]
-    return s ~= nil and s.kind == ITEM_FOOD
+    return s ~= nil and s.kind == ITEM_FOOD and s.food == self.diet
 end
 
 function Worker:tile()
@@ -292,7 +297,7 @@ function Worker:nearestRipeBush()
     local best, bestD = nil, math.huge
     local blocked, blockedD = nil, math.huge
     for _, node in ipairs(self.world.nodes) do
-        if node.kind == NODE_BUSH and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
+        if node.kind == NODE_BUSH and node.food == self.diet and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
             local c = Util.tileCenter(node.x, node.y)
             local d = Util.dist(self.x, self.y, c.x, c.y)
             if self.world:isReachable(node.x, node.y) then
@@ -309,7 +314,7 @@ end
 function Worker:fetchFood()
     if self.slots[SLOT_PERSONAL] then return false end
     local t = self:tile()
-    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y)
+    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, self.diet)
     if not item then return false end
     local path = self:pathTo(item.x, item.y)
     if not path then return false end
@@ -377,7 +382,7 @@ function Worker:decide()
     -- 3. Still holding something? Get it home first.
     if self:carrying() then
         if self:goDeliver() then return end
-        if self:carrying().kind == CARGO_FOOD and self.hunger < HUNGER_EAT_THRESHOLD then
+        if self:edible(self:carrying()) and self.hunger < HUNGER_EAT_THRESHOLD then
             self.slots[SLOT_WORK].kind = ITEM_FOOD
             self:snack(SLOT_WORK)
             return
@@ -578,7 +583,7 @@ function Worker:deliverHere()
             if self:goDeliver() then return end
             return
         end
-        self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.fruit)
+        self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.food)
         self:releaseTile()
     end
     if cargo.kind ~= CARGO_FOOD then
@@ -606,7 +611,7 @@ function Worker:arrive()
         local tile = self.world:get(t.x, t.y)
         if self.world:tileHasItem(t.x, t.y, self.targetItem) then
             local item = self.world:takeItem(t.x, t.y, self.targetItem)
-            self.slots[SLOT_PERSONAL] = { kind = item.kind, fruit = item.fruit }
+            self.slots[SLOT_PERSONAL] = { kind = item.kind, food = item.food }
             self:emit('pickup', item.kind)
         end
         self:releaseItem()
@@ -667,13 +672,13 @@ function Worker:finishAction()
         if self.targetSite and not self.targetSite.done then
             local site = self.targetSite
             local kind = self.world:completeSite(site)
-            if kind then cargo = { kind = kind, fruit = 1 } end
+            if kind then cargo = { kind = kind } end
             if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
             self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
         elseif self.targetNode and self.targetNode.ready then
             local node = self.targetNode
             local kind = self.world:harvestNode(node)
-            cargo = { kind = kind, fruit = node.fruit }
+            cargo = { kind = kind, food = node.food }
             self:emit('work', node.kind)
         end
         self:releaseNode()

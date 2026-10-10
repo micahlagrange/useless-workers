@@ -50,9 +50,7 @@ function Abilities:cancelSite(site)
     local refund = not site.working
     self.jobs:removeSite(site)
     self.world:removeSite(site)
-    if refund then
-        for k, n in pairs(COSTS[site.kind] or {}) do self.world:addStock(k, n) end
-    end
+    if refund then self.world:refund(COSTS[site.kind] or {}) end
     self:effect('unmark', { count = 1, kind = site.kind })
     return true
 end

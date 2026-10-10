@@ -45,9 +45,11 @@ function TestWorker:setUp()
     self.ore = self.world:get(3, 6).node
     self.pocket = self.world:get(5, 8).node
     self.pocket.ready = false; self.pocket.timer = 999
+    -- everyone in these tests eats steak and every bush grows it
+    for _, n in ipairs(self.world.nodes) do n.food = 'steak' end
     self.opts = function(role, x, y)
         return {
-            x = x or 5, y = y or 4, role = role, name = 'Dave', drain = 0.5,
+            x = x or 5, y = y or 4, role = role, name = 'Dave', drain = 0.5, diet = 'steak',
             onComplain = function(_, reason, node) self.complaints[#self.complaints + 1] = { reason = reason, node = node } end,
             onEvent = function(_, name, data) self.events[#self.events + 1] = name .. (data and (':' .. tostring(data)) or '') end,
         }
@@ -168,7 +170,7 @@ end
 
 function TestWorker:testHungryMinerEatsBetweenTilesThenComesBack()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
-    self.world:storeItem(ITEM_FOOD, 7, 4, 3)
+    self.world:storeItem(ITEM_FOOD, 7, 4, 'steak')
     local area = self.world:newArea()
     self.world:addSite(SITE_MINE, 4, 7, area)
     self.world:addSite(SITE_MINE, 5, 7, area)
@@ -246,8 +248,8 @@ end
 
 function TestWorker:testHungryMorphiFetchesFromStorageIntoSlot2()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
-    self.world:storeItem(ITEM_FOOD, 7, 4, 3)
-    self.world:storeItem(ITEM_FOOD, 7, 5, 4)
+    self.world:storeItem(ITEM_FOOD, 7, 4, 'steak')
+    self.world:storeItem(ITEM_FOOD, 7, 5, 'steak')
     w.hunger = 20
     run({ w }, self.world, self.jobs, 5)
     lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
@@ -260,7 +262,7 @@ end
 
 function TestWorker:testHungryWithSnackFinishesTheJobFirst()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
-    w.slots[SLOT_PERSONAL] = { kind = ITEM_FOOD, fruit = 1 }
+    w.slots[SLOT_PERSONAL] = { kind = ITEM_FOOD, food = 'steak' }
     self.jobs:postNode(self.tree)
     run({ w }, self.world, self.jobs, 0.6)
     lu.assertEquals(w.state, 'walking')
@@ -280,7 +282,7 @@ end
 function TestWorker:testTakesABreakAfterEnoughWork()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 6, 5))
     w.workTime = BREAK_AFTER_SECONDS
-    self.world:storeItem(ITEM_FOOD, 7, 5, 2)
+    self.world:storeItem(ITEM_FOOD, 7, 5, 'steak')
     self.jobs:postNode(self.tree)
     run({ w }, self.world, self.jobs, 6)
     -- grabbed a snack from storage first, then rested in the break room

@@ -32,6 +32,10 @@ function UI.new()
         title = love.graphics.newFont(FONT_PATH, 46),
     }
     self.foodIcon = love.graphics.newImage('assets/images/fruit/yp_apple.png')
+    self.foodImages = {}
+    for food, file in pairs(FOOD_SPRITE) do
+        self.foodImages[food] = love.graphics.newImage('assets/images/fruit/' .. file)
+    end
     self.morphiIcon = love.graphics.newImage('assets/images/morphis/pupper-worker-walk.png')
     self.morphiQuad = love.graphics.newQuad(0, 0, 16, 16, self.morphiIcon:getWidth(), self.morphiIcon:getHeight())
     self.icons = {
@@ -244,6 +248,13 @@ function UI:iconFood(x, y, s)
     love.graphics.draw(self.foodIcon, x, y, 0, s / 16, s / 16)
 end
 
+function UI:iconFoodKind(food, x, y, s)
+    local img = self.foodImages[food]
+    if not img then return end
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(img, x, y, 0, s / 16, s / 16)
+end
+
 function UI:iconMorphi(x, y, s)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.morphiIcon, self.morphiQuad, x, y, 0, s / 16, s / 16)
@@ -346,10 +357,15 @@ function UI:drawTopBar(game)
         return true
     end
     local qLabel = sc:seasonLabel():upper()
+    if game.mode == 'level' then qLabel = 'LEVEL ' .. game.level.index end
     local timeColor = C.text
     if sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
-    label(self.narrow and qLabel:sub(1, 3) or qLabel)
+    label(self.narrow and qLabel:gsub('LEVEL ', 'L'):sub(1, 3) or qLabel)
     text(Util.formatTime(sc.quarterTimer), timeColor)
+    if game.mode == 'level' and label('PTS') then
+        local spent, par = game.world.spent, game.level.def.par
+        text(spent .. '/' .. par, spent > par and C.warn or C.good)
+    end
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
     local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
     if label('FED') then text(fed .. '%', fed < 35 and C.warn or C.text) end
@@ -358,7 +374,7 @@ function UI:drawTopBar(game)
     icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
     icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text)
-    if not self.narrow and label('HAUL') then text(tostring(sc.output)) end
+    if game.mode ~= 'level' and not self.narrow and label('HAUL') then text(tostring(sc.output)) end
     -- following / seed, in whatever room is left before the buttons
     local right = ''
     if game.follow and game.selectedWorker then right = 'following ' .. game.selectedWorker.name end
@@ -459,7 +475,8 @@ function UI:drawBottomBar(game)
             setColor(C.good)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
-            self:printFit('the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), nx, py + 3, px + pw - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printFit('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - nx - 24, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:iconFoodKind(w.diet, px + pw - 160, py - 2, 18)
             self:printFit(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             local sx = px
             for i = 1, INVENTORY_SLOTS do
@@ -591,6 +608,7 @@ function UI:drawUnits(game, view)
         love.graphics.setFont(nameFont)
         setColor(C.good)
         love.graphics.print(w.name, cName, ry + 4)
+        self:iconFoodKind(w.diet, cName + nameFont:getWidth(w.name) + 6, ry + 2, 16)
         if rowH >= 44 then
             self:printFit(w.species .. ', ' .. w.roleInfo.label:lower(), cName, ry + 26, cTask - cName - 8, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
         else
@@ -711,28 +729,56 @@ function UI:drawTitle(title, highScore)
     y = y + 17
     self:centered('They will look after themselves. Badly.', y, self.fonts.hud, C.dim)
     y = y + 15 + gap(36)
-    -- difficulty with tappable arrows
-    local diff = DIFFICULTIES[title.difficultyIndex]
-    local name = diff.name:upper()
-    local nw = self.fonts.big:getWidth(name)
-    self:centered(name, y, self.fonts.big)
+    -- what to play: a level, or the open wilds
+    local opt = title.options[title.option]
+    local row1
+    if opt.kind == 'level' then
+        row1 = 'LEVEL ' .. opt.index .. ': ' .. (opt.locked and 'LOCKED' or opt.def.name:upper())
+    else
+        row1 = 'FREE PLAY'
+    end
+    local nw = self.fonts.big:getWidth(row1)
+    self:centered(row1, y, self.fonts.big, opt.locked and C.dim or C.text)
     local aw, ah = 44, 40
     self.titleButtons.left = { x = cx - nw / 2 - 20 - aw, y = y - 7, w = aw, h = ah }
     self.titleButtons.right = { x = cx + nw / 2 + 20, y = y - 7, w = aw, h = ah }
     self:button(self.titleButtons.left, '<', false)
     self:button(self.titleButtons.right, '>', false)
     y = y + 26 + 8
-    self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier, y, self.fonts.small, C.dim)
-    y = y + 11 + gap(30)
-    local seedText = 'SEED: ' .. title.seed
-    if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
-    self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
-    local sw = self.fonts.big:getWidth(seedText) + 40
-    self.titleButtons.seed = { x = cx - sw / 2, y = y - 8, w = sw, h = 42 }
-    y = y + 26 + 8
-    self:centered(title.editingSeed and 'type a seed, ENTER when done' or (self.touch and 'tap the seed to change it' or 'S to change the seed'), y, self.fonts.small, C.dim)
+    local diff = DIFFICULTIES[title.difficultyIndex]
+    if opt.kind == 'level' then
+        if opt.locked then
+            self:centered('clear level ' .. (opt.index - 1) .. ' first', y, self.fonts.small, C.dim)
+        else
+            self:centeredFit(opt.def.blurb, y, self.vw - 80, C.dim, { self.fonts.small, self.fonts.tiny })
+            y = y + 14
+            local best = opt.best and ('   best ' .. opt.best .. (opt.best <= opt.def.par and ' (3 stars)' or '')) or ''
+            self:centered(opt.def.points .. ' points to spend, par ' .. opt.def.par .. best, y, self.fonts.small, C.text)
+        end
+        y = y + 11 + gap(30)
+    else
+        local dname = diff.name:upper()
+        local dw = self.fonts.hud:getWidth(dname)
+        self:centered(dname, y, self.fonts.hud)
+        self.titleButtons.diffLeft = { x = cx - dw / 2 - 16 - 36, y = y - 8, w = 36, h = 30 }
+        self.titleButtons.diffRight = { x = cx + dw / 2 + 16, y = y - 8, w = 36, h = 30 }
+        self:button(self.titleButtons.diffLeft, '<', false)
+        self:button(self.titleButtons.diffRight, '>', false)
+        y = y + 18
+        self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.fonts.small, C.dim)
+        y = y + 11 + gap(30)
+        local seedText = 'SEED: ' .. title.seed
+        if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
+        self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
+        local sw = self.fonts.big:getWidth(seedText) + 40
+        self.titleButtons.seed = { x = cx - sw / 2, y = y - 8, w = sw, h = 42 }
+        y = y + 26 + 8
+        self:centered(title.editingSeed and 'type a seed, ENTER when done' or (self.touch and 'tap the seed to change it' or 'S to change the seed'), y, self.fonts.small, C.dim)
+    end
     y = y + 11 + gap(24)
-    self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), y, self.fonts.hud)
+    if opt.kind == 'free' then
+        self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), y, self.fonts.hud)
+    end
     y = y + 15 + gap(30)
     local startText = self.touch and 'TAP TO START' or 'ENTER or click to start'
     local stw = self.fonts.big:getWidth(startText) + 60
@@ -742,13 +788,50 @@ function UI:drawTitle(title, highScore)
     self:centered(startText, y + 14, self.fonts.big, C.good)
     y = y + 54 + gap(14)
     if not self.touch then
-        self:centered('LEFT / RIGHT: difficulty     M: mute     F11: fullscreen', y, self.fonts.small, C.dim)
+        self:centered('LEFT / RIGHT: level     UP / DOWN: difficulty     M: mute     F11: fullscreen', y, self.fonts.small, C.dim)
         y = y + 11 + gap(14)
     end
-    y = y + self:centeredFit('Pupper forages food, Twins chops logs, Cwab mines gold. Mark stone to mine, bridge water, build bins and beds.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
-    self:centeredFit('You never control a morphi. Keep them fed through four seasons. Gold is worth 3, logs 2, food 1.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
+    y = y + self:centeredFit('Every morphi eats one food and nothing else. Bridges and bins cost points, mining is free, logs are points.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
+    self:centeredFit('You never control a morphi. Keep them all fed to the end of the level, and spend as little as you can.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
     self.titleButtons.mute = { x = self.vw - 90, y = 10, w = 80, h = 28 }
     self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+end
+
+local function starText(n)
+    local t = ''
+    for i = 1, 3 do t = t .. (i <= n and '*' or '-') .. (i < 3 and ' ' or '') end
+    return t
+end
+
+function UI:drawLevelClear(game)
+    local lv = game.level
+    local x, y, pw, ph = self:panel(720, 360)
+    self:centeredFit('LEVEL ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+    self:centered(starText(lv.stars), y + 78, self.fonts.title, lv.stars == 3 and C.good or C.text)
+    local spent, par = game.world.spent, lv.def.par
+    self:centeredFit('spent ' .. spent .. ' point' .. (spent == 1 and '' or 's') .. ', par ' .. par, y + 150, pw - 40, C.text, { self.fonts.hud })
+    if spent > par then
+        self:centeredFit('a sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin wall, the grove.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    else
+        self:centeredFit('That is as cheap as it gets.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    end
+    if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
+    local go = self.touch and 'tap' or 'ENTER or click'
+    if lv.index < #game.levels then
+        self:centeredFit(go .. ': level ' .. (lv.index + 1) .. '     ' .. (self.touch and 'MENU: title' or 'ESC: title'), y + ph - 40, pw - 40, C.dim)
+    else
+        self:centeredFit('All five levels clear. ' .. go .. ': back to the title', y + ph - 40, pw - 40, C.dim)
+    end
+end
+
+function UI:drawLevelFailed(game)
+    local lv = game.level
+    local x, y, pw, ph = self:panel(720, 260)
+    self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
+    self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    local go = self.touch and 'tap' or 'ENTER or click'
+    self:centeredFit(go .. ': try again     ' .. (self.touch and 'MENU: title' or 'ESC: title'), y + ph - 40, pw - 40, C.dim)
 end
 
 function UI:drawConfirmQuit()

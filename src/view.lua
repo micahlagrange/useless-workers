@@ -22,22 +22,17 @@ function View.new(world)
         local grid = anim8.newGrid(16, 16, img:getWidth(), img:getHeight())
         self.sheets[key] = { image = img, quads = grid('1-' .. frames, 1), frames = frames }
     end
-    self.fruitImages = {}
-    local files = love.filesystem.getDirectoryItems('assets/images/fruit')
-    table.sort(files)
-    for _, file in ipairs(files) do
-        if file:match('^yp_.*%.png$') then
-            self.fruitImages[#self.fruitImages + 1] = love.graphics.newImage('assets/images/fruit/' .. file)
-        end
+    self.foodImages = {}
+    for food, file in pairs(FOOD_SPRITE) do
+        self.foodImages[food] = love.graphics.newImage('assets/images/fruit/' .. file)
     end
     self.bubbleFont = love.graphics.newFont('assets/fonts/commodore64.ttf', 8)
     self.rgb = {}
     return self
 end
 
-function View:fruitImage(index)
-    if #self.fruitImages == 0 then return nil end
-    return self.fruitImages[(index - 1) % #self.fruitImages + 1]
+function View:foodImage(food)
+    return self.foodImages[food] or self.foodImages[FOOD_KINDS[1]]
 end
 
 function View:hex(h)
@@ -145,7 +140,7 @@ function View:drawNodes(clock)
             love.graphics.ellipse('fill', px + 6, py + 9, 4, 3.5)
             love.graphics.ellipse('fill', px + 10, py + 10, 4, 3)
             if node.ready then
-                local img = self:fruitImage(node.fruit or 1)
+                local img = self:foodImage(node.food)
                 if img then
                     love.graphics.setColor(1, 1, 1, 1)
                     love.graphics.draw(img, px + 8, py + 7, 0, 0.5, 0.5, 8, 8)
@@ -299,7 +294,7 @@ function View:drawItems(clock)
             love.graphics.ellipse('fill', px + 8, py + 12, 5, 2)
         end
         if item.kind == ITEM_FOOD then
-            local img = self:fruitImage(item.fruit or 1)
+            local img = self:foodImage(item.food)
             if img then
                 love.graphics.setColor(1, 1, 1, 1)
                 if inBin then
@@ -405,7 +400,7 @@ function View:drawWorker(w, clock, selected)
         local bob = math.sin((clock or 0) * 6 + w.id) * 1
         local cy = w.y - 15 + bob
         if cargo.kind == CARGO_FOOD then
-            local img = self:fruitImage(cargo.fruit or 1)
+            local img = self:foodImage(cargo.food)
             if img then
                 love.graphics.setColor(1, 1, 1, 1)
                 love.graphics.draw(img, w.x, cy, 0, 0.7, 0.7, 8, 8)
@@ -424,7 +419,7 @@ function View:drawWorker(w, clock, selected)
     end
     local pocket = w.slots[SLOT_PERSONAL]
     if pocket and pocket.kind == ITEM_FOOD then
-        local img = self:fruitImage(pocket.fruit or 1)
+        local img = self:foodImage(pocket.food)
         if img then
             love.graphics.setColor(1, 1, 1, 1)
             love.graphics.draw(img, w.x + 7, feetY - 4, 0, 0.4, 0.4, 8, 8)

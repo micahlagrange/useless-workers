@@ -1,10 +1,12 @@
--- High score per difficulty. Saved to disk on desktop, kept in memory on the
--- web build (love.js filesystem writes were unreliable in earlier jams).
+-- Saved numbers: the high score per free play difficulty (by number) and
+-- campaign progress (by name). Saved to disk on desktop, kept in memory on
+-- the web build (love.js filesystem writes were unreliable in earlier jams).
 local Highscore = {}
 local memory = {}
 
-local function fileName(difficultyIndex)
-    return 'difficulty' .. difficultyIndex .. '.highscore'
+local function fileName(key)
+    if type(key) == 'number' then return 'difficulty' .. key .. '.highscore' end
+    return tostring(key) .. '.highscore'
 end
 
 local function canUseDisk()
@@ -32,6 +34,14 @@ function Highscore.save(difficultyIndex, score)
         pcall(love.filesystem.write, fileName(difficultyIndex), tostring(score))
     end
     return true
+end
+
+-- Store a value whatever it is (campaign progress, best points on a level).
+function Highscore.set(key, value)
+    memory[key] = value
+    if canUseDisk() then
+        pcall(love.filesystem.write, fileName(key), tostring(value))
+    end
 end
 
 function Highscore.resetMemory()

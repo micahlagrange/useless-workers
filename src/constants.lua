@@ -71,6 +71,15 @@ ROLES = {
     miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
 }
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
+-- Every morphi eats one thing and nothing else. Food grows on bushes of
+-- that kind; a forager picks any kind into storage, and everyone takes only
+-- their own from it, or eats straight off a bush of their kind when hungry.
+FOOD_KINDS  = { 'steak', 'fish', 'cheese', 'chili', 'candy' }
+FOOD_SPRITE = { steak = 'yp_ham.png', fish = 'yp_tuna.png', cheese = 'yp_cheese.png', chili = 'yp_chilipepper.png', candy = 'yp_candy1.png' }
+MORPHI_DIET = { pupper = 'steak', woofoof = 'fish', twins = 'cheese', cwab = 'chili', blue = 'candy' }
+MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', cwab = 'miner', blue = 'miner' }
+-- grid letters for food bushes in hand built levels
+FOOD_CHAR   = { k = 'steak', f = 'fish', c = 'cheese', h = 'chili', y = 'candy' }
 MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', cwab = 'Cwab', blue = 'Blob' }
 
 -- Workers (section 5)

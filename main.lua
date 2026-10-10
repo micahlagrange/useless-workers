@@ -8,6 +8,7 @@ local Worker = require('src.worker')
 local Scoring = require('src.scoring')
 local Abilities = require('src.abilities')
 local Highscore = require('src.highscore')
+local Campaign = require('src.campaign')
 local Camera = require('src.camera')
 local View = require('src.view')
 local UI = require('src.ui')
@@ -19,7 +20,27 @@ love.graphics.setDefaultFilter('nearest', 'nearest')
 local state = 'title'
 local ui
 local game = {}
-local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false }
+local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false, options = {}, option = 1 }
+
+-- The title offers each level (locked until the one before is clear) and
+-- free play. Progress lives in the high score store under string keys.
+local function levelsUnlocked()
+    return math.max(1, Highscore.load('levels_unlocked'))
+end
+
+local function buildTitleOptions()
+    local unlocked = levelsUnlocked()
+    title.options = {}
+    for i = 1, Campaign.count() do
+        local cleared = Highscore.load('level' .. i .. '_cleared') == 1
+        title.options[#title.options + 1] = {
+            kind = 'level', index = i, def = Campaign.levels[i], locked = i > unlocked,
+            best = cleared and Highscore.load('level' .. i .. '_best') or nil,
+        }
+    end
+    title.options[#title.options + 1] = { kind = 'free' }
+    if title.option > #title.options then title.option = 1 end
+end
 -- touch: every finger on the screen, by id. Two fingers pinch to zoom and pan.
 local touches = {}
 local touchCount = 0
@@ -79,6 +100,11 @@ local function onWorkerEvent(worker, name, data)
             ui:alert(worker.name .. ' left the band. Too many hardships, too little care.')
         else
             ui:alert(worker.name .. ' starved and wandered off into the wilds.')
+        end
+        if game.mode == 'level' and (state == 'playing' or state == 'units') then
+            game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
+            state = 'levelfailed'
+            love.mouse.setVisible(true)
         end
     end
 end
@@ -157,12 +183,79 @@ local function newGame(seedString, difficultyIndex)
     game.report = nil
     game.highScore = Highscore.load(difficultyIndex)
     game.isNewHigh = false
+    game.mode = 'free'
+    game.levels = Campaign.levels
     Effects.clear()
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
     ui:alert('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
     state = 'playing'
     hideCursor()
+end
+
+-- A hand built level: its own map, morphis, points and clock. The season
+-- machinery still counts hardships, but the clock ending means a clear.
+local function newLevel(index)
+    local run = Campaign.load(index, Rng.new(index))
+    game = {}
+    game.mode = 'level'
+    game.level = run
+    game.levels = Campaign.levels
+    game.seedString = 'level ' .. index
+    game.rng = Rng.new(index)
+    game.scoring = Scoring.new(DEFAULT_DIFFICULTY)
+    game.scoring.drain = run.def.drain
+    game.scoring.quarterTimer = run.def.seconds
+    game.world = run.world
+    game.jobs = Jobs.new()
+    for _, node in ipairs(game.world.nodes) do
+        if node.ready then game.jobs:postNode(node) end
+    end
+    game.workers = {}
+    game.hired = #run.specs
+    game.roleHires = {}
+    game.clock = 0
+    game.staffCount = #run.specs
+    game.averageHunger = run.def.hunger
+    game.abilities = Abilities.new(game.world, game.jobs, onEffect)
+    game.view = View.new(game.world)
+    game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
+    game.camera.scale = 2
+    game.camera:centerOn(game.world.breakroom.cx, game.world.breakroom.cy)
+    game.selectedWorker = nil
+    game.follow = false
+    game.lineStart = nil
+    game.dragging = false
+    game.report = nil
+    game.highScore = 0
+    game.isNewHigh = false
+    for _, spec in ipairs(run.specs) do
+        table.insert(game.workers, Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+            x = spec.x, y = spec.y, role = spec.role, sheet = spec.sheet, name = spec.name,
+            diet = spec.diet, hunger = spec.hunger, drain = run.def.drain,
+            onComplain = onComplain, onEvent = onWorkerEvent,
+        }))
+    end
+    Effects.clear()
+    ui:clear()
+    ui:alert('Level ' .. index .. ': ' .. run.def.name .. '. ' .. run.def.intro)
+    state = 'playing'
+    hideCursor()
+end
+
+local function levelClear()
+    local lv = game.level
+    local spent = game.world.spent
+    lv.stars = Campaign.stars(spent, lv.def.par)
+    local key = 'level' .. lv.index
+    local cleared = Highscore.load(key .. '_cleared') == 1
+    lv.isNewBest = not cleared or spent < Highscore.load(key .. '_best')
+    if lv.isNewBest then Highscore.set(key .. '_best', spent) end
+    Highscore.set(key .. '_cleared', 1)
+    Highscore.set('levels_unlocked', math.max(levelsUnlocked(), lv.index + 1))
+    state = 'levelclear'
+    love.mouse.setVisible(true)
+    Audio.playSFX('win')
 end
 
 local function staffStats()
@@ -228,6 +321,16 @@ local function goToTitle()
     state = 'title'
     love.mouse.setVisible(true)
     title.editingSeed = false
+    buildTitleOptions()
+end
+
+local function titleMove(step)
+    title.option = (title.option - 1 + step) % #title.options + 1
+    title.editingSeed = false
+end
+
+local function difficultyMove(step)
+    title.difficultyIndex = (title.difficultyIndex - 1 + step) % #DIFFICULTIES + 1
 end
 
 -- LOVE callbacks -----------------------------------------------------------
@@ -235,6 +338,9 @@ end
 function love.load()
     ui = UI.new()
     love.keyboard.setKeyRepeat(true)
+    buildTitleOptions()
+    -- start on the furthest unlocked level
+    title.option = math.min(levelsUnlocked(), Campaign.count())
 end
 
 function love.resize(w, h)
@@ -259,12 +365,12 @@ local function updatePlaying(dt)
     local count, avg = staffStats()
     game.staffCount = count
     game.averageHunger = avg or game.averageHunger
-    if count == 0 then
+    if count == 0 and game.mode ~= 'level' then
         finishGame('gameover')
         return
     end
     if game.scoring:update(dt, avg) then
-        closeQuarter()
+        if game.mode == 'level' then levelClear() else closeQuarter() end
         return
     end
     local dx, dy = 0, 0
@@ -371,6 +477,10 @@ function love.draw()
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
+    elseif state == 'levelclear' then
+        ui:drawLevelClear(game)
+    elseif state == 'levelfailed' then
+        ui:drawLevelFailed(game)
     elseif state == 'units' then
         ui:drawUnits(game, game.view)
     end
@@ -389,6 +499,13 @@ end
 -- Input --------------------------------------------------------------------
 
 local function startFromTitle()
+    local opt = title.options[title.option]
+    if opt.kind == 'level' then
+        if opt.locked then ui:toast('Clear level ' .. (opt.index - 1) .. ' first') return end
+        startMusic()
+        newLevel(opt.index)
+        return
+    end
     startMusic()
     title.editingSeed = false
     if title.seed == '' then title.seed = DEFAULT_SEED end
@@ -443,9 +560,13 @@ function love.mousepressed(x, y, button, istouch)
         if button ~= 1 then return end
         local id = ui:titleButtonAt(vx, vy)
         if id == 'left' then
-            title.difficultyIndex = (title.difficultyIndex - 2) % #DIFFICULTIES + 1
+            titleMove(-1)
         elseif id == 'right' then
-            title.difficultyIndex = title.difficultyIndex % #DIFFICULTIES + 1
+            titleMove(1)
+        elseif id == 'diffLeft' then
+            difficultyMove(-1)
+        elseif id == 'diffRight' then
+            difficultyMove(1)
         elseif id == 'seed' then
             title.editingSeed = not title.editingSeed
             love.keyboard.setTextInput(title.editingSeed)
@@ -461,6 +582,16 @@ function love.mousepressed(x, y, button, istouch)
         return
     elseif state == 'gameover' then
         if button == 1 then goToTitle() end
+        return
+    elseif state == 'levelclear' then
+        if button ~= 1 then return end
+        if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
+        if game.level.index < Campaign.count() then newLevel(game.level.index + 1) else goToTitle() end
+        return
+    elseif state == 'levelfailed' then
+        if button ~= 1 then return end
+        if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
+        newLevel(game.level.index)
         return
     elseif state == 'annual' then
         if button == 1 then
@@ -643,10 +774,14 @@ function love.keypressed(key)
         if key == 'return' or key == 'kpenter' or key == 'space' then
             startFromTitle()
         elseif key == 'left' or key == 'a' then
-            title.difficultyIndex = (title.difficultyIndex - 2) % #DIFFICULTIES + 1
+            titleMove(-1)
         elseif key == 'right' or key == 'd' then
-            title.difficultyIndex = title.difficultyIndex % #DIFFICULTIES + 1
-        elseif key == 's' then
+            titleMove(1)
+        elseif key == 'up' or key == 'w' then
+            difficultyMove(-1)
+        elseif key == 'down' then
+            difficultyMove(1)
+        elseif key == 's' and title.options[title.option].kind == 'free' then
             title.editingSeed = true
         elseif key == 'escape' and not isWeb() then
             love.event.quit()
@@ -682,6 +817,18 @@ function love.keypressed(key)
         end
     elseif state == 'gameover' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'escape' then
+            goToTitle()
+        end
+    elseif state == 'levelclear' then
+        if key == 'return' or key == 'kpenter' or key == 'space' then
+            if game.level.index < Campaign.count() then newLevel(game.level.index + 1) else goToTitle() end
+        elseif key == 'escape' then
+            goToTitle()
+        end
+    elseif state == 'levelfailed' then
+        if key == 'return' or key == 'kpenter' or key == 'space' or key == 'r' then
+            newLevel(game.level.index)
+        elseif key == 'escape' then
             goToTitle()
         end
     elseif state == 'annual' then
