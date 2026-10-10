@@ -826,7 +826,7 @@ end
 
 -- What this level asks for. Opens paused at the start and from GOAL up top.
 function UI:drawGoal(game)
-    local x, y, pw, ph = self:panel(760, 420)
+    local x, y, pw, ph = self:panel(760, 310)
     local lines = {}
     if game.mode == 'level' then
         local def = game.level.def
