@@ -41,7 +41,6 @@ function UI.new()
     self.icons = {
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
         mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
-        bridge = love.graphics.newImage('assets/images/ui/line_btn.png'),
     }
     self.cursors = {
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
@@ -305,6 +304,23 @@ function UI:iconFloor(x, y, s)
     love.graphics.draw(self.foodIcon, x + s * 0.3, y + s * 0.3, 0, s * 0.4 / 16, s * 0.4 / 16)
 end
 
+-- Planks laid across water, seen from above.
+function UI:iconBridge(x, y, s)
+    love.graphics.setColor(0.37, 0.56, 0.66)
+    love.graphics.rectangle('fill', x + s * 0.05, y + s * 0.1, s * 0.9, s * 0.8)
+    love.graphics.setColor(0.55, 0.7, 0.78)
+    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.25, s * 0.05)
+    love.graphics.rectangle('fill', x + s * 0.6, y + s * 0.75, s * 0.25, s * 0.05)
+    love.graphics.setColor(0.62, 0.47, 0.27)
+    love.graphics.rectangle('fill', x + s * 0.05, y + s * 0.34, s * 0.9, s * 0.32)
+    love.graphics.setColor(0.35, 0.26, 0.14)
+    for i = 0, 4 do
+        love.graphics.rectangle('fill', x + s * (0.08 + i * 0.19), y + s * 0.34, s * 0.03, s * 0.32)
+    end
+    love.graphics.rectangle('fill', x + s * 0.05, y + s * 0.3, s * 0.9, s * 0.05)
+    love.graphics.rectangle('fill', x + s * 0.05, y + s * 0.65, s * 0.9, s * 0.05)
+end
+
 function UI:iconBed(x, y, s)
     love.graphics.setColor(0.4, 0.28, 0.16)
     love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.8, s * 0.65)
@@ -384,7 +400,7 @@ function UI:drawTopBar(game)
     -- following / seed, in whatever room is left before the buttons
     local right = ''
     if game.follow and game.selectedWorker then right = 'following ' .. game.selectedWorker.name end
-    if limit - x > 220 and not self.narrow then right = right .. (right ~= '' and '   ' or '') .. 'seed ' .. tostring(game.seedString) end
+    if limit - x > 220 and not self.narrow and game.mode ~= 'level' then right = right .. (right ~= '' and '   ' or '') .. 'seed ' .. tostring(game.seedString) end
     if right ~= '' and limit - x > 60 then
         self:printFit(right, x, 14, limit - x, 'right', C.dim, { self.fonts.small, self.fonts.tiny })
     end
@@ -429,6 +445,7 @@ function UI:drawToolIcon(tool, x, y, size, affordable)
     if tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
     elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
     elseif tool == ABILITY_BED then self:iconBed(x, y, size)
+    elseif tool == ABILITY_BRIDGE then self:iconBridge(x, y, size)
     end
     if not affordable then
         love.graphics.setColor(0.1, 0.1, 0.1, 0.55)
