@@ -84,6 +84,7 @@ MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', 
 
 -- Workers (section 5)
 HUNGER_MAX             = 100
+STARTING_HUNGER        = 45     -- morphis arrive peckish, so the first thing they do is look for food
 HUNGER_EAT_THRESHOLD   = 30
 HUNGER_STARVING        = 12     -- a starving morphi eats even its work item if it is food, or drops its cargo
 FRUIT_HUNGER_VALUE     = 55

@@ -124,6 +124,7 @@ local function hire(n)
             sheet = sheets[(game.roleHires[role] - 1) % #sheets + 1],
             name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
+            hunger = STARTING_HUNGER,
             onComplain = onComplain,
             onEvent = onWorkerEvent,
         })
@@ -189,8 +190,9 @@ local function newGame(seedString, difficultyIndex)
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
     ui:alert('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
-    state = 'playing'
-    hideCursor()
+    game.started = false
+    state = 'goal'
+    love.mouse.setVisible(true)
 end
 
 -- A hand built level: its own map, morphis, points and clock. The season
@@ -238,9 +240,20 @@ local function newLevel(index)
     end
     Effects.clear()
     ui:clear()
-    ui:alert('Level ' .. index .. ': ' .. run.def.name .. '. ' .. run.def.intro)
+    game.started = false
+    state = 'goal'
+    love.mouse.setVisible(true)
+end
+
+local function closeGoal()
+    game.started = true
     state = 'playing'
     hideCursor()
+end
+
+local function openGoal()
+    state = 'goal'
+    love.mouse.setVisible(true)
 end
 
 local function levelClear()
@@ -403,7 +416,7 @@ function love.update(dt)
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
     end
-    -- 'confirmquit' is a pause: nothing updates
+    -- 'confirmquit' and 'goal' are pauses: nothing updates
 end
 
 local function drawWorld()
@@ -477,6 +490,8 @@ function love.draw()
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
+    elseif state == 'goal' then
+        ui:drawGoal(game)
     elseif state == 'levelclear' then
         ui:drawLevelClear(game)
     elseif state == 'levelfailed' then
@@ -548,6 +563,7 @@ local function pressTopButton(id)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
     elseif id == 'mute' then Audio.toggleMute()
     elseif id == 'menu' then openMenu()
+    elseif id == 'goal' then openGoal()
     end
     Audio.playSFX('click')
 end
@@ -582,6 +598,9 @@ function love.mousepressed(x, y, button, istouch)
         return
     elseif state == 'gameover' then
         if button == 1 then goToTitle() end
+        return
+    elseif state == 'goal' then
+        if button == 1 then closeGoal() end
         return
     elseif state == 'levelclear' then
         if button ~= 1 then return end
@@ -795,6 +814,8 @@ function love.keypressed(key)
             toggleFollow()
         elseif key == 'u' then
             openUnits()
+        elseif key == 'g' then
+            openGoal()
         elseif key == '=' or key == '+' or key == 'kp+' then
             zoomBy(1.25)
         elseif key == '-' or key == 'kp-' then
@@ -819,6 +840,8 @@ function love.keypressed(key)
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'escape' then
             goToTitle()
         end
+    elseif state == 'goal' then
+        closeGoal()
     elseif state == 'levelclear' then
         if key == 'return' or key == 'kpenter' or key == 'space' then
             if game.level.index < Campaign.count() then newLevel(game.level.index + 1) else goToTitle() end

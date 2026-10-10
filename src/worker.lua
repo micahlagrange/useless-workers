@@ -337,8 +337,13 @@ function Worker:eatSomething()
             return true
         end
     elseif blocked then
-        self:complain('hungry', blocked)
-        return true
+        -- one grumble per cooldown, however many bushes are out of reach:
+        -- waiting on a bridge should not cost a morphi its whole morale
+        if self.lastHungryComplaint == nil or self.clock - self.lastHungryComplaint >= COMPLAINT_COOLDOWN then
+            self.lastHungryComplaint = self.clock
+            self:complain('hungry', blocked)
+            return true
+        end
     end
     return false
 end

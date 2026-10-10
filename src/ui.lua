@@ -93,7 +93,7 @@ function UI:layout(w, h)
     local defs = {
         { id = 'menu', label = 'MENU' }, { id = 'mute', label = 'MUTE' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
-        { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' },
+        { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
     }
     self.topButtons = {}
     local x = self.vw - 8
@@ -822,6 +822,55 @@ function UI:drawLevelClear(game)
     else
         self:centeredFit('All five levels clear. ' .. go .. ': back to the title', y + ph - 40, pw - 40, C.dim)
     end
+end
+
+-- What this level asks for. Opens paused at the start and from GOAL up top.
+function UI:drawGoal(game)
+    local x, y, pw, ph = self:panel(760, 420)
+    local lines = {}
+    if game.mode == 'level' then
+        local def = game.level.def
+        self:centeredFit('LEVEL ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+        lines = {
+            { def.intro, C.text },
+            { 'Keep everyone fed until the clock runs out. Nobody may be lost.', C.text },
+            { def.points .. ' points to spend, par ' .. def.par .. '. Bridges, bins and beds cost points. Mining is free. Logs are points.', C.dim },
+        }
+    else
+        self:centeredFit('FREE PLAY', y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+        lines = {
+            { 'A random map, four seasons, migrants when the haul is good.', C.text },
+            { 'Keep the band fed. Hardships and hunger wear morale down; at zero a morphi leaves.', C.text },
+            { 'Mark FLOOR spots or BINS so foragers can store food, MINE stone, BRIDGE the rivers.', C.dim },
+        }
+    end
+    local ly = y + 64
+    for _, line in ipairs(lines) do
+        ly = ly + self:printFit(line[1], x + 24, ly, pw - 48, 'left', line[2], { self.fonts.hud, self.fonts.small, self.fonts.tiny }) + 10
+    end
+    -- who eats what
+    ly = ly + 6
+    love.graphics.setFont(self.fonts.small)
+    setColor(C.dim)
+    love.graphics.print('WHO EATS WHAT', x + 24, ly)
+    ly = ly + 18
+    local seen = {}
+    local cx = x + 24
+    for _, w in ipairs(game.workers) do
+        if w.alive and not seen[w.sheet] then
+            seen[w.sheet] = true
+            local label = w.species .. ' eats ' .. w.diet
+            local lw = self.fonts.small:getWidth(label) + 26
+            if cx + lw > x + pw - 24 then cx = x + 24; ly = ly + 24 end
+            self:iconFoodKind(w.diet, cx, ly - 3, 18)
+            love.graphics.setFont(self.fonts.small)
+            setColor(C.text)
+            love.graphics.print(label, cx + 22, ly)
+            cx = cx + lw + 16
+        end
+    end
+    local go = self.touch and 'tap' or 'ENTER, G or click'
+    self:centeredFit(go .. ': ' .. (game.started and 'back to it' or 'begin') .. '     GOAL up top brings this back', y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
 end
 
 function UI:drawLevelFailed(game)
