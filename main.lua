@@ -424,6 +424,10 @@ end
 local function drawWorld()
     local cam = game.camera
     game.view:rebuildCanvas() -- before the camera transform, see View:rebuildCanvas
+    -- beyond the map: dark ground, not a black hole
+    love.graphics.setColor(0.11, 0.13, 0.09, 1)
+    love.graphics.rectangle('fill', 0, 0, love.graphics.getDimensions())
+    love.graphics.setColor(1, 1, 1, 1)
     cam:apply()
     Effects.applyShake()
     game.view:drawWorld()

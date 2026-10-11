@@ -76,7 +76,11 @@ function UI:layout(w, h)
     -- fit the 1280x800 design into the window on its tighter side, so a
     -- phone gets a small HUD with room for the map, and a big monitor a
     -- bigger one. Never below 0.55: text has to stay legible.
-    self.scale = Util.clamp(math.min(w / 1280, h / 800), 0.55, 2.0)
+    self.scale = math.min(w / 1280, h / 800)
+    -- a small frame (a phone, or a small embed on a page) scales by its
+    -- width instead, so the HUD stays legible and stacks into the narrow layout
+    if w < 700 then self.scale = w / 700 end
+    self.scale = Util.clamp(self.scale, 0.55, 2.0)
     self.vw, self.vh = w / self.scale, h / self.scale
     self.narrow = self.vw < 980
     -- on a narrow screen the quick buttons get their own row under the stats
@@ -578,6 +582,9 @@ function UI:drawHUD(game)
     self:drawTopBar(game)
     self:drawAlerts()
     self:drawBottomBar(game)
+    if self.touch and self.winH > self.winW * 1.2 then
+        self:centeredFit('Turn your phone sideways for the best view', self.vh - BOTTOM_BAR_H - 26, self.vw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    end
 end
 
 -- Drawn in window space, not the scaled HUD space.
