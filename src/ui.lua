@@ -77,9 +77,14 @@ function UI:layout(w, h)
     -- phone gets a small HUD with room for the map, and a big monitor a
     -- bigger one. Never below 0.55: text has to stay legible.
     self.scale = math.min(w / 1280, h / 800)
-    -- a small frame (a phone, or a small embed on a page) scales by its
-    -- width instead, so the HUD stays legible and stacks into the narrow layout
-    if w < 700 then self.scale = w / 700 end
+    if self.touch or h <= 500 then
+        -- a phone or tablet: fingers need targets and eyes need text, so
+        -- scale by height (landscape) but never so wide the bar cannot fit
+        self.scale = math.min(h / 520, w / 1100)
+    elseif w < 700 then
+        -- a small embed on a page scales by its width
+        self.scale = w / 700
+    end
     self.scale = Util.clamp(self.scale, 0.55, 2.0)
     self.vw, self.vh = w / self.scale, h / self.scale
     self.narrow = self.vw < 980

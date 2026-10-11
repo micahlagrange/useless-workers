@@ -13,6 +13,7 @@ function Camera.new(worldW, worldH, viewW, viewH)
     self.viewW, self.viewH = viewW, viewH
     self.minScale = 0.5
     self.maxScale = 4
+    self:setView(viewW, viewH)
     return self
 end
 
@@ -25,8 +26,12 @@ function Camera:fitWorld(barsPx)
     self:centerOn(self.worldPxW / 2, self.worldPxH / 2)
 end
 
+-- Zooming in is capped so at least twenty tiles stay on screen; a phone
+-- never ends up looking at one giant tree.
 function Camera:setView(w, h)
     self.viewW, self.viewH = w, h
+    self.maxScale = Util.clamp(w / (20 * TILE_SIZE), 1.5, 4)
+    self.scale = Util.clamp(self.scale, self.minScale, self.maxScale)
     self:clamp()
 end
 

@@ -574,8 +574,20 @@ local function pressTopButton(id)
     Audio.playSFX('click')
 end
 
+-- The first finger on the screen switches to the touch layout.
+local function noteTouch()
+    if ui.touch then return end
+    ui.touch = true
+    love.mouse.setVisible(true)
+    ui:layout(love.graphics.getDimensions())
+    if game and game.camera then
+        game.camera:setView(love.graphics.getDimensions())
+        if game.mode == 'level' and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+    end
+end
+
 function love.mousepressed(x, y, button, istouch)
-    if istouch then ui.touch = true; love.mouse.setVisible(true) end
+    if istouch then noteTouch() end
     if pinch then return end
     local vx, vy = ui:toVirtual(x, y)
     if state == 'title' then
@@ -738,7 +750,7 @@ local function pinchState()
 end
 
 function love.touchpressed(id, x, y)
-    ui.touch = true
+    noteTouch()
     touches[id] = { x = x, y = y }
     touchCount = touchCount + 1
     if touchCount >= 2 and state == 'playing' then
