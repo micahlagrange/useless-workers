@@ -24,13 +24,14 @@ local C = {
 
 function UI.new()
     local self = setmetatable({}, UI)
-    self.fonts = {
-        tiny = love.graphics.newFont(FONT_PATH, 9),
-        small = love.graphics.newFont(FONT_PATH, 11),
-        hud = love.graphics.newFont(FONT_PATH, 15),
-        big = love.graphics.newFont(FONT_PATH, 26),
-        title = love.graphics.newFont(FONT_PATH, 46),
+    -- two font sets: the desk set, and a bigger one for fingers and small
+    -- screens where 9 px text is a smudge
+    self.fontSets = {
+        desk = { tiny = 9, small = 11, hud = 15, big = 26, title = 46 },
+        touch = { tiny = 11, small = 13, hud = 16, big = 26, title = 44 },
     }
+    self.fontCache = {}
+    self:useFonts('desk')
     self.foodIcon = love.graphics.newImage('assets/images/fruit/yp_apple.png')
     self.foodImages = {}
     for food, file in pairs(FOOD_SPRITE) do
@@ -89,7 +90,7 @@ function UI:layout(w, h)
     self.vw, self.vh = w / self.scale, h / self.scale
     self.narrow = self.vw < 980
     -- on a narrow screen the quick buttons get their own row under the stats
-    TOP_BAR_H = self.narrow and 70 or 40
+    TOP_BAR_H = self.narrow and 64 or 40
     -- tool buttons along the bottom
     local n = #ABILITY_ORDER
     local gap = 8
@@ -110,11 +111,11 @@ function UI:layout(w, h)
     }
     self.topButtons = {}
     local x = self.vw - 8
-    local by = self.narrow and 38 or 6
+    local by = self.narrow and 34 or 6
     for _, d in ipairs(defs) do
         local bwid = self.fonts.small:getWidth(d.label) + 16
         x = x - bwid
-        self.topButtons[#self.topButtons + 1] = { id = d.id, label = d.label, x = x, y = by, w = bwid, h = 28 }
+        self.topButtons[#self.topButtons + 1] = { id = d.id, label = d.label, x = x, y = by, w = bwid, h = self.narrow and 26 or 28 }
         x = x - 6
     end
     self.topButtonsLeft = self.narrow and self.vw or x
