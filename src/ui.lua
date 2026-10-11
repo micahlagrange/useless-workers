@@ -72,16 +72,29 @@ local function hit(r, x, y)
     return r and x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h
 end
 
+function UI:useFonts(set)
+    if self.fontSet == set then return end
+    self.fontSet = set
+    if not self.fontCache[set] then
+        local f = {}
+        for name, size in pairs(self.fontSets[set]) do f[name] = love.graphics.newFont(FONT_PATH, size) end
+        self.fontCache[set] = f
+    end
+    self.fonts = self.fontCache[set]
+end
+
 function UI:layout(w, h)
     self.winW, self.winH = w, h
     -- fit the 1280x800 design into the window on its tighter side, so a
-    -- phone gets a small HUD with room for the map, and a big monitor a
-    -- bigger one. Never below 0.55: text has to stay legible.
+    -- big monitor gets a bigger HUD and a small window a smaller one.
+    -- Never below 0.55: text has to stay legible.
     self.scale = math.min(w / 1280, h / 800)
-    if self.touch or h <= 500 then
-        -- a phone or tablet: fingers need targets and eyes need text, so
-        -- scale by height (landscape) but never so wide the bar cannot fit
-        self.scale = math.min(h / 520, w / 1100)
+    local handheld = self.touch or h <= 500
+    self:useFonts(handheld and 'touch' or 'desk')
+    if handheld then
+        -- a phone or tablet: close to 1:1 so the bigger fonts stay readable,
+        -- bounded by width so the tool bar still fits
+        self.scale = math.min(h / 400, w / 1000)
     elseif w < 700 then
         -- a small embed on a page scales by its width
         self.scale = w / 700
