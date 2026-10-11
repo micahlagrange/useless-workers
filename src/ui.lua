@@ -411,12 +411,13 @@ function UI:drawTopBar(game)
         local spent, par = game.world.spent, game.level.def.par
         text(spent .. '/' .. par, spent > par and C.warn or C.good)
     end
+    -- what matters most comes first, so a tight bar drops the tail end
+    icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
+    local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
+    icon(UI.iconFood, stored .. '/' .. cap, cap == 0 and C.warn or C.text)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
     local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
     if label('FED') then text(fed .. '%', fed < 35 and C.warn or C.text) end
-    local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
-    icon(UI.iconFood, stored .. '/' .. cap, cap == 0 and C.warn or C.text)
-    icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
     icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text)
     if game.mode ~= 'level' and not self.narrow and label('HAUL') then text(tostring(sc.output)) end
@@ -558,9 +559,9 @@ function UI:drawBottomBar(game)
             local lines
             if self.touch then
                 lines = {
-                    'SELECT: drag pans, tap picks a morphi.',
-                    'Pinch to zoom. FOLLOW and UNITS up top.',
-                    'FLOOR free, BIN 1 log, BED 2 logs.',
+                    'Drag pans. Tap picks. Pinch zooms.',
+                    'GOAL, UNITS, FOLLOW are up top.',
+                    'FLOOR free. BIN 1 log. BED 2.',
                 }
             else
                 lines = {
