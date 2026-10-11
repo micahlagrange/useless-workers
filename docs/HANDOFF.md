@@ -38,6 +38,25 @@ everything lives, what is done, and what was asked for next.
   isMobile, deviceScaleFactor 3.
 - Font is `assets/fonts/commodore64.ttf` (wide; always use `printFit`).
 
+## Local workflow on Windows (set up 2026-10-11)
+
+- This checkout is a git worktree of `../useless-workers`. It was made from
+  WSL; `git worktree repair` from the main checkout fixed the paths for
+  Windows git. Redo that if WSL is used again.
+- Python 3.10 (pyenv) has `lupa` and `makelove`. Tests: `python tst/run.py`.
+- LÖVE 11.5 is at `C:/Program Files/LOVE`. Run the game with
+  `"C:/Program Files/LOVE/lovec.exe" .` from the repo root (console build,
+  prints Lua errors to the terminal).
+- Web build: `python -m makelove lovejs`, then
+  `python tools/patch_lovejs.py makelove-build/lovejs/morphis-lovejs.zip`,
+  unzip into `makelove-build/html`, serve that folder with
+  `python -m http.server 8000`, open `http://localhost:8000/morphis/`.
+- Browser check: node 22 with Playwright 1.64 (chromium installed under
+  `%LOCALAPPDATA%/ms-playwright`). `node tools/web_shot.js out.png` loads the
+  served page, waits 8 s, and screenshots it; it needs `playwright` resolvable
+  from where it runs (`npm i playwright@1.64.0` in a scratch folder works).
+- `gh` is logged in as micahlagrange, so push and Actions checks work.
+
 ## Architecture (LÖVE 11.4, love.js for web)
 
 Pure logic (no love calls, unit tested): `src/constants.lua` (every tunable),

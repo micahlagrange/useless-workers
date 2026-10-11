@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 
 failures = 0
-files = sorted(glob.glob("tst/*_test.lua"))
+files = sorted(p.replace(os.sep, "/") for p in glob.glob("tst/*_test.lua"))
 if not files:
     print("no tests found")
     sys.exit(1)
