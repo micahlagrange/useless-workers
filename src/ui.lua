@@ -305,6 +305,22 @@ function UI:printFit(text, x, y, maxWidth, align, color, fonts)
     return font:getHeight() * #lines
 end
 
+-- A paragraph: wrapped in the largest font that keeps it to maxLines.
+-- Returns the height used.
+function UI:printWrap(text, x, y, maxWidth, color, fonts, maxLines)
+    fonts = fonts or { self.fonts.hud, self.fonts.small, self.fonts.tiny }
+    local font = fonts[#fonts]
+    for _, f in ipairs(fonts) do
+        local _, l = f:getWrap(text, maxWidth)
+        if #l <= (maxLines or 3) then font = f break end
+    end
+    local _, l = font:getWrap(text, maxWidth)
+    setColor(color or C.text)
+    love.graphics.setFont(font)
+    love.graphics.printf(text, x, y, maxWidth, 'left')
+    return font:getHeight() * #l
+end
+
 function UI:centeredFit(text, y, maxWidth, color, fonts)
     return self:printFit(text, (self.vw - maxWidth) / 2, y, maxWidth, 'center', color, fonts)
 end
@@ -691,7 +707,7 @@ function UI:drawBottomBar(game)
             love.graphics.print('F follows, U lists everyone', bx, py + 70)
         elseif game.mode == 'arcade' then
             -- the live checklist: what the band insists on before eating
-            self:drawGoalList(game, px, py + 2, pw, 15)
+            self:drawGoalList(game, px, self.vh - BOTTOM_BAR_H + 6, pw, 15, BOTTOM_BAR_H - 10)
         else
             local lines
             if self.touch then
@@ -733,9 +749,11 @@ function UI:drawBottomBar(game)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- The arcade checklist with its ticks. Returns the height used.
-function UI:drawGoalList(game, x, y, w, rowH)
+-- The arcade checklist with its ticks. Rows shrink to fit maxH when given.
+-- Returns the height used.
+function UI:drawGoalList(game, x, y, w, rowH, maxH)
     local goals = Campaign.goals(game.level, game.workers)
+    if maxH and #goals > 0 then rowH = math.min(rowH, math.floor(maxH / #goals)) end
     local ly = y
     local box = rowH - 4
     for _, g in ipairs(goals) do
@@ -1014,7 +1032,8 @@ end
 
 function UI:drawLevelClear(game)
     local lv = game.level
-    local x, y, pw, ph = self:panel(720, 380)
+    local last = lv.index >= #game.levels
+    local x, y, pw, ph = self:panel(720, last and 350 or 320)
     self:centeredFit(Campaign.title[lv.set] .. ' ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
     for i = 1, 3 do
         self:star(x + pw / 2 + (i - 2) * 64, y + 100, 24, i <= lv.stars)
@@ -1029,7 +1048,7 @@ function UI:drawLevelClear(game)
         self:centeredFit('Right on par.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     end
     if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
-    if lv.index < #game.levels then
+    if not last then
         self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false } })
     else
         self:centeredFit('All ' .. #game.levels .. ' levels clear.', y + 250, pw - 40, C.text, { self.fonts.hud })
@@ -1089,10 +1108,13 @@ end
 -- Arcade: the story, the checklist with live ticks, the points, the band.
 function UI:drawArcadeGoal(game)
     local def = game.level.def
-    local x, y, pw, ph = self:panel(760, 440)
+    -- sized to what the last frame measured, so short levels get a short panel
+    local x, y, pw, ph = self:panel(760, self.arcadeGoalH or 440)
     self:centeredFit('ARCADE ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
     local ly = y + 64
-    ly = ly + self:printFit(def.intro, x + 24, ly, pw - 48, 'left', C.text, { self.fonts.hud, self.fonts.small, self.fonts.tiny }) + 10
+    -- a short screen (a phone on its side) cannot afford the big intro font
+    local introFonts = self.vh < 600 and { self.fonts.small, self.fonts.tiny } or nil
+    ly = ly + self:printWrap(def.intro, x + 24, ly, pw - 48, C.text, introFonts) + 10
     love.graphics.setFont(self.fonts.small)
     setColor(C.dim)
     love.graphics.print('THE BAND INSISTS ON', x + 24, ly)
@@ -1102,7 +1124,7 @@ function UI:drawArcadeGoal(game)
     local diff = ARCADE_DIFFICULTIES[game.level.difficulty or DEFAULT_ARCADE_DIFFICULTY]
     local costs = points .. ' points to spend on ' .. diff.name:lower() .. ', par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
     if points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
-    ly = ly + self:printFit(costs, x + 24, ly, pw - 48, 'left', C.dim, { self.fonts.small, self.fonts.tiny }) + 10
+    ly = ly + self:printWrap(costs, x + 24, ly, pw - 48, C.dim, { self.fonts.small, self.fonts.tiny }, 2) + 10
     love.graphics.setFont(self.fonts.small)
     setColor(C.dim)
     love.graphics.print('THE BAND', x + 24, ly)
@@ -1119,7 +1141,8 @@ function UI:drawArcadeGoal(game)
             cx = cx + lw + 22
         end
     end
-    self:centeredFit('GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.', y + ph - 80, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self.arcadeGoalH = ly + 18 - y + 104
+    self:centeredFit('GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.', y + ph - 84, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'close', game.started and 'BACK TO IT' or 'BEGIN', true } })
 end
 
