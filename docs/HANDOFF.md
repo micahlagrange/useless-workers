@@ -6,16 +6,15 @@ everything lives.
 
 ## State at handoff (2026-10-12)
 
-- Branch `claude/game-jam-repo-analysis-ao9tmq`, head `448fa66`. Working
+- Branch `claude/game-jam-repo-analysis-ao9tmq`, head `fede209`. Working
   tree clean, everything pushed, CI green, web build live at
   https://multivoxmuse.itch.io/morphi.
-- Tests: 90 across `tst/*_test.lua`, all passing (`python tst/run.py`).
-- The previous session ran in the VS Code extension on this Windows machine,
-  in the worktree `C:\Users\sixst\Documents\github\useless-workers-hr`. The
-  owner intends to continue from a CLI session with Remote Control
-  (`claude --resume` in that folder, then `/rename morphi` and
-  `/remote-control morphi`). The standalone `claude` CLI was not installed
-  on this machine as of the handoff.
+- Tests: all passing across `tst/*_test.lua` (`python tst/run.py`).
+- Sessions run on this Windows machine in the worktree
+  `C:\Users\sixst\Documents\github\useless-workers-hr`, from the Claude
+  desktop app (Code tab). Remote Control is already on for these sessions,
+  so the owner can follow along from another device; there is nothing to
+  set up.
 
 ### Done in the last session (2026-10-11 and 12)
 
@@ -30,6 +29,10 @@ everything lives.
    bushes, and par set above the cheapest build so it can be beaten.
 4. Walk cycles for Woofoof, Twins and Blob; Ribbit the frog as the sixth
    morphi; a bridge cursor; morphis step off a tile that turns into a wall.
+5. Restart (`fede209`): the MENU panel offers RESTART in every mode, and a
+   stuck arcade level (no logs, nothing being built, no hungry morphi can
+   reach food, for five seconds) shows a RESTART LEVEL button; R does the
+   same.
 
 ### Open items and things to check
 
@@ -205,6 +208,6 @@ game fits any frame it is given but cannot change the itch frame.
 
 - Portrait phones work but are small; the game hints to turn sideways.
 - Gold has no sink since the memo tool was removed; it only scores.
-- Arcade has no fail state: if the points run out, MENU restarts the level.
+- Arcade has no fail state as such; a stuck level offers RESTART LEVEL.
 - The old design doc under `docs/human-resources-design-doc.md` describes
   the original corporate theme and is out of date.
