@@ -63,6 +63,10 @@ local pinch = nil
 local reportTimer = 0
 local musicStarted = false
 local PAN_SPEED = 700
+-- Fast forward: the simulation runs this many steps a frame. It sticks from
+-- level to level, since a player who likes it fast likes it fast.
+local SIM_SPEEDS = { 1, 2, 4 }
+local simSpeed = 1
 
 local function isWeb()
     return love.system.getOS() == 'Web'
@@ -397,7 +401,9 @@ function love.resize(w, h)
 end
 
 
-local function updatePlaying(dt)
+-- substep: an extra fast forward step this frame; the camera and effects
+-- only move once a frame.
+local function updatePlaying(dt, substep)
     game.clock = game.clock + dt
     game.jobs:update(dt)
     game.world:update(dt, onReady)
@@ -442,6 +448,7 @@ local function updatePlaying(dt)
         if game.mode == 'level' then levelClear() else closeQuarter() end
         return
     end
+    if substep then return end
     local dx, dy = 0, 0
     if love.keyboard.isDown('w') or love.keyboard.isDown('up') then dy = dy - 1 end
     if love.keyboard.isDown('s') or love.keyboard.isDown('down') then dy = dy + 1 end
@@ -466,7 +473,11 @@ function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
     if state == 'playing' or state == 'units' then
-        updatePlaying(dt)
+        game.speed = simSpeed
+        for step = 1, simSpeed do
+            updatePlaying(dt, step > 1)
+            if state ~= 'playing' and state ~= 'units' then break end
+        end
         ui:update(dt)
     elseif state == 'report' then
         reportTimer = reportTimer + dt
@@ -627,8 +638,16 @@ local function zoomBy(factor)
     game.camera:zoomAt(factor, w / 2, h / 2)
 end
 
+local function cycleSpeed()
+    for i, v in ipairs(SIM_SPEEDS) do
+        if v == simSpeed then simSpeed = SIM_SPEEDS[i % #SIM_SPEEDS + 1] break end
+    end
+    game.speed = simSpeed
+end
+
 local function pressTopButton(id)
     if id == 'units' then openUnits()
+    elseif id == 'speed' then cycleSpeed()
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
@@ -901,6 +920,9 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'f' then
             toggleFollow()
+        elseif key == 'space' then
+            cycleSpeed()
+            Audio.playSFX('click')
         elseif key == 'u' then
             openUnits()
         elseif key == 'g' then

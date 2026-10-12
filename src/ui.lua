@@ -131,6 +131,7 @@ function UI:layout(w, h)
         { id = 'menu', label = 'MENU' }, { id = 'mute', label = 'MUTE' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
+        { id = 'speed', label = 'SPEED 4x' },
     }
     self.topButtons = {}
     local x = self.vw - 8
@@ -524,7 +525,12 @@ function UI:drawTopBar(game)
     end
     for _, b in ipairs(self.topButtons) do
         local active = (b.id == 'follow' and game.follow) or (b.id == 'mute' and game.muted)
-        self:button(b, b.label, active)
+        local label = b.label
+        if b.id == 'speed' then
+            label = 'SPEED ' .. (game.speed or 1) .. 'x'
+            active = (game.speed or 1) > 1
+        end
+        self:button(b, label, active)
     end
     self:drawRestartCall(game)
 end
@@ -1113,7 +1119,7 @@ function UI:drawArcadeGoal(game)
             cx = cx + lw + 22
         end
     end
-    self:centeredFit('GOAL up top brings this back. MENU starts the level over.', y + ph - 80, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit('GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.', y + ph - 80, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'close', game.started and 'BACK TO IT' or 'BEGIN', true } })
 end
 
