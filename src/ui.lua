@@ -9,7 +9,6 @@ UI.__index = UI
 
 TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
-local FONT_PATH = 'assets/fonts/commodore64.ttf'
 local ALERT_TTL = 7
 local MAX_ALERTS = 4
 
@@ -25,11 +24,11 @@ local C = {
 
 function UI.new()
     local self = setmetatable({}, UI)
-    -- two font sets: the desk set, and a bigger one for fingers and small
-    -- screens where 9 px text is a smudge
+    -- LOVE's own face (Vera Sans): plain and readable at any size. Two
+    -- sets: the desk set, and a bigger one for fingers and small screens.
     self.fontSets = {
-        desk = { tiny = 9, small = 11, hud = 15, big = 26, title = 46 },
-        touch = { tiny = 11, small = 13, hud = 16, big = 26, title = 44 },
+        desk = { tiny = 10, small = 12, hud = 15, big = 24, title = 40 },
+        touch = { tiny = 12, small = 14, hud = 17, big = 26, title = 40 },
     }
     self.fontCache = {}
     self:useFonts('desk')
@@ -60,7 +59,7 @@ function UI.new()
     self.buttons = {}
     self.topButtons = {}
     self.titleButtons = {}
-    self.confirmButtons = {}
+    self.panelButtons = {}
     self.touch = false -- true once a finger has touched the screen: no mouse cursor, bigger targets
     self:layout(love.graphics.getDimensions())
     return self
@@ -80,7 +79,7 @@ function UI:useFonts(set)
     self.fontSet = set
     if not self.fontCache[set] then
         local f = {}
-        for name, size in pairs(self.fontSets[set]) do f[name] = love.graphics.newFont(FONT_PATH, size) end
+        for name, size in pairs(self.fontSets[set]) do f[name] = love.graphics.newFont(size) end
         self.fontCache[set] = f
     end
     self.fonts = self.fontCache[set]
@@ -164,11 +163,60 @@ function UI:titleButtonAt(mx, my)
     return nil
 end
 
-function UI:confirmButtonAt(mx, my)
-    for id, r in pairs(self.confirmButtons) do
-        if hit(r, mx, my) then return id end
+-- Buttons on whatever panel is open: NEXT LEVEL, TRY AGAIN, CLOSE and so on.
+function UI:panelButtonAt(mx, my)
+    for _, b in ipairs(self.panelButtons) do
+        if hit(b, mx, my) then return b.id end
     end
     return nil
+end
+
+function UI:panelButton(id, r, label, active, color)
+    self:button(r, label, active, color)
+    self.panelButtons[#self.panelButtons + 1] = { id = id, x = r.x, y = r.y, w = r.w, h = r.h }
+end
+
+-- A row of buttons centred at the bottom of a panel. defs = { {id, label, active, color} }
+function UI:panelButtonRow(x, y, pw, ph, defs)
+    local bw, bh, gap = math.min(200, math.floor((pw - 40) / #defs) - 12), 40, 12
+    local total = #defs * bw + (#defs - 1) * gap
+    local bx = x + math.floor(pw / 2 - total / 2)
+    for _, d in ipairs(defs) do
+        self:panelButton(d[1], { x = bx, y = y + ph - bh - 20, w = bw, h = bh }, d[2], d[3], d[4])
+        bx = bx + bw + gap
+    end
+end
+
+-- A box with a tick in it when done.
+function UI:checkbox(x, y, s, done)
+    love.graphics.setColor(0, 0, 0, 0.5)
+    love.graphics.rectangle('fill', x, y, s, s)
+    setColor(done and C.good or C.dim)
+    love.graphics.rectangle('line', x + 0.5, y + 0.5, s - 1, s - 1)
+    if done then
+        love.graphics.setLineWidth(2)
+        love.graphics.line(x + s * 0.22, y + s * 0.52, x + s * 0.42, y + s * 0.74, x + s * 0.8, y + s * 0.28)
+        love.graphics.setLineWidth(1)
+    end
+end
+
+-- A five point star, filled when earned.
+function UI:star(cx, cy, r, filled)
+    local pts = {}
+    for i = 0, 9 do
+        local a = -math.pi / 2 + i * math.pi / 5
+        local rad = (i % 2 == 0) and r or r * 0.45
+        pts[#pts + 1] = cx + math.cos(a) * rad
+        pts[#pts + 1] = cy + math.sin(a) * rad
+    end
+    if filled then
+        love.graphics.setColor(0.95, 0.8, 0.25)
+        love.graphics.polygon('fill', pts)
+        love.graphics.setColor(0.6, 0.45, 0.1)
+    else
+        setColor(C.dim)
+    end
+    love.graphics.polygon('line', pts)
 end
 
 
@@ -548,9 +596,9 @@ function UI:drawBottomBar(game)
             local lx = b.x + 5 + IS + 4
             self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
             self:printFit(self:fitLine(abilities:costText(b.tool), b.x + b.w - lx - 4), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-            love.graphics.setFont(self.fonts.small)
+            love.graphics.setFont(self.fonts.tiny)
             setColor(C.dim)
-            love.graphics.print('[' .. b.key .. ']', lx, b.y + 44)
+            love.graphics.print(b.key, b.x + b.w - 4 - self.fonts.tiny:getWidth(b.key), b.y + 3)
         end
     end
     -- right side: selected worker or hints
@@ -604,7 +652,7 @@ function UI:drawBottomBar(game)
                 love.graphics.rectangle('fill', bx, py + 61, 140 * (w.morale / MORALE_MAX), 6)
                 setColor(C.dim)
             end
-            love.graphics.print(self.touch and 'FOLLOW and UNITS are up top' or 'F: follow  U: units', bx, py + 70)
+            love.graphics.print('F follows, U lists everyone', bx, py + 70)
         elseif game.mode == 'arcade' then
             -- the live checklist: what the band insists on before eating
             self:drawGoalList(game, px, py + 2, pw, 15)
@@ -612,15 +660,13 @@ function UI:drawBottomBar(game)
             local lines
             if self.touch then
                 lines = {
-                    'Drag pans. Tap picks. Pinch zooms.',
-                    'GOAL, UNITS, FOLLOW are up top.',
-                    'FLOOR free. BIN 1 log. BED 2.',
+                    'Drag to pan, tap to pick, pinch to zoom.',
+                    'Pick a tool below, then tap the map.',
                 }
             else
                 lines = {
-                    'WASD / drag pan, wheel zoom, 1-6 tools, U units',
-                    'FLOOR spot: free, 1 item. BIN: 1 log, 4 items. BED: 2 logs.',
-                    'SELECT a morphi, then F to follow it. ESC asks.',
+                    'Drag or WASD to pan, wheel to zoom, 1-6 pick a tool.',
+                    'Click a morphi with SELECT to see what it is up to.',
                 }
             end
             local ly = py + 4
@@ -655,9 +701,11 @@ end
 function UI:drawGoalList(game, x, y, w, rowH)
     local goals = Campaign.goals(game.level, game.workers)
     local ly = y
+    local box = rowH - 4
     for _, g in ipairs(goals) do
-        local mark = g.done and '[x] ' or '[ ] '
-        ly = ly + self:printFit(mark .. g.label, x, ly, w, 'left', g.done and C.good or C.text, { self.fonts.small, self.fonts.tiny }) + (rowH - self.fonts.small:getHeight())
+        self:checkbox(x, ly + 1, box, g.done)
+        self:printFit(g.label, x + box + 8, ly + math.floor((box - self.fonts.small:getHeight()) / 2) + 1, w - box - 8, 'left', g.done and C.good or C.text, { self.fonts.small, self.fonts.tiny })
+        ly = ly + rowH
     end
     return ly - y
 end
@@ -690,7 +738,7 @@ function UI:drawUnits(game, view)
     end
     local pw = math.min(1000, self.vw - 24)
     local rowH = Util.clamp(math.floor((self.vh - 120) / math.max(#units, 1)), 30, 54)
-    local ph = 74 + #units * rowH + 30
+    local ph = 74 + #units * rowH + 16
     local x, y = self:panel(pw, ph)
     self.unitPanel = { x = x, y = y, w = pw, h = ph }
     self:centeredFit('UNITS  (' .. #units .. ' morphis)', y + 16, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
@@ -763,7 +811,7 @@ function UI:drawUnits(game, view)
         self.unitButtons[#self.unitButtons + 1] = { worker = w, x = r.x, y = r.y, w = r.w, h = r.h }
         ry = ry + rowH
     end
-    self:centeredFit(self.touch and 'tap outside to close     tap FOLLOW to watch a morphi' or 'U or ESC: close     click FOLLOW to watch a morphi', y + ph - 24, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:panelButton('close', { x = x + pw - 130, y = y + 12, w = 112, h = 30 }, 'CLOSE', false)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -782,6 +830,7 @@ end
 
 -- A centred panel no bigger than the screen. Returns x, y, w, h.
 function UI:panel(w, h)
+    self.panelButtons = {}
     w = math.min(w, self.vw - 16)
     h = math.min(h, self.vh - 16)
     local x, y = math.floor(self.vw / 2 - w / 2), math.floor(self.vh / 2 - h / 2)
@@ -825,13 +874,7 @@ function UI:drawReport(report, scoring)
     love.graphics.setFont(self.fonts.title)
     setColor(gradeColor)
     love.graphics.print(report.grade, x + pw - 110, y + 70 + rs)
-    local next_
-    if scoring:yearComplete() then
-        next_ = (self.touch and 'tap' or 'SPACE or click') .. ': the year ends'
-    else
-        next_ = (self.touch and 'tap' or 'SPACE or click') .. ': next season'
-    end
-    self:centeredFit(next_, y + ph - 36, pw - 40, C.dim)
+    self:panelButtonRow(x, y, pw, ph, { { 'next', scoring:yearComplete() and 'THE YEAR ENDS' or 'NEXT SEASON', true } })
 end
 
 function UI:drawTitle(title, highScore)
@@ -868,13 +911,28 @@ function UI:drawTitle(title, highScore)
     if opt.kind == 'level' then
         if opt.locked then
             self:centered('clear ' .. Campaign.title[opt.set]:lower() .. ' level ' .. (opt.index - 1) .. ' first', y, self.fonts.small, C.dim)
+            y = y + 11 + gap(30)
         else
             self:centeredFit(opt.def.blurb, y, self.vw - 80, C.dim, { self.fonts.small, self.fonts.tiny })
-            y = y + 14
+            y = y + 16
+            local points = Campaign.points(opt.def, opt.set, title.arcadeDifficulty)
             local best = opt.best and ('   best ' .. opt.best .. (opt.best <= opt.def.par and ' (3 stars)' or '')) or ''
-            self:centered(opt.def.points .. ' points to spend, par ' .. opt.def.par .. best, y, self.fonts.small, C.text)
+            self:centered(points .. ' points to spend, par ' .. opt.def.par .. best, y, self.fonts.small, C.text)
+            y = y + 14 + gap(16)
+            if opt.set == 'arcade' then
+                local ad = ARCADE_DIFFICULTIES[title.arcadeDifficulty]
+                local dname = ad.name:upper()
+                local dw = self.fonts.hud:getWidth(dname)
+                self:centered(dname, y, self.fonts.hud)
+                self.titleButtons.diffLeft = { x = cx - dw / 2 - 16 - 36, y = y - 8, w = 36, h = 30 }
+                self.titleButtons.diffRight = { x = cx + dw / 2 + 16, y = y - 8, w = 36, h = 30 }
+                self:button(self.titleButtons.diffLeft, '<', false)
+                self:button(self.titleButtons.diffRight, '>', false)
+                y = y + 20
+                self:centered(ad.blurb, y, self.fonts.small, C.dim)
+            end
+            y = y + 11 + gap(20)
         end
-        y = y + 11 + gap(30)
     else
         local dname = diff.name:upper()
         local dw = self.fonts.hud:getWidth(dname)
@@ -892,23 +950,25 @@ function UI:drawTitle(title, highScore)
         local sw = self.fonts.big:getWidth(seedText) + 40
         self.titleButtons.seed = { x = cx - sw / 2, y = y - 8, w = sw, h = 42 }
         y = y + 26 + 8
-        self:centered(title.editingSeed and 'type a seed, ENTER when done' or (self.touch and 'tap the seed to change it' or 'S to change the seed'), y, self.fonts.small, C.dim)
+        self:centered(title.editingSeed and 'type a seed, then press ENTER' or 'tap or press S to change the seed', y, self.fonts.small, C.dim)
     end
     y = y + 11 + gap(24)
     if opt.kind == 'free' then
         self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), y, self.fonts.hud)
     end
     y = y + 15 + gap(30)
-    local startText = self.touch and 'TAP TO START' or 'ENTER or click to start'
-    local stw = self.fonts.big:getWidth(startText) + 60
+    local startText = 'START'
+    local stw = math.max(260, self.fonts.big:getWidth(startText) + 80)
     self.titleButtons.start = { x = cx - stw / 2, y = y, w = stw, h = 54 }
+    love.graphics.setColor(0.2, 0.24, 0.14, 1)
+    love.graphics.rectangle('fill', self.titleButtons.start.x, y, stw, 54)
     setColor(C.accent)
     love.graphics.rectangle('line', self.titleButtons.start.x + 0.5, y + 0.5, stw - 1, 53)
     self:centered(startText, y + 14, self.fonts.big, C.good)
     y = y + 54 + gap(14)
     if not self.touch then
-        self:centered('LEFT / RIGHT: level     UP / DOWN: difficulty     M: mute     F11: fullscreen', y, self.fonts.small, C.dim)
-        y = y + 11 + gap(14)
+        self:centered('arrow keys pick the level and the difficulty', y, self.fonts.small, C.dim)
+        y = y + 14 + gap(10)
     end
     y = y + self:centeredFit('ARCADE: every morphi wants one meal. Give the band what it insists on, spend as few points as you can.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
     self:centeredFit('SURVIVAL (retired): keep everyone fed to the clock. You never control a morphi.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
@@ -916,37 +976,35 @@ function UI:drawTitle(title, highScore)
     self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
 end
 
-local function starText(n)
-    local t = ''
-    for i = 1, 3 do t = t .. (i <= n and '*' or '-') .. (i < 3 and ' ' or '') end
-    return t
-end
-
 function UI:drawLevelClear(game)
     local lv = game.level
-    local x, y, pw, ph = self:panel(720, 360)
+    local x, y, pw, ph = self:panel(720, 380)
     self:centeredFit(Campaign.title[lv.set] .. ' ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
-    self:centered(starText(lv.stars), y + 78, self.fonts.title, lv.stars == 3 and C.good or C.text)
+    for i = 1, 3 do
+        self:star(x + pw / 2 + (i - 2) * 64, y + 100, 24, i <= lv.stars)
+    end
     local spent, par = game.world.spent, lv.def.par
     self:centeredFit('spent ' .. spent .. ' point' .. (spent == 1 and '' or 's') .. ', par ' .. par, y + 150, pw - 40, C.text, { self.fonts.hud })
     if spent > par then
-        self:centeredFit('a sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin stone, the nook.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+        self:centeredFit('A sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin stone, the nook.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    elseif spent < par then
+        self:centeredFit('UNDER PAR. Sharper than we planned for.', y + 180, pw - 40, C.good, { self.fonts.hud, self.fonts.small })
     else
-        self:centeredFit('That is as cheap as it gets.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+        self:centeredFit('Right on par.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     end
     if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
-    local go = self.touch and 'tap' or 'ENTER or click'
     if lv.index < #game.levels then
-        self:centeredFit(go .. ': level ' .. (lv.index + 1) .. '     ' .. (self.touch and 'MENU: title' or 'ESC: title'), y + ph - 40, pw - 40, C.dim)
+        self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false } })
     else
-        self:centeredFit('All ' .. #game.levels .. ' levels clear. ' .. go .. ': back to the title', y + ph - 40, pw - 40, C.dim)
+        self:centeredFit('All ' .. #game.levels .. ' levels clear.', y + 250, pw - 40, C.text, { self.fonts.hud })
+        self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true } })
     end
 end
 
 -- What this level asks for. Opens paused at the start and from GOAL up top.
 function UI:drawGoal(game)
     if game.mode == 'arcade' then return self:drawArcadeGoal(game) end
-    local x, y, pw, ph = self:panel(760, 310)
+    local x, y, pw, ph = self:panel(760, 340)
     local lines = {}
     if game.mode == 'level' then
         local def = game.level.def
@@ -989,14 +1047,13 @@ function UI:drawGoal(game)
             cx = cx + lw + 16
         end
     end
-    local go = self.touch and 'tap' or 'ENTER, G or click'
-    self:centeredFit(go .. ': ' .. (game.started and 'back to it' or 'begin') .. '     GOAL up top brings this back', y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:panelButtonRow(x, y, pw, ph, { { 'close', game.started and 'BACK TO IT' or 'BEGIN', true } })
 end
 
 -- Arcade: the story, the checklist with live ticks, the points, the band.
 function UI:drawArcadeGoal(game)
     local def = game.level.def
-    local x, y, pw, ph = self:panel(760, 400)
+    local x, y, pw, ph = self:panel(760, 440)
     self:centeredFit('ARCADE ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
     local ly = y + 64
     ly = ly + self:printFit(def.intro, x + 24, ly, pw - 48, 'left', C.text, { self.fonts.hud, self.fonts.small, self.fonts.tiny }) + 10
@@ -1004,9 +1061,11 @@ function UI:drawArcadeGoal(game)
     setColor(C.dim)
     love.graphics.print('THE BAND INSISTS ON', x + 24, ly)
     ly = ly + 18
-    ly = ly + self:drawGoalList(game, x + 24, ly, pw - 48, 18) + 6
-    local costs = def.points .. ' points to spend, par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
-    if def.points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
+    ly = ly + self:drawGoalList(game, x + 24, ly, pw - 48, 22) + 6
+    local points = game.level.points
+    local diff = ARCADE_DIFFICULTIES[game.level.difficulty or DEFAULT_ARCADE_DIFFICULTY]
+    local costs = points .. ' points to spend on ' .. diff.name:lower() .. ', par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
+    if points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
     ly = ly + self:printFit(costs, x + 24, ly, pw - 48, 'left', C.dim, { self.fonts.small, self.fonts.tiny }) + 10
     love.graphics.setFont(self.fonts.small)
     setColor(C.dim)
@@ -1024,8 +1083,8 @@ function UI:drawArcadeGoal(game)
             cx = cx + lw + 22
         end
     end
-    local go = self.touch and 'tap' or 'ENTER, G or click'
-    self:centeredFit(go .. ': ' .. (game.started and 'back to it' or 'begin') .. '     GOAL up top brings this back     MENU starts over', y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit('GOAL up top brings this back. MENU starts the level over.', y + ph - 80, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:panelButtonRow(x, y, pw, ph, { { 'close', game.started and 'BACK TO IT' or 'BEGIN', true } })
 end
 
 function UI:drawLevelFailed(game)
@@ -1034,19 +1093,14 @@ function UI:drawLevelFailed(game)
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    local go = self.touch and 'tap' or 'ENTER or click'
-    self:centeredFit(go .. ': try again     ' .. (self.touch and 'MENU: title' or 'ESC: title'), y + ph - 40, pw - 40, C.dim)
+    self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false } })
 end
 
 function UI:drawConfirmQuit()
     local x, y, pw, ph = self:panel(720, 230)
     self:centeredFit('Quit to the title screen?', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('This game will be lost.', y + 76, pw - 40, C.dim)
-    local bw, bh = 180, 44
-    self.confirmButtons.yes = { x = x + pw / 2 - bw - 12, y = y + ph - 80, w = bw, h = bh }
-    self.confirmButtons.no = { x = x + pw / 2 + 12, y = y + ph - 80, w = bw, h = bh }
-    self:button(self.confirmButtons.yes, self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn)
-    self:button(self.confirmButtons.no, self.touch and 'KEEP PLAYING' or 'KEEP PLAYING (ESC)', true)
+    self:panelButtonRow(x, y, pw, ph, { { 'yes', 'QUIT', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
 end
 
 function UI:drawGameOver(scoring, highScore, isNew)
@@ -1059,7 +1113,7 @@ function UI:drawGameOver(scoring, highScore, isNew)
     else
         self:centered('HIGH SCORE: ' .. highScore, y + math.floor(ph * 0.58), self.fonts.hud, C.dim)
     end
-    self:centeredFit((self.touch and 'tap' or 'ENTER or click') .. ': back to the title', y + ph - 40, pw - 40, C.dim)
+    self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true } })
 end
 
 function UI:drawAnnual(scoring, highScore, isNew)
@@ -1082,7 +1136,7 @@ function UI:drawAnnual(scoring, highScore, isNew)
     else
         self:centered('HIGH SCORE: ' .. highScore, ry + 66, self.fonts.hud, C.dim)
     end
-    self:centeredFit((self.touch and 'tap' or 'ENTER or click') .. ': keep going, year after year     ' .. (self.touch and 'MENU up top for the title' or 'T: title'), y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false } })
 end
 
 return UI

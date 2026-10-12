@@ -23,8 +23,8 @@ end
 -- Plays an arcade level with the real morphi AI after laying down a
 -- solution, until everyone has eaten or the cap runs out. Returns whether
 -- they all ate, the points spent, and how long it took.
-local function play(index, solutionName, cap)
-    local run = Campaign.load(index, Rng.new(index), 'arcade')
+local function play(index, solutionName, cap, difficulty)
+    local run = Campaign.load(index, Rng.new(index), 'arcade', difficulty)
     local world, def = run.world, run.def
     local jobs = Jobs.new()
     for _, node in ipairs(world.nodes) do
@@ -61,7 +61,9 @@ function TestArcadeLevels:testSixWellFormedLevels()
         lu.assertTrue(run.world.arcade)
         lu.assertEquals(run.set, 'arcade')
         lu.assertEquals(#run.specs, #def.morphis)
-        lu.assertEquals(run.world.stock.logs, def.points)
+        lu.assertEquals(run.world.stock.logs, def.points.easy)
+        lu.assertEquals(Campaign.load(i, Rng.new(i), 'arcade', 3).world.stock.logs, def.points.hard)
+        lu.assertTrue(def.points.easy >= def.points.normal and def.points.normal >= def.points.hard)
         for _, spec in ipairs(run.specs) do
             lu.assertEquals(spec.role, ARCADE_ROLE[spec.species])
             lu.assertTrue(run.world:isReachable(spec.x, spec.y), 'spawn off the camp bank in arcade ' .. i)
@@ -88,21 +90,28 @@ function TestArcadeLevels:testArcadeMorphisHaveOneJobEach()
     end
 end
 
-function TestArcadeLevels:testObviousSolutionsFeedEveryone()
+-- The obvious build fits the hard budget, with a log or two left over, and
+-- easy pays for it twice: a heap of mistakes still wins.
+function TestArcadeLevels:testObviousSolutionsFeedEveryoneOnHard()
     for i = 1, 6 do
-        local allAte, spent, clock = play(i, 'obvious')
+        local allAte, spent, clock = play(i, 'obvious', nil, 3)
         print(string.format('  arcade %d obvious: spent %d, fed in %ds', i, spent, math.floor(clock)))
         lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the obvious solution')
-        lu.assertTrue(spent <= Campaign.arcade[i].points, 'arcade ' .. i .. ' obvious solution overspends')
+        local p = Campaign.arcade[i].points
+        lu.assertTrue(spent <= p.hard, 'arcade ' .. i .. ' obvious solution does not fit the hard budget')
+        lu.assertTrue(p.easy >= spent * 2, 'arcade ' .. i .. ' easy should pay for the obvious build twice')
     end
 end
 
-function TestArcadeLevels:testCleverSolutionsFeedEveryoneAtPar()
+-- The clever build beats par: three stars and then some.
+function TestArcadeLevels:testCleverSolutionsBeatPar()
     for i = 1, 6 do
         local allAte, spent, clock = play(i, 'clever')
-        print(string.format('  arcade %d clever:  spent %d, fed in %ds', i, spent, math.floor(clock)))
+        print(string.format('  arcade %d clever:  spent %d, par %d, fed in %ds', i, spent, Campaign.arcade[i].par, math.floor(clock)))
         lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the clever solution')
-        lu.assertEquals(spent, Campaign.arcade[i].par, 'arcade ' .. i .. ' clever solution is not at par')
+        local par = Campaign.arcade[i].par
+        lu.assertTrue(spent <= par, 'arcade ' .. i .. ' clever solution is over par')
+        if par > 0 then lu.assertTrue(spent < par, 'arcade ' .. i .. ' clever solution should come in under par') end
     end
 end
 

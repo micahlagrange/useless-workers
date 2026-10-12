@@ -160,6 +160,16 @@ SITE_CAPACITY = { storage = STORAGE_FLOOR_CAPACITY, bin = STORAGE_BIN_CAPACITY }
 -- space tile per morphi), enclosed (walls all round the floors, a door to
 -- get in), binsInside (every bin behind the walls).
 ARCADE_NEED_ORDER = { 'bins', 'floors', 'enclosed', 'binsInside' }
+-- Arcade budgets: each level lists points per difficulty. Easy pays for the
+-- obvious build twice over, so a heap of mistakes still wins; hard pays for
+-- it once with a log or two to spare. Par sits a little above the cheapest
+-- build, so a sharp eye can come in under it.
+ARCADE_DIFFICULTIES = {
+    { key = 'easy',   name = 'Easy',   blurb = 'points to burn, build it twice if you like' },
+    { key = 'normal', name = 'Normal', blurb = 'room for a few mistakes' },
+    { key = 'hard',   name = 'Hard',   blurb = 'the obvious build and a log or two to spare' },
+}
+DEFAULT_ARCADE_DIFFICULTY = 1
 
 -- Seasons and the tally. A year is four seasons; the wilds grade each one.
 -- Internally a season is still a 'quarter' and migrants are 'hires'.

@@ -20,7 +20,7 @@ love.graphics.setDefaultFilter('nearest', 'nearest')
 local state = 'title'
 local ui
 local game = {}
-local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false, options = {}, option = 1 }
+local title = { difficultyIndex = DEFAULT_DIFFICULTY, arcadeDifficulty = DEFAULT_ARCADE_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false, options = {}, option = 1 }
 
 -- The title offers the arcade levels first, then the retired survival
 -- levels, then free play. A level is locked until the one before it is
@@ -214,9 +214,9 @@ end
 -- A hand built level: its own map, morphis and points. Survival has a
 -- clock, and the clock ending means a clear. Arcade has no clock: the
 -- level is clear when every morphi has eaten.
-local function newLevel(index, set)
+local function newLevel(index, set, difficulty)
     set = set or 'arcade'
-    local run = Campaign.load(index, Rng.new(index), set)
+    local run = Campaign.load(index, Rng.new(index), set, difficulty or title.arcadeDifficulty)
     game = {}
     game.mode = set == 'arcade' and 'arcade' or 'level'
     setTools(set == 'arcade' and TOOLS_ARCADE or TOOLS_SURVIVAL)
@@ -360,8 +360,22 @@ local function titleMove(step)
     title.editingSeed = false
 end
 
+-- UP / DOWN and the < > under the name: free play's wilds, or the arcade budget.
 local function difficultyMove(step)
-    title.difficultyIndex = (title.difficultyIndex - 1 + step) % #DIFFICULTIES + 1
+    local opt = title.options[title.option]
+    if opt.kind == 'free' then
+        title.difficultyIndex = (title.difficultyIndex - 1 + step) % #DIFFICULTIES + 1
+    elseif opt.set == 'arcade' then
+        title.arcadeDifficulty = (title.arcadeDifficulty - 1 + step) % #ARCADE_DIFFICULTIES + 1
+    end
+end
+
+local function nextLevelOrTitle()
+    if game.level.index < Campaign.count(game.level.set) then
+        newLevel(game.level.index + 1, game.level.set, game.level.difficulty)
+    else
+        goToTitle()
+    end
 end
 
 -- LOVE callbacks -----------------------------------------------------------
@@ -548,7 +562,7 @@ local function startFromTitle()
     if opt.kind == 'level' then
         if opt.locked then ui:toast('Clear ' .. Campaign.title[opt.set]:lower() .. ' level ' .. (opt.index - 1) .. ' first') return end
         startMusic()
-        newLevel(opt.index, opt.set)
+        newLevel(opt.index, opt.set, title.arcadeDifficulty)
         return
     end
     startMusic()
@@ -644,25 +658,27 @@ function love.mousepressed(x, y, button, istouch)
     elseif state == 'goal' then
         if button == 1 then closeGoal() end
         return
-    elseif state == 'levelclear' then
-        if button ~= 1 then return end
-        if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
-        if game.level.index < Campaign.count(game.level.set) then newLevel(game.level.index + 1, game.level.set) else goToTitle() end
+    end
+    if button ~= 1 then return end
+    local pb = ui:panelButtonAt(vx, vy)
+    if pb then Audio.playSFX('click') end
+    if state == 'levelclear' then
+        if pb == 'next' then nextLevelOrTitle() elseif pb == 'title' then goToTitle() end
         return
     elseif state == 'levelfailed' then
-        if button ~= 1 then return end
-        if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
-        newLevel(game.level.index, game.level.set)
+        if pb == 'retry' then newLevel(game.level.index, game.level.set, game.level.difficulty) elseif pb == 'title' then goToTitle() end
         return
     elseif state == 'annual' then
-        if button == 1 then
+        if pb == 'title' then
+            goToTitle()
+        else
             game.scoring:startEndless()
             state = 'playing'
             hideCursor()
         end
         return
     elseif state == 'confirmquit' then
-        if ui:confirmButtonAt(vx, vy) == 'yes' then
+        if pb == 'yes' then
             goToTitle()
         else
             state = 'playing'
@@ -670,18 +686,16 @@ function love.mousepressed(x, y, button, istouch)
         end
         return
     elseif state == 'units' then
-        if button == 1 then
-            local w = ui:unitButtonAt(vx, vy)
-            if w then
-                game.selectedWorker = w
-                game.follow = true
-                game.abilities:select(ABILITY_SELECT)
-                ui:toast('Following ' .. w.name)
-                Audio.playSFX('click')
-                closeUnits()
-            elseif not ui:insideUnitPanel(vx, vy) then
-                closeUnits()
-            end
+        local w = ui:unitButtonAt(vx, vy)
+        if w then
+            game.selectedWorker = w
+            game.follow = true
+            game.abilities:select(ABILITY_SELECT)
+            ui:toast('Following ' .. w.name)
+            Audio.playSFX('click')
+            closeUnits()
+        elseif pb == 'close' or not ui:insideUnitPanel(vx, vy) then
+            closeUnits()
         end
         return
     end
@@ -886,13 +900,13 @@ function love.keypressed(key)
         closeGoal()
     elseif state == 'levelclear' then
         if key == 'return' or key == 'kpenter' or key == 'space' then
-            if game.level.index < Campaign.count(game.level.set) then newLevel(game.level.index + 1, game.level.set) else goToTitle() end
+            nextLevelOrTitle()
         elseif key == 'escape' then
             goToTitle()
         end
     elseif state == 'levelfailed' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'r' then
-            newLevel(game.level.index, game.level.set)
+            newLevel(game.level.index, game.level.set, game.level.difficulty)
         elseif key == 'escape' then
             goToTitle()
         end

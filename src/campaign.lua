@@ -59,19 +59,36 @@ function Campaign.validate(def, set)
             if not foods[diet] then return false, species .. ' eats ' .. diet .. ' and there is none' end
         end
     end
-    if def.par > def.points then return false, 'par is more than the starting points' end
+    if set == 'arcade' then
+        for _, d in ipairs(ARCADE_DIFFICULTIES) do
+            if type(def.points[d.key]) ~= 'number' then return false, 'no ' .. d.key .. ' points' end
+            if def.par > def.points[d.key] then return false, 'par is more than the ' .. d.key .. ' points' end
+        end
+    elseif def.par > def.points then
+        return false, 'par is more than the starting points'
+    end
     return true
 end
 
+-- Logs a level starts with. Arcade budgets depend on the difficulty index.
+function Campaign.points(def, set, difficulty)
+    if set == 'arcade' then
+        local d = ARCADE_DIFFICULTIES[difficulty or DEFAULT_ARCADE_DIFFICULTY] or ARCADE_DIFFICULTIES[DEFAULT_ARCADE_DIFFICULTY]
+        return def.points[d.key]
+    end
+    return def.points
+end
+
 -- Builds the world and lists the morphis to spawn. Returns a run table:
--- { def, index, set, world, specs = { {species, role, name, x, y, hunger} } }
-function Campaign.load(index, rng, set)
+-- { def, index, set, difficulty, points, world, specs = { {species, role, name, x, y, hunger} } }
+function Campaign.load(index, rng, set, difficulty)
     set = set or 'survival'
     local def = Campaign.list(set)[index]
     if not def then return nil, 'no ' .. set .. ' level ' .. tostring(index) end
     rng = rng or Rng.new(index)
     local world = World.fromGrid(def.grid, rng)
-    world.stock = { logs = def.points, gold = 0 }
+    local points = Campaign.points(def, set, difficulty)
+    world.stock = { logs = points, gold = 0 }
     world.spent = 0
     if set == 'arcade' then
         world.arcade = true
@@ -92,7 +109,7 @@ function Campaign.load(index, rng, set)
             diet = MORPHI_DIET[species],
         }
     end
-    return { def = def, index = index, set = set, world = world, specs = specs }
+    return { def = def, index = index, set = set, difficulty = difficulty, points = points, world = world, specs = specs }
 end
 
 -- Three stars at par, two within a couple of points, one for surviving.
