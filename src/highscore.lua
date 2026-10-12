@@ -1,6 +1,6 @@
 -- Saved numbers: the high score per free play difficulty (by number) and
--- campaign progress (by name). Saved to disk on desktop, kept in memory on
--- the web build (love.js filesystem writes were unreliable in earlier jams).
+-- campaign progress (by name). Saved to disk everywhere; on the web love.js
+-- keeps the save folder in IndexedDB and tools/patch_lovejs.py makes it flush.
 local Highscore = {}
 local memory = {}
 
@@ -10,9 +10,7 @@ local function fileName(key)
 end
 
 local function canUseDisk()
-    if not love or not love.filesystem then return false end
-    if love.system and love.system.getOS() == 'Web' then return false end
-    return true
+    return love ~= nil and love.filesystem ~= nil
 end
 
 function Highscore.load(difficultyIndex)

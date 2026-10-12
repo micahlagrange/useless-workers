@@ -9,6 +9,7 @@ WINDOW_HEIGHT = 800
 
 function love.conf(t)
     t.title = "Morphis"
+    t.identity = "morphis" -- the save folder; on itch every love.js game shares one IndexedDB
     t.version = "11.4" -- 11.4 keeps makelove and love.js happy, the API we use is identical in 11.5
     t.console = false
     t.window.width = WINDOW_WIDTH   -- the starting size; the HUD lays itself out for any size after that
