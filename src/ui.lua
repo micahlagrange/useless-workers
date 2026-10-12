@@ -53,7 +53,7 @@ function UI.new()
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         wall = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         door = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
-        bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
+        bridge = love.graphics.newImage('assets/images/ui/bridge_cursor.png'),
     }
     self.alerts = {}
     self.toastText, self.toastTtl = nil, 0

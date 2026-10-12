@@ -69,9 +69,10 @@ function TestArcadeLevels:testSixWellFormedLevels()
             lu.assertTrue(run.world:isReachable(spec.x, spec.y), 'spawn off the camp bank in arcade ' .. i)
         end
     end
-    for _, species in ipairs({ 'pupper', 'woofoof', 'twins', 'cwab', 'blue' }) do
+    for _, species in ipairs({ 'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit' }) do
         lu.assertTrue(seen[species], species .. ' never shows up')
     end
+    lu.assertEquals(#Campaign.arcade[6].morphis, 6)
     -- each level asks for everything the one before did, and then some
     local last = 0
     for i = 1, 6 do
@@ -152,7 +153,7 @@ function TestArcadeLevels:testGoalChecklistTicksLive()
     lu.assertFalse(goals[5].done)
     workers[1].ate = true
     goals = Campaign.goals(run, workers)
-    lu.assertStrContains(goals[5].label, '1/5')
+    lu.assertStrContains(goals[5].label, '1/6')
 end
 
 TestEnclosure = {}
@@ -328,6 +329,17 @@ function TestArcadeWorker:testFloorIsLivingSpaceNotStorage()
     lu.assertTrue(self.world:get(5, 5).floor)
     local site = self.world:addSite(SITE_WALL, 5, 5)
     lu.assertNil(site, 'nothing is built on a floor')
+end
+
+function TestArcadeWorker:testAMorphiStepsOffATileThatTurnsIntoAWall()
+    local pupper = self.make('pupper', 6, 5)
+    pupper.ate = true
+    self.world:setType(6, 5, TILE_WALL)
+    self:run({ pupper }, 1)
+    local t = pupper:tile()
+    lu.assertTrue(self.world:isPassable(t.x, t.y), 'stepped off the wall')
+    lu.assertTrue(self.world:isReachable(t.x, t.y))
+    lu.assertTrue(t.x ~= 6 or t.y ~= 5)
 end
 
 function TestArcadeWorker:testBuilderStaysOnTheCampSideOfAWall()

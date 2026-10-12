@@ -6,7 +6,7 @@
 -- and a door instead of fourteen.
 --
 -- Grid letters: '.' grass  '#' stone  '~' water  'B' camp (2x2)
--- 'k' steak  'f' fish  'c' cheese  'h' chili  'y' candy (any food will do here)
+-- 'k' steak  'f' fish  'c' cheese  'h' chili  'y' candy  'g' grapes (any food will do here)
 --
 -- needs: what has to be true before anyone eats, see ARCADE_NEED_ORDER.
 -- obvious / clever: designations a test lays down to prove both solutions
@@ -139,10 +139,10 @@ Levels[5] = {
 
 Levels[6] = {
     name = 'Inside',
-    blurb = 'Everyone. The bins have to be inside the walls too.',
-    intro = 'The last straw: every BIN must stand inside the house with the floors. Stone and water still count as walls. The old stone room has a gap in it.',
-    morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue' },
-    points = { easy = 36, normal = 24, hard = 17 }, par = 5,
+    blurb = 'Ribbit joins, a second builder. The bins have to be inside the walls too.',
+    intro = 'Ribbit the frog joins and builds alongside Twins. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it.',
+    morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit' },
+    points = { easy = 38, normal = 26, hard = 19 }, par = 5,
     needs = { bins = true, floors = true, enclosed = true, binsInside = true },
     grid = {
         '..........................',
@@ -152,18 +152,18 @@ Levels[6] = {
         '..#....#...BB....c....f...',
         '..##..##...BB.............',
         '............h.......y.....',
-        '......k...................',
+        '......k.............g.....',
         '.....................c....',
-        '..........................',
+        '..........g...............',
     },
     obvious = {
-        floor = { { 16, 7 }, { 17, 7 }, { 18, 7 }, { 16, 8 }, { 17, 8 } },
+        floor = { { 15, 7 }, { 16, 7 }, { 17, 7 }, { 18, 7 }, { 15, 8 }, { 16, 8 } },
         bin = { { 18, 8 } },
-        wall = { { 15, 6 }, { 16, 6 }, { 17, 6 }, { 18, 6 }, { 19, 6 }, { 15, 7 }, { 19, 7 }, { 15, 8 }, { 19, 8 }, { 15, 9 }, { 16, 9 }, { 18, 9 }, { 19, 9 } },
+        wall = { { 14, 6 }, { 15, 6 }, { 16, 6 }, { 17, 6 }, { 18, 6 }, { 19, 6 }, { 14, 7 }, { 19, 7 }, { 14, 8 }, { 19, 8 }, { 14, 9 }, { 15, 9 }, { 16, 9 }, { 18, 9 }, { 19, 9 } },
         door = { { 17, 9 } },
     },
     clever = {
-        floor = { { 4, 3 }, { 5, 3 }, { 6, 3 }, { 7, 3 }, { 4, 4 } },
+        floor = { { 4, 3 }, { 5, 3 }, { 6, 3 }, { 7, 3 }, { 4, 4 }, { 5, 4 } },
         bin = { { 7, 5 } },
         wall = { { 5, 6 } },
         door = { { 6, 6 } },

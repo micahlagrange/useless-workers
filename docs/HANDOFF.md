@@ -37,7 +37,8 @@ everything lives, what is done, and what was asked for next.
   (`--no-sandbox --use-gl=swiftshader`). Use sparingly: the owner asked to
   keep Playwright runs short. Phone emulation: viewport 852x393, hasTouch,
   isMobile, deviceScaleFactor 3.
-- Font is `assets/fonts/commodore64.ttf` (wide; always use `printFit`).
+- Font is LOVE's built in Vera Sans (`love.graphics.newFont(size)`); the
+  old C64 face is gone. `printFit` still picks the largest font that fits.
 
 ## Local workflow on Windows (set up 2026-10-11)
 
@@ -117,18 +118,26 @@ retired but selectable. Level 2 pairs Pupper with Twins because only the
 builder can bridge. Arcade has no fail state and no clock: the top bar
 shows elapsed time, and MENU starts a level over if the points run out.
 
+Then, same day: a readable font and a plain GUI (buttons, checkboxes,
+stars), arcade budgets per difficulty (`ARCADE_DIFFICULTIES`, picked on the
+title with UP/DOWN) with par set a little above the cheapest build, walk
+cycles for Woofoof, Twins and Blob (generated from the old sheets: bob,
+lean, squash and stretch), Ribbit the frog as the sixth morphi (a second
+builder, joins in arcade 6; lumberjack in the wilds, eats grapes), and a
+bridge cursor (`assets/images/ui/bridge_cursor.png`).
+
 ## Next up (asked for, not done)
 
-1. Walking animations: Cwab and Pupper look great; Woofoof, Twins and Blob
+1. Walking animations (DONE, see above; redraw by hand if the generated
+   cycles are not enough): Cwab and Pupper look great; Woofoof, Twins and Blob
    do not. Compare the sheets in `assets/images/morphis/*-worker-walk.png`
    (16x16 frames in a row, read by `View.new` with anim8) and redraw frames
    where needed.
-2. One more morphi: owner said "surprise me". Needs a sheet, a name in
+2. One more morphi (DONE: Ribbit). To add another: a sheet, a name in
    `MORPHI_SHEET_NAMES`, a diet in `MORPHI_DIET`, a role in `MORPHI_ROLE`
-   and `ARCADE_ROLE`, and a food sprite in `FOOD_SPRITE`.
-3. The bridge tool's mouse cursor still uses the old line cursor image
-   (`assets/images/ui/line_cursor.png`); draw a bridge cursor to match the
-   new bridge icon (`UI:iconBridge`).
+   and `ARCADE_ROLE`, a food sprite in `FOOD_SPRITE`, a grid letter in
+   `FOOD_CHAR`, and a level that lists it.
+3. The bridge cursor (DONE).
 
 ## Known rough edges
 

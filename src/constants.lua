@@ -70,25 +70,26 @@ ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins' }, alsoTakes = { 'woodwork' } },
+    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
     miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
     -- arcade only: building is a job of its own
-    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins' }, alsoTakes = { 'woodwork' } },
+    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
 -- Nobody chops: the points a level starts with are all the logs there are.
-ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner' }
+ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner', ribbit = 'builder' }
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
 -- Every morphi eats one thing and nothing else. Food grows on bushes of
 -- that kind; a forager picks any kind into storage, and everyone takes only
 -- their own from it, or eats straight off a bush of their kind when hungry.
-FOOD_KINDS  = { 'steak', 'fish', 'cheese', 'chili', 'candy' }
-FOOD_SPRITE = { steak = 'yp_ham.png', fish = 'yp_tuna.png', cheese = 'yp_cheese.png', chili = 'yp_chilipepper.png', candy = 'yp_candy1.png' }
-MORPHI_DIET = { pupper = 'steak', woofoof = 'fish', twins = 'cheese', cwab = 'chili', blue = 'candy' }
-MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', cwab = 'miner', blue = 'miner' }
+FOOD_KINDS  = { 'steak', 'fish', 'cheese', 'chili', 'candy', 'grapes' }
+FOOD_SPRITE = { steak = 'yp_ham.png', fish = 'yp_tuna.png', cheese = 'yp_cheese.png', chili = 'yp_chilipepper.png', candy = 'yp_candy1.png', grapes = 'yp_grapes.png' }
+MORPHI_DIET = { pupper = 'steak', woofoof = 'fish', twins = 'cheese', cwab = 'chili', blue = 'candy', ribbit = 'grapes' }
+MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', cwab = 'miner', blue = 'miner', ribbit = 'lumberjack' }
 -- grid letters for food bushes in hand built levels
-FOOD_CHAR   = { k = 'steak', f = 'fish', c = 'cheese', h = 'chili', y = 'candy' }
-MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', cwab = 'Cwab', blue = 'Blob' }
+FOOD_CHAR   = { k = 'steak', f = 'fish', c = 'cheese', h = 'chili', y = 'candy', g = 'grapes' }
+-- Ribbit the frog is the sixth: a second builder in arcade, a lumberjack in the wilds.
+MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', cwab = 'Cwab', blue = 'Blob', ribbit = 'Ribbit' }
 
 -- Workers (section 5)
 HUNGER_MAX             = 100

@@ -779,6 +779,27 @@ function Worker:mood()
     return 'fine'
 end
 
+-- A wall went up under my feet: step onto the nearest open tile, towards
+-- camp if there is a choice, and think again. Nothing can path from inside
+-- a wall, so without this the morphi would stand there for ever.
+function Worker:unstick(x, y)
+    local best = nil
+    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
+        if self.world:isPassable(c[1], c[2]) then
+            best = best or c
+            if self.world:isReachable(c[1], c[2]) then best = c; break end
+        end
+    end
+    if not best then return false end
+    local c = Util.tileCenter(best[1], best[2])
+    self.x, self.y = c.x, c.y
+    self:dropJob()
+    self.eatingSlot = nil
+    self.state = 'idle'
+    self.decideTimer = 0
+    return true
+end
+
 function Worker:update(dt, clock)
     self.clock = clock or (self.clock + dt)
     self.animTime = self.animTime + dt
@@ -787,6 +808,10 @@ function Worker:update(dt, clock)
         if self.bubble.ttl <= 0 then self.bubble = nil end
     end
     if not self.alive then return end
+    if self.state ~= 'quitting' then
+        local here = self:tile()
+        if not self.world:isPassable(here.x, here.y) then self:unstick(here.x, here.y) end
+    end
     if self.state == 'quitting' then
         local d = self.exitDir
         self.x = self.x + d.dx * self.speed * dt
