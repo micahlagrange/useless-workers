@@ -1257,10 +1257,8 @@ function UI:drawTitle(title, highScore)
     local _, th = self:centered('MORPHIS', y, self.fonts.title, C.text, self.vw - 2 * 100)
     y = y + th + gap(14)
     if not short then
-        local _, h1 = self:centered('A small band settling the harsh wilds.', y, self.fonts.hud, C.dim)
-        y = y + h1 + 2
-        local _, h2 = self:centered('They will look after themselves. Badly.', y, self.fonts.hud, C.dim)
-        y = y + h2 + gap(36)
+        y = y + self:centeredFit('A small band settling the harsh wilds.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + 2
+        y = y + self:centeredFit('They will look after themselves. Badly.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + gap(36)
     else
         y = y + 6
     end
@@ -1278,7 +1276,7 @@ function UI:drawTitle(title, highScore)
     self.titleButtons.right = { x = math.floor(cx + nw / 2 + 12), y = y - 1, w = aw, h = ah }
     self:button(self.titleButtons.left, '<', false)
     self:button(self.titleButtons.right, '>', false)
-    y = y + ah + 6
+    y = y + ah + 14 -- clear of the arrows above
     local function diffRow(name)
         local dw, dh = self:centered(name, y, self.fonts.hud, C.text, self.vw - 2 * (36 + 16) - 16)
         self.titleButtons.diffLeft = { x = math.floor(cx - dw / 2 - 12 - 36), y = y - 8, w = 36, h = 30 }
@@ -1301,21 +1299,26 @@ function UI:drawTitle(title, highScore)
             if opt.set == 'arcade' then
                 local ad = ARCADE_DIFFICULTIES[title.arcadeDifficulty]
                 diffRow(ad.name:upper())
-                local _, bh = self:centered(ad.blurb, y, self.fonts.small, C.dim)
-                y = y + bh
+                y = y + self:centeredFit(ad.blurb, y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny })
             end
             y = y + gap(20)
         end
     else
         diffRow(diff.name:upper())
-        local _, h = self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.fonts.small, C.dim)
-        y = y + h + gap(30)
+        y = y + self:centeredFit(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
         local seedText = 'SEED: ' .. title.seed
         if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
         local sw = self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
         self.titleButtons.seed = { x = cx - (sw + 40) / 2, y = y - 8, w = sw + 40, h = 42 }
         y = y + 34
-        local _, h2 = self:centered(title.editingSeed and 'type a seed, then press ENTER' or 'tap or press S to change the seed', y, self.fonts.small, C.dim)
+        if title.editingSeed and self.touch then
+            -- phones will not raise a keyboard for love.js: here is one
+            self:drawSeedKeyboard(y + 4)
+            self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+            return
+        end
+        local hint = title.editingSeed and 'type a seed, then press ENTER' or (self.touch and 'tap the seed to change it' or 'tap or press S to change the seed')
+        local _, h2 = self:centered(hint, y, self.fonts.small, C.dim)
         y = y + h2 + gap(24)
         local _, h3 = self:centered('HIGH SCORE (' .. diff.name .. '): ' .. tostring(highScore), y, self.fonts.hud)
         y = y + h3
@@ -1347,6 +1350,37 @@ function UI:drawTitle(title, highScore)
         y = y + self:centeredFit(note, y, self.vw - 40, C.dim, fonts) + 6
     end
     self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+end
+
+-- Letters and digits for the seed, DEL and OK. Keys are title buttons
+-- named 'key:<char>'.
+function UI:drawSeedKeyboard(y)
+    local rows = { 'ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ0123', '456789' }
+    local gap = 6
+    local kw = math.floor((self.vw - 24 - 9 * gap) / 10)
+    local kh = Util.clamp(math.floor((self.vh - y - 12) / #rows) - gap, 26, 48)
+    local x0 = math.floor((self.vw - (10 * kw + 9 * gap)) / 2)
+    for r, row in ipairs(rows) do
+        local ky = y + (r - 1) * (kh + gap)
+        for i = 1, #row do
+            local ch = row:sub(i, i)
+            local b = { x = x0 + (i - 1) * (kw + gap), y = ky, w = kw, h = kh }
+            self.titleButtons['key:' .. ch] = b
+            self:button(b, ch, false)
+        end
+        if r == #rows then
+            -- DEL and OK fill the rest of the last row
+            local left = x0 + #row * (kw + gap)
+            local rest = x0 + 10 * kw + 9 * gap - left
+            local dw = math.floor((rest - gap) / 2)
+            local del = { x = left, y = ky, w = dw, h = kh }
+            local ok = { x = left + dw + gap, y = ky, w = rest - dw - gap, h = kh }
+            self.titleButtons['key:DEL'] = del
+            self.titleButtons['key:OK'] = ok
+            self:button(del, 'DEL', false)
+            self:button(ok, 'OK', true)
+        end
+    end
 end
 
 function UI:drawLevelClear(game)

@@ -714,6 +714,18 @@ function love.mousepressed(x, y, button, istouch)
             love.keyboard.setTextInput(title.editingSeed)
         elseif id == 'mute' then
             Audio.toggleMute()
+        elseif id and id:sub(1, 4) == 'key:' then
+            -- the on-screen keyboard: phones will not raise their own for love.js
+            local k = id:sub(5)
+            if k == 'DEL' then
+                title.seed = title.seed:sub(1, -2)
+            elseif k == 'OK' then
+                title.editingSeed = false
+                if title.seed == '' then title.seed = DEFAULT_SEED end
+            elseif #title.seed < 12 then
+                title.seed = title.seed .. k
+            end
+            Audio.playSFX('click')
         elseif id == 'start' or not istouch then
             -- a click anywhere starts; a finger has to hit the box
             startFromTitle()
@@ -938,6 +950,7 @@ function love.keypressed(key)
             difficultyMove(1)
         elseif key == 's' and title.options[title.option].kind == 'free' then
             title.editingSeed = true
+            title.swallowText = true -- the S that opened the field is not part of the seed
         elseif key == 'escape' and not isWeb() then
             love.event.quit()
         end
@@ -1012,6 +1025,10 @@ function love.keypressed(key)
 end
 
 function love.textinput(text)
+    if title.swallowText then
+        title.swallowText = false
+        return
+    end
     if state == 'title' and title.editingSeed and #title.seed < 12 and text:match('^[%w]$') then
         title.seed = title.seed .. text
     end
