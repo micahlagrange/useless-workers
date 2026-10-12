@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Morphis Level Editor</title>
+<style>
+  :root {
+    --bg: #171a14; --panel: #22261d; --panel2: #2b3024; --line: #46503a;
+    --text: #e9e6d2; --dim: #a7ab92; --good: #8fd18a; --warn: #f08a6a; --accent: #c9d17a;
+    --grass: #94a35b; --stone: #6d6a64; --water: #5f8fa8; --camp: #c9b27a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; }
+  body { padding: 0 0 env(safe-area-inset-bottom); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; letter-spacing: .5px; }
+  select, input, textarea, button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+  select, input { padding: 6px 8px; min-height: 36px; }
+  textarea { width: 100%; padding: 8px; resize: vertical; }
+  button { padding: 6px 12px; min-height: 36px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on, .tool.on { background: #3a4428; border-color: var(--accent); color: var(--good); }
+  button.danger { color: var(--warn); }
+  nav.tabs { display: flex; gap: 4px; padding: 8px 12px 0; flex-wrap: wrap; }
+  nav.tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
+  main { padding: 0 12px 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 0 8px 8px 8px; padding: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { color: var(--dim); }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+  .field > span { color: var(--dim); font-size: 13px; }
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin: 8px 0; }
+  .tool { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); min-height: 40px; cursor: pointer; user-select: none; font-size: 13px; }
+  .tool canvas { flex: none; image-rendering: pixelated; border-radius: 3px; }
+  .mapwrap { overflow: auto; margin: 0 0 6px; border: 1px solid var(--line); border-radius: 6px; background: #0e100c; max-height: 55vh; touch-action: none; }
+  #map { display: block; image-rendering: pixelated; touch-action: none; }
+  .status { font-size: 13px; color: var(--dim); }
+  ul.checks { margin: 6px 0; padding-left: 18px; }
+  ul.checks li.bad { color: var(--warn); }
+  ul.checks li.ok { color: var(--good); }
+  .band { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .band label { display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
+  .band img { width: 32px; height: 32px; image-rendering: pixelated; }
+  .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .grid3 input { width: 100%; }
+  .hidden { display: none !important; }
+  .cost { font-variant-numeric: tabular-nums; }
+  .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #000c; border: 1px solid var(--accent); padding: 8px 14px; border-radius: 8px; z-index: 9; }
+  code { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MORPHIS LEVELS</h1>
+  <select id="levelPick" aria-label="Level"></select>
+  <button id="newLevel">+ New</button>
+  <button id="dupLevel">Copy</button>
+  <button id="upLevel" title="Move earlier">&uarr;</button>
+  <button id="downLevel" title="Move later">&darr;</button>
+  <button id="delLevel" class="danger">Delete</button>
+</header>
+
+<nav class="tabs">
+  <button data-tab="map" class="on">Map</button>
+  <button data-tab="details">Details</button>
+  <button data-tab="solutions">Solutions</button>
+  <button data-tab="export">Save &amp; export</button>
+</nav>
+
+<main>
+  <div class="card">
+    <!-- the map sits on top so a phone paints without scrolling past the tools -->
+    <div class="mapwrap" id="mapwrap"><canvas id="map"></canvas></div>
+    <div class="status" id="hover">&nbsp;</div>
+    <ul class="checks" id="checks"></ul>
+
+    <!-- MAP ------------------------------------------------------------ -->
+    <section data-pane="map">
+      <div class="row">
+        <label>Width</label><button data-size="w,-1">-</button><span id="wVal"></span><button data-size="w,1">+</button>
+        <label>Height</label><button data-size="h,-1">-</button><span id="hVal"></span><button data-size="h,1">+</button>
+        <label for="zoom">Zoom</label><input id="zoom" type="range" min="12" max="48" value="28">
+      </div>
+      <div class="palette" id="palette"></div>
+      <div class="status">Tap or drag to paint. CAMP drops the 2x2 camp where you tap (there is only ever one). BIN takes the tile tapped and the one to its right.</div>
+    </section>
+
+    <!-- DETAILS ---------------------------------------------------------- -->
+    <section data-pane="details" class="hidden">
+      <label class="field"><span>Name (the title shows it in capitals)</span><input id="fName" maxlength="40"></label>
+      <label class="field"><span>Blurb: one line under the name on the title screen</span><input id="fBlurb" maxlength="120"></label>
+      <label class="field"><span>Intro: the paragraph on the goal panel</span><textarea id="fIntro" rows="3"></textarea></label>
+      <div class="field"><span>The band (arcade jobs: Pupper and Woofoof forage, Twins and Ribbit build, Cwab and Blob mine)</span><div class="band" id="band"></div></div>
+      <div class="field"><span>Points (logs to start with) per difficulty, and par (3 stars)</span>
+        <div class="grid3">
+          <label class="field"><span>Easy</span><input id="pEasy" type="number" min="0"></label>
+          <label class="field"><span>Normal</span><input id="pNormal" type="number" min="0"></label>
+          <label class="field"><span>Hard</span><input id="pHard" type="number" min="0"></label>
+          <label class="field"><span>Par</span><input id="pPar" type="number" min="0"></label>
+        </div>
+      </div>
+      <div class="field"><span>The band insists on (before anyone eats)</span>
+        <div class="row" id="needs"></div>
+      </div>
+    </section>
+
+    <!-- SOLUTIONS -------------------------------------------------------- -->
+    <section data-pane="solutions" class="hidden">
+      <div class="row">
+        <button data-sol="obvious" class="on">Obvious</button>
+        <button data-sol="clever">Clever</button>
+        <span class="status">The tests build both and play them with the real morphi AI: obvious must fit the hard budget, clever must beat par.</span>
+      </div>
+      <div class="palette" id="solTools"></div>
+      <div class="cost" id="costLine"></div>
+      <div class="status">BRIDGE draws a straight line (up to 12 tiles, logs only for the water). MINE drags a rectangle over stone. The others toggle one tile. ERASE removes whatever is on a tile. Tap a mark with its own tool to remove it.</div>
+    </section>
+
+    <!-- EXPORT ----------------------------------------------------------- -->
+    <section data-pane="export" class="hidden">
+      <div class="row">
+        <button id="loadGame">Load levels from the game</button>
+        <button id="saveGame">Save into the game</button>
+        <button id="download">Download arcade_levels.lua</button>
+        <button id="copyLua">Copy Lua</button>
+      </div>
+      <div class="status" id="saveStatus"></div>
+      <div class="row">
+        <button id="exportJson">Copy JSON backup</button>
+        <button id="importJson">Load JSON from the box</button>
+      </div>
+      <label class="field"><span>Lua for <code>src/arcade_levels.lua</code> (or paste JSON here to load it)</span><textarea id="out" rows="14" spellcheck="false"></textarea></label>
+      <div class="status">Everything also saves in this browser as you go. After saving into the game, run <code>python tst/run.py</code>: the arcade tests play every level's obvious and clever solutions.</div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+'use strict';
+// ---------------------------------------------------------------- the game's vocabulary
+const FOOD_CHAR = { k: 'steak', f: 'fish', c: 'cheese', h: 'chili', y: 'candy', g: 'grapes' };
+const FOOD_SPRITE = { steak: 'yp_ham.png', fish: 'yp_tuna.png', cheese: 'yp_cheese.png', chili: 'yp_chilipepper.png', candy: 'yp_candy1.png', grapes: 'yp_grapes.png' };
+const MORPHIS = [
+  { key: 'pupper', name: 'Pupper', role: 'forager' }, { key: 'woofoof', name: 'Woofoof', role: 'forager' },
+  { key: 'twins', name: 'Twins', role: 'builder' }, { key: 'cwab', name: 'Cwab', role: 'miner' },
+  { key: 'blue', name: 'Blob', role: 'miner' }, { key: 'ribbit', name: 'Ribbit', role: 'builder' },
+];
+const NEEDS = [
+  { key: 'bins', label: 'a BIN to eat from' }, { key: 'floors', label: 'a FLOOR tile each' },
+  { key: 'enclosed', label: 'WALLS round the floors, a DOOR' }, { key: 'binsInside', label: 'every BIN inside' },
+];
+const TILES = [
+  { ch: '.', name: 'Grass' }, { ch: '#', name: 'Stone' }, { ch: '~', name: 'Water' }, { ch: 'B', name: 'Camp' },
+  { ch: 'k', name: 'Steak' }, { ch: 'f', name: 'Fish' }, { ch: 'c', name: 'Cheese' }, { ch: 'h', name: 'Chili' },
+  { ch: 'y', name: 'Candy' }, { ch: 'g', name: 'Grapes' }, { ch: 'T', name: 'Tree' }, { ch: 'G', name: 'Gold ore' },
+  { ch: 'b', name: 'Bush' }, { ch: 'W', name: 'Wall' }, { ch: 'D', name: 'Door' }, { ch: 'F', name: 'Floor' },
+  { ch: 'N', name: 'Bin' }, { ch: 'S', name: 'Floor spot' }, { ch: 'd', name: 'Bed' },
+];
+const SOL_TOOLS = [
+  { key: 'bridge', name: 'Bridge' }, { key: 'mine', name: 'Mine' }, { key: 'floor', name: 'Floor' },
+  { key: 'bin', name: 'Bin' }, { key: 'wall', name: 'Wall' }, { key: 'door', name: 'Door' }, { key: 'erase', name: 'Erase' },
+];
+const LINE_MAX = 12;
+const ASSETS = '../assets/images/';
+const STORE = 'morphis-level-editor-v1';
+const DEFAULT_HEADER = `-- Arcade levels. Nobody gets hungry; every morphi just wants one meal,
+-- and the level is won when they have all had it. Edited with
+-- tools/level_editor.html.
+--
+-- Grid letters: '.' grass  '#' stone  '~' water  'B' camp (2x2)
+-- 'k' steak  'f' fish  'c' cheese  'h' chili  'y' candy  'g' grapes (any food will do here)
+--
+-- needs: what has to be true before anyone eats, see ARCADE_NEED_ORDER.
+-- obvious / clever: designations a test lays down to prove both solutions
+-- feed everyone. bridge = {x1, y1, x2, y2}, mine = {x1, y1, x2, y2},
+-- floor / bin / wall / door = {x, y}.
+--
+-- points: logs to start with per difficulty (see ARCADE_DIFFICULTIES).
+-- par: a little above the cheapest build, so it can be beaten.
+require('src.constants')
+`;
+
+// ---------------------------------------------------------------- images
+const img = {};
+function loadImg(key, src) { const i = new Image(); i.onload = () => draw(); i.src = src; img[key] = i; }
+for (const [food, file] of Object.entries(FOOD_SPRITE)) loadImg(food, ASSETS + 'fruit/' + file);
+for (const m of MORPHIS) loadImg('m_' + m.key, ASSETS + 'morphis/' + m.key + '-worker-walk.png');
+function ready(i) { return i && i.complete && i.naturalWidth > 0; }
+
+// ---------------------------------------------------------------- state
+function blankLevel() {
+  const grid = [];
+  for (let y = 0; y < 8; y++) grid.push('.'.repeat(22));
+  grid[2] = '..BB' + '.'.repeat(18);
+  grid[3] = '..BB' + '.'.repeat(18);
+  return { name: 'New level', blurb: '', intro: '', morphis: ['pupper'], points: { easy: 10, normal: 6, hard: 3 }, par: 2,
+           needs: {}, grid, obvious: {}, clever: {} };
+}
+let state = { header: DEFAULT_HEADER, levels: [blankLevel()], current: 0 };
+try { const saved = JSON.parse(localStorage.getItem(STORE)); if (saved && saved.levels && saved.levels.length) state = saved; } catch (e) {}
+const lv = () => state.levels[state.current];
+function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+
+let tab = 'map', tool = '#', solName = 'obvious', solTool = 'bridge';
+const $ = (s) => document.querySelector(s);
+const toastEl = document.createElement('div');
+function toast(msg) {
+  toastEl.className = 'toast'; toastEl.textContent = msg; document.body.appendChild(toastEl);
+  clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.remove(), 2200);
+}
+
+// ---------------------------------------------------------------- tile drawing
+const COL = { '.': '#94a35b', '#': '#6d6a64', '~': '#5f8fa8', 'B': '#c9b27a', 'W': '#6b4f2a', 'D': '#a6823f' };
+function tileChar(l, x, y) { return (l.grid[y] || '')[x] || '.'; }
+function drawTile(g, ch, px, py, s, l, x, y) {
+  const base = (ch === '#' || ch === 'G') ? '#6d6a64' : ch === '~' ? '#5f8fa8' : ch === 'B' ? '#c9b27a' : ch === 'W' ? '#6b4f2a' : ch === 'D' ? '#a6823f' : '#94a35b';
+  g.fillStyle = base; g.fillRect(px, py, s, s);
+  if (ch === '#' || ch === 'G') {
+    g.fillStyle = 'rgba(255,255,255,.14)'; g.fillRect(px, py, s, Math.max(1, s / 16));
+    g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(px, py + s - s / 8, s, s / 8);
+  }
+  if (ch === 'G') { g.fillStyle = '#e6c440'; g.beginPath(); g.arc(px + s / 2, py + s / 2, s / 5, 0, 7); g.fill(); }
+  if (ch === 'W') { g.fillStyle = '#8a6a3a'; for (let r = 0; r < 3; r++) g.fillRect(px + 1, py + r * s / 3 + 1, s - 2, s / 3 - 2); }
+  if (ch === 'D') { g.fillStyle = '#6b4f2a'; g.fillRect(px + s * .25, py + s * .1, s * .5, s * .8); g.fillStyle = '#e6c440'; g.fillRect(px + s * .62, py + s * .5, s / 10, s / 10); }
+  if (ch === 'B') { g.strokeStyle = '#5e4a26'; g.strokeRect(px + .5, py + .5, s - 1, s - 1); }
+  if (ch === 'T') { g.fillStyle = '#5a3a1e'; g.fillRect(px + s * .44, py + s * .55, s * .12, s * .35); g.fillStyle = '#2f6b2a'; g.beginPath(); g.arc(px + s / 2, py + s * .42, s * .32, 0, 7); g.fill(); }
+  if (FOOD_CHAR[ch] || ch === 'b') {
+    g.fillStyle = '#3f7a34'; g.beginPath(); g.ellipse(px + s / 2, py + s * .66, s * .4, s * .26, 0, 0, 7); g.fill();
+    const f = FOOD_CHAR[ch];
+    if (f && ready(img[f])) g.drawImage(img[f], px + s * .18, py + s * .05, s * .64, s * .64);
+    else if (f) { g.fillStyle = '#fff'; g.font = `bold ${s * .5}px monospace`; g.textAlign = 'center'; g.fillText(ch, px + s / 2, py + s * .6); }
+  }
+  if (ch === 'F' || ch === 'S') { g.fillStyle = '#c9a66b'; g.fillRect(px + s * .1, py + s * .1, s * .8, s * .8); g.strokeStyle = '#7d6238'; g.strokeRect(px + s * .1 + .5, py + s * .1 + .5, s * .8 - 1, s * .8 - 1); }
+  if (ch === 'd') { g.fillStyle = '#6b4f2a'; g.fillRect(px + s * .12, py + s * .06, s * .76, s * .88); g.fillStyle = '#eee8d0'; g.fillRect(px + s * .2, py + s * .14, s * .6, s * .72); g.fillStyle = '#7aa0d8'; g.fillRect(px + s * .2, py + s * .4, s * .6, s * .46); }
+  if (ch === 'N') drawBin(g, px, py, s, 1);
+}
+function drawBin(g, px, py, s, a) {
+  g.globalAlpha = a;
+  g.fillStyle = '#8c6b3d'; g.fillRect(px + s * .06, py + s * .06, s * 1.88, s * .88);
+  g.fillStyle = '#2a1f10'; g.fillRect(px + s * .18, py + s * .18, s * 1.64, s * .64);
+  g.fillStyle = '#8c6b3d'; g.fillRect(px + s * .94, py + s * .18, s * .12, s * .64);
+  g.globalAlpha = 1;
+}
+
+// palette swatches use the same drawing
+function swatch(ch, size) {
+  const c = document.createElement('canvas'); c.width = size * (ch === 'N' ? 2 : 1); c.height = size;
+  const l = { grid: [ch === 'N' ? 'N.' : ch] };
+  drawTile(c.getContext('2d'), ch === 'N' ? '.' : ch, 0, 0, size, l, 0, 0);
+  if (ch === 'N') { drawTile(c.getContext('2d'), '.', size, 0, size, l, 1, 0); drawBin(c.getContext('2d'), 0, 0, size, 1); }
+  return c;
+}
+
+// ---------------------------------------------------------------- the map
+const canvas = $('#map'), g = canvas.getContext('2d');
+let cell = 28, dragStart = null, dragNow = null, painting = false;
+function dims(l) { return { w: l.grid[0].length, h: l.grid.length }; }
+
+function solTiles(l, sol, kind) { return (l[sol] && l[sol][kind]) || []; }
+function lineTiles(x1, y1, x2, y2) {
+  const out = [], dx = x2 - x1, dy = y2 - y1;
+  if (Math.abs(dx) >= Math.abs(dy)) { const st = Math.sign(dx) || 1, n = Math.min(Math.abs(dx), LINE_MAX - 1); for (let i = 0; i <= n; i++) out.push([x1 + i * st, y1]); }
+  else { const st = Math.sign(dy) || 1, n = Math.min(Math.abs(dy), LINE_MAX - 1); for (let i = 0; i <= n; i++) out.push([x1, y1 + i * st]); }
+  return out;
+}
+function rectTiles(x1, y1, x2, y2) {
+  const out = [];
+  for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) out.push([x, y]);
+  return out;
+}
+
+function draw() {
+  const l = lv(), { w, h } = dims(l);
+  cell = +$('#zoom').value;
+  canvas.width = w * cell; canvas.height = h * cell;
+  g.imageSmoothingEnabled = false;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const ch = tileChar(l, x, y);
+    drawTile(g, ch === 'N' ? '.' : ch, x * cell, y * cell, cell, l, x, y);
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (tileChar(l, x, y) === 'N') drawBin(g, x * cell, y * cell, cell, 1);
+  // the camp, as one block with its sign
+  const camp = findCamp(l);
+  if (camp) {
+    g.fillStyle = '#c9b27a'; g.fillRect(camp.x * cell, camp.y * cell, cell * 2, cell * 2);
+    g.strokeStyle = '#5e4a26'; g.lineWidth = 2; g.strokeRect(camp.x * cell + 1, camp.y * cell + 1, cell * 2 - 2, cell * 2 - 2); g.lineWidth = 1;
+    g.fillStyle = '#2b2312'; g.font = `bold ${Math.max(9, cell * .42)}px monospace`; g.textAlign = 'center'; g.fillText('CAMP', camp.x * cell + cell, camp.y * cell + cell * 1.15);
+  }
+  // grid lines
+  g.strokeStyle = 'rgba(0,0,0,.12)';
+  for (let x = 0; x <= w; x++) { g.beginPath(); g.moveTo(x * cell + .5, 0); g.lineTo(x * cell + .5, h * cell); g.stroke(); }
+  for (let y = 0; y <= h; y++) { g.beginPath(); g.moveTo(0, y * cell + .5); g.lineTo(w * cell, y * cell + .5); g.stroke(); }
+  if (tab === 'solutions') drawSolution(l, solName);
+  // the drag in progress
+  if (dragStart && dragNow && tab === 'solutions' && (solTool === 'bridge' || solTool === 'mine')) {
+    const tiles = solTool === 'bridge' ? lineTiles(dragStart[0], dragStart[1], dragNow[0], dragNow[1]) : rectTiles(dragStart[0], dragStart[1], dragNow[0], dragNow[1]);
+    g.fillStyle = 'rgba(255,255,255,.35)';
+    for (const [x, y] of tiles) g.fillRect(x * cell, y * cell, cell, cell);
+  }
+}
+
+function drawSolution(l, sol) {
+  const s = l[sol] || {};
+  const a = .8;
+  for (const b of s.bridge || []) for (const [x, y] of lineTiles(b[0] - 1, b[1] - 1, b[2] - 1, b[3] - 1)) {
+    if (tileChar(l, x, y) !== '~') continue;
+    g.fillStyle = `rgba(138,111,63,${a})`; g.fillRect(x * cell, y * cell, cell, cell);
+    g.fillStyle = 'rgba(80,56,28,.9)'; for (let i = 1; i < 4; i++) g.fillRect(x * cell, y * cell + i * cell / 4, cell, 1);
+  }
+  for (const m of s.mine || []) for (const [x, y] of rectTiles(m[0] - 1, m[1] - 1, m[2] - 1, m[3] - 1)) {
+    if (!'#G'.includes(tileChar(l, x, y))) continue;
+    g.strokeStyle = '#ff9933'; g.lineWidth = 2;
+    g.strokeRect(x * cell + 3, y * cell + 3, cell - 6, cell - 6);
+    g.beginPath(); g.moveTo(x * cell + 6, y * cell + 6); g.lineTo(x * cell + cell - 6, y * cell + cell - 6); g.moveTo(x * cell + cell - 6, y * cell + 6); g.lineTo(x * cell + 6, y * cell + cell - 6); g.stroke();
+    g.lineWidth = 1;
+  }
+  g.globalAlpha = a;
+  for (const [x, y] of s.floor || []) drawTile(g, 'F', (x - 1) * cell, (y - 1) * cell, cell, l, 0, 0);
+  for (const [x, y] of s.wall || []) drawTile(g, 'W', (x - 1) * cell, (y - 1) * cell, cell, l, 0, 0);
+  for (const [x, y] of s.door || []) drawTile(g, 'D', (x - 1) * cell, (y - 1) * cell, cell, l, 0, 0);
+  g.globalAlpha = 1;
+  for (const [x, y] of s.bin || []) drawBin(g, (x - 1) * cell, (y - 1) * cell, cell, a);
+}
+
+function findCamp(l) {
+  const { w, h } = dims(l);
+  for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++)
+    if (tileChar(l, x, y) === 'B' && tileChar(l, x + 1, y) === 'B' && tileChar(l, x, y + 1) === 'B' && tileChar(l, x + 1, y + 1) === 'B') return { x, y };
+  return null;
+}
+
+function setChar(l, x, y, ch) {
+  const { w, h } = dims(l);
+  if (x < 0 || y < 0 || x >= w || y >= h) return;
+  const row = l.grid[y];
+  l.grid[y] = row.slice(0, x) + ch + row.slice(x + 1);
+}
+
+function paintAt(x, y) {
+  const l = lv(), { w, h } = dims(l);
+  if (x < 0 || y < 0 || x >= w || y >= h) return;
+  const was = tileChar(l, x, y);
+  // whatever stood here goes: a bin takes its right tile with it, the camp is one block
+  if (was === 'B' && tool !== 'B') { const c = findCamp(l); if (c) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setChar(l, c.x + dx, c.y + dy, '.'); }
+  if (tool === 'B') {
+    if (x >= w - 1 || y >= h - 1) { toast('The camp is 2x2: tap one tile in from the edge'); return; }
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) if (tileChar(l, xx, yy) === 'B') setChar(l, xx, yy, '.');
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setChar(l, x + dx, y + dy, 'B');
+  } else if (tool === 'N') {
+    if (x >= w - 1) { toast('A bin needs a tile to its right'); return; }
+    setChar(l, x, y, 'N'); setChar(l, x + 1, y, '.');
+  } else {
+    setChar(l, x, y, tool);
+  }
+  changed();
+}
+
+// solutions: coordinates are 1-based, like the Lua tables
+function solMarkAt(l, sol, x1, y1) {
+  const s = l[sol] || (l[sol] = {});
+  const hits = [];
+  for (const k of ['floor', 'bin', 'wall', 'door']) (s[k] || []).forEach((p, i) => {
+    if ((p[0] === x1 || (k === 'bin' && p[0] + 1 === x1)) && p[1] === y1) hits.push([k, i]);
+  });
+  for (const k of ['bridge', 'mine']) (s[k] || []).forEach((m, i) => {
+    const tiles = k === 'bridge' ? lineTiles(m[0], m[1], m[2], m[3]) : rectTiles(m[0], m[1], m[2], m[3]);
+    if (tiles.some(([x, y]) => x === x1 && y === y1)) hits.push([k, i]);
+  });
+  return hits;
+}
+function removeMarks(s, hits) {
+  hits.sort((a, b) => b[1] - a[1]).forEach(([k, i]) => { s[k].splice(i, 1); if (!s[k].length) delete s[k]; });
+}
+function solApply(a, b) {
+  const l = lv(), s = l[solName] || (l[solName] = {});
+  const [x1, y1, x2, y2] = [a[0] + 1, a[1] + 1, b[0] + 1, b[1] + 1];
+  const hits = solMarkAt(l, solName, x2, y2);
+  if (solTool === 'erase') { removeMarks(s, hits); changed(); return; }
+  if (solTool === 'bridge' || solTool === 'mine') {
+    const same = solMarkAt(l, solName, x1, y1).filter(([k]) => k === solTool);
+    if (x1 === x2 && y1 === y2 && same.length) { removeMarks(s, same); changed(); return; }
+    (s[solTool] = s[solTool] || []).push([x1, y1, x2, y2]);
+    changed(); return;
+  }
+  const own = hits.filter(([k]) => k === solTool);
+  if (own.length) { removeMarks(s, own); changed(); return; }
+  removeMarks(s, hits.filter(([k]) => k !== 'bridge' && k !== 'mine'));
+  (s[solTool] = s[solTool] || []).push([x2, y2]);
+  changed();
+}
+
+function cellAt(e) {
+  const r = canvas.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / (r.width / dims(lv()).w)), Math.floor((e.clientY - r.top) / (r.height / dims(lv()).h))];
+}
+canvas.addEventListener('pointerdown', (e) => {
+  if (tab === 'details' || tab === 'export') return;
+  canvas.setPointerCapture(e.pointerId);
+  const c = cellAt(e);
+  dragStart = c; dragNow = c; painting = true;
+  if (tab === 'map') paintAt(c[0], c[1]);
+  draw();
+});
+canvas.addEventListener('pointermove', (e) => {
+  const c = cellAt(e), l = lv();
+  const { w, h } = dims(l);
+  if (c[0] >= 0 && c[1] >= 0 && c[0] < w && c[1] < h) $('#hover').textContent = `x ${c[0] + 1}, y ${c[1] + 1}: ${TILES.find(t => t.ch === tileChar(l, c[0], c[1]))?.name || ''}`;
+  if (!painting) return;
+  if (c[0] === dragNow[0] && c[1] === dragNow[1]) return;
+  dragNow = c;
+  // terrain paints as the finger moves; the camp and bins go down once
+  if (tab === 'map' && tool !== 'B' && tool !== 'N') paintAt(c[0], c[1]);
+  draw();
+});
+function endDrag(e) {
+  if (!painting) return;
+  painting = false;
+  if (tab === 'solutions' && dragStart) solApply(dragStart, cellAt(e));
+  dragStart = dragNow = null;
+  draw();
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', () => { painting = false; dragStart = dragNow = null; draw(); });
+
+// ---------------------------------------------------------------- checks
+function costOf(l, sol) {
+  const s = l[sol] || {};
+  let logs = 0;
+  for (const b of s.bridge || []) for (const [x, y] of lineTiles(b[0] - 1, b[1] - 1, b[2] - 1, b[3] - 1)) if (tileChar(l, x, y) === '~') logs++;
+  logs += (s.bin || []).length + (s.wall || []).length + (s.door || []).length;
+  return logs;
+}
+function problems(l) {
+  const out = [], { w, h } = dims(l);
+  if (!findCamp(l)) out.push('No camp: place the 2x2 CAMP');
+  let campTiles = 0, food = 0;
+  for (const row of l.grid) for (const ch of row) { if (ch === 'B') campTiles++; if (FOOD_CHAR[ch]) food++; }
+  if (campTiles !== 4) out.push(`The camp must be exactly one 2x2 block (found ${campTiles} camp tiles)`);
+  if (!food) out.push('Nothing to eat: paint some food bushes');
+  if (!l.morphis.length) out.push('The band is empty');
+  if (!l.name.trim()) out.push('No name');
+  for (const [x, y] of l.grid.flatMap((r, yy) => [...r].map((c, xx) => c === 'N' ? [xx, yy] : null).filter(Boolean)))
+    if (x >= w - 1 || !'.'.includes(tileChar(l, x + 1, y))) out.push(`Bin at ${x + 1},${y + 1} needs grass to its right`);
+  if (!(l.points.easy >= l.points.normal && l.points.normal >= l.points.hard)) out.push('Points should go easy >= normal >= hard');
+  const has = (k) => l.needs[k];
+  if (has('binsInside') && !has('enclosed')) out.push('"every BIN inside" needs "WALLS round the floors" too');
+  if (has('enclosed') && !has('floors')) out.push('"WALLS round the floors" needs "a FLOOR tile each" too');
+  for (const sol of ['obvious', 'clever']) {
+    const s = l[sol] || {};
+    const occupied = {};
+    const mark = (x, y, what) => { const k = x + ',' + y; if (occupied[k]) out.push(`${sol}: ${what} at ${x},${y} sits on a ${occupied[k]}`); occupied[k] = what; };
+    for (const [x, y] of s.floor || []) { if (!'.'.includes(tileChar(l, x - 1, y - 1))) out.push(`${sol}: floor at ${x},${y} is not on grass`); mark(x, y, 'floor'); }
+    for (const [x, y] of s.wall || []) { if (!'.'.includes(tileChar(l, x - 1, y - 1))) out.push(`${sol}: wall at ${x},${y} is not on grass`); mark(x, y, 'wall'); }
+    for (const [x, y] of s.door || []) { if (!'.'.includes(tileChar(l, x - 1, y - 1))) out.push(`${sol}: door at ${x},${y} is not on grass`); mark(x, y, 'door'); }
+    for (const [x, y] of s.bin || []) {
+      if (!'.'.includes(tileChar(l, x - 1, y - 1)) || !'.'.includes(tileChar(l, x, y - 1))) out.push(`${sol}: bin at ${x},${y} needs two grass tiles`);
+      mark(x, y, 'bin'); mark(x + 1, y, 'bin');
+    }
+    for (const b of s.bridge || []) if (!lineTiles(b[0] - 1, b[1] - 1, b[2] - 1, b[3] - 1).some(([x, y]) => tileChar(l, x, y) === '~')) out.push(`${sol}: bridge ${b.join(',')} crosses no water`);
+    for (const m of s.mine || []) if (!rectTiles(m[0] - 1, m[1] - 1, m[2] - 1, m[3] - 1).some(([x, y]) => '#G'.includes(tileChar(l, x, y)))) out.push(`${sol}: mine ${m.join(',')} covers no stone`);
+    const floors = (s.floor || []).length;
+    if (has('floors') && floors && floors < l.morphis.length) out.push(`${sol}: ${floors} floors for ${l.morphis.length} morphis`);
+    if (has('bins') && !(s.bin || []).length && Object.keys(s).length) out.push(`${sol}: the band wants a bin and there is none`);
+  }
+  const ob = costOf(l, 'obvious'), cl = costOf(l, 'clever');
+  if (Object.keys(l.obvious || {}).length && ob > l.points.hard) out.push(`The obvious build costs ${ob}, more than the hard budget of ${l.points.hard}`);
+  if (Object.keys(l.clever || {}).length && cl >= l.par && l.par > 0) out.push(`The clever build costs ${cl}: it has to beat par (${l.par})`);
+  return out;
+}
+
+// ---------------------------------------------------------------- Lua out
+function luaStr(s) { return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ') + "'"; }
+function luaSol(s) {
+  const parts = [];
+  for (const k of ['bridge', 'mine', 'floor', 'bin', 'wall', 'door']) {
+    if (s && s[k] && s[k].length) parts.push(`${k} = { ${s[k].map(p => '{ ' + p.join(', ') + ' }').join(', ')} }`);
+  }
+  if (!parts.length) return '{}';
+  if (parts.join(', ').length < 90) return '{ ' + parts.join(', ') + ' }';
+  return '{\n        ' + parts.join(',\n        ') + ',\n    }';
+}
+function toLua() {
+  const out = [state.header.trimEnd(), '', 'local Levels = {}', ''];
+  state.levels.forEach((l, i) => {
+    const needs = Object.keys(l.needs).filter(k => l.needs[k]);
+    out.push(`Levels[${i + 1}] = {`);
+    out.push(`    name = ${luaStr(l.name)},`);
+    out.push(`    blurb = ${luaStr(l.blurb)},`);
+    out.push(`    intro = ${luaStr(l.intro)},`);
+    out.push(`    morphis = { ${l.morphis.map(luaStr).join(', ')} },`);
+    out.push(`    points = { easy = ${l.points.easy}, normal = ${l.points.normal}, hard = ${l.points.hard} }, par = ${l.par},`);
+    out.push(needs.length ? `    needs = { ${needs.map(k => k + ' = true').join(', ')} },` : '    needs = {},');
+    out.push('    grid = {');
+    for (const row of l.grid) out.push(`        ${luaStr(row)},`);
+    out.push('    },');
+    out.push(`    obvious = ${luaSol(l.obvious)},`);
+    out.push(`    clever = ${luaSol(l.clever)},`);
+    out.push('}', '');
+  });
+  out.push('return Levels', '');
+  return out.join('\n');
+}
+
+// ---------------------------------------------------------------- Lua in (the format this tool and the repo write)
+function balanced(text, from) {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) return text.slice(from, i + 1); }
+  }
+  return null;
+}
+function parseLua(text) {
+  const first = text.search(/^Levels\[1\]\s*=\s*\{/m);
+  if (first < 0) throw new Error('no Levels[1] in that text');
+  let header = text.slice(0, first).replace(/\n*local Levels = \{\}\s*$/m, '\n');
+  const levels = [];
+  const re = /^Levels\[(\d+)\]\s*=\s*\{/gm;
+  let m;
+  while ((m = re.exec(text))) {
+    let block = balanced(text, m.index + m[0].length - 1);
+    block = block.replace(/\s--[^\n']*$/gm, '');
+    const str = (k) => { const r = block.match(new RegExp(k + "\\s*=\\s*'((?:[^'\\\\]|\\\\.)*)'")); return r ? r[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\') : ''; };
+    const morphis = [...(block.match(/morphis\s*=\s*\{([^}]*)\}/) || ['', ''])[1].matchAll(/'(\w+)'/g)].map(x => x[1]);
+    const pts = block.match(/points\s*=\s*\{\s*easy\s*=\s*(\d+),\s*normal\s*=\s*(\d+),\s*hard\s*=\s*(\d+)\s*\}/);
+    const par = block.match(/par\s*=\s*(\d+)/);
+    const needs = {};
+    for (const x of ((block.match(/needs\s*=\s*\{([^}]*)\}/) || ['', ''])[1]).matchAll(/(\w+)\s*=\s*true/g)) needs[x[1]] = true;
+    const gi = block.search(/grid\s*=\s*\{/);
+    const gridBlock = balanced(block, block.indexOf('{', gi));
+    const grid = [...gridBlock.matchAll(/'([^']*)'/g)].map(x => x[1]);
+    const sol = (name) => {
+      const i = block.search(new RegExp('\\b' + name + '\\s*=\\s*\\{'));
+      if (i < 0) return {};
+      const b = balanced(block, block.indexOf('{', i));
+      const s = {};
+      for (const k of ['bridge', 'mine', 'floor', 'bin', 'wall', 'door']) {
+        const ki = b.search(new RegExp('\\b' + k + '\\s*=\\s*\\{'));
+        if (ki < 0) continue;
+        const kb = balanced(b, b.indexOf('{', ki));
+        s[k] = [...kb.slice(1, -1).matchAll(/\{([^{}]*)\}/g)].map(x => x[1].split(',').map(n => +n.trim()));
+      }
+      return s;
+    };
+    levels.push({ name: str('name'), blurb: str('blurb'), intro: str('intro'), morphis,
+      points: pts ? { easy: +pts[1], normal: +pts[2], hard: +pts[3] } : { easy: 10, normal: 6, hard: 3 },
+      par: par ? +par[1] : 0, needs, grid, obvious: sol('obvious'), clever: sol('clever') });
+  }
+  return { header, levels };
+}
+
+// ---------------------------------------------------------------- UI wiring
+function buildPalette() {
+  const p = $('#palette'); p.innerHTML = '';
+  for (const t of TILES) {
+    const d = document.createElement('div');
+    d.className = 'tool' + (t.ch === tool ? ' on' : '');
+    d.appendChild(swatch(t.ch, 24));
+    d.appendChild(document.createTextNode(t.name));
+    d.onclick = () => { tool = t.ch; buildPalette(); };
+    p.appendChild(d);
+  }
+  const s = $('#solTools'); s.innerHTML = '';
+  const icon = { bridge: null, mine: '#', floor: 'F', bin: 'N', wall: 'W', door: 'D', erase: '.' };
+  for (const t of SOL_TOOLS) {
+    const d = document.createElement('div');
+    d.className = 'tool' + (t.key === solTool ? ' on' : '');
+    if (t.key === 'bridge') { const c = swatch('~', 24); const cg = c.getContext('2d'); cg.fillStyle = '#8a6f3f'; cg.fillRect(0, 4, 24, 16); cg.fillStyle = '#50381c'; for (let i = 1; i < 4; i++) cg.fillRect(0, 4 + i * 4, 24, 1); d.appendChild(c); }
+    else d.appendChild(swatch(icon[t.key], 24));
+    d.appendChild(document.createTextNode(t.name));
+    d.onclick = () => { solTool = t.key; buildPalette(); };
+    s.appendChild(d);
+  }
+}
+
+function buildBand() {
+  const b = $('#band'); b.innerHTML = '';
+  for (const m of MORPHIS) {
+    const lab = document.createElement('label');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = lv().morphis.includes(m.key);
+    cb.onchange = () => {
+      const l = lv();
+      l.morphis = MORPHIS.map(x => x.key).filter(k => k === m.key ? cb.checked : l.morphis.includes(k));
+      changed(false);
+    };
+    const c = document.createElement('canvas'); c.width = 32; c.height = 32; c.style.imageRendering = 'pixelated';
+    const im = img['m_' + m.key];
+    const paint = () => { const cg = c.getContext('2d'); cg.imageSmoothingEnabled = false; cg.clearRect(0, 0, 32, 32); if (ready(im)) cg.drawImage(im, 0, 0, 16, 16, 0, 0, 32, 32); };
+    paint(); if (im) im.addEventListener('load', paint);
+    lab.append(cb, c, document.createTextNode(`${m.name} (${m.role})`));
+    b.appendChild(lab);
+  }
+  const n = $('#needs'); n.innerHTML = '';
+  for (const need of NEEDS) {
+    const lab = document.createElement('label'); lab.className = 'tool';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!lv().needs[need.key];
+    cb.onchange = () => { if (cb.checked) lv().needs[need.key] = true; else delete lv().needs[need.key]; changed(false); };
+    lab.append(cb, document.createTextNode(need.label));
+    n.appendChild(lab);
+  }
+}
+
+function fillDetails() {
+  const l = lv();
+  $('#fName').value = l.name; $('#fBlurb').value = l.blurb; $('#fIntro').value = l.intro;
+  $('#pEasy').value = l.points.easy; $('#pNormal').value = l.points.normal; $('#pHard').value = l.points.hard; $('#pPar').value = l.par;
+  buildBand();
+}
+for (const [id, set] of [['fName', (l, v) => l.name = v], ['fBlurb', (l, v) => l.blurb = v], ['fIntro', (l, v) => l.intro = v],
+  ['pEasy', (l, v) => l.points.easy = +v || 0], ['pNormal', (l, v) => l.points.normal = +v || 0], ['pHard', (l, v) => l.points.hard = +v || 0], ['pPar', (l, v) => l.par = +v || 0]]) {
+  $('#' + id).addEventListener('input', (e) => { set(lv(), e.target.value); changed(false); refreshPicker(); });
+}
+
+function refreshPicker() {
+  const p = $('#levelPick'); p.innerHTML = '';
+  state.levels.forEach((l, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${l.name || '(unnamed)'}`; p.appendChild(o); });
+  p.value = state.current;
+}
+$('#levelPick').onchange = (e) => { state.current = +e.target.value; refreshAll(); };
+$('#newLevel').onclick = () => { state.levels.splice(state.current + 1, 0, blankLevel()); state.current++; refreshAll(); changed(); };
+$('#dupLevel').onclick = () => { state.levels.splice(state.current + 1, 0, JSON.parse(JSON.stringify(lv()))); state.current++; lv().name += ' copy'; refreshAll(); changed(); };
+$('#delLevel').onclick = () => {
+  if (state.levels.length === 1) { toast('There has to be one level'); return; }
+  if (!confirm(`Delete level ${state.current + 1}, "${lv().name}"?`)) return;
+  state.levels.splice(state.current, 1); state.current = Math.max(0, state.current - 1); refreshAll(); changed();
+};
+function move(d) {
+  const i = state.current, j = i + d;
+  if (j < 0 || j >= state.levels.length) return;
+  [state.levels[i], state.levels[j]] = [state.levels[j], state.levels[i]]; state.current = j; refreshAll(); changed();
+}
+$('#upLevel').onclick = () => move(-1);
+$('#downLevel').onclick = () => move(1);
+
+document.querySelectorAll('[data-size]').forEach(b => b.onclick = () => {
+  const [axis, d] = b.dataset.size.split(','); const l = lv(); const { w, h } = dims(l);
+  if (axis === 'w') {
+    if (+d < 0 && w <= 6) return;
+    l.grid = l.grid.map(r => +d > 0 ? r + '.' : r.slice(0, -1));
+  } else {
+    if (+d < 0 && h <= 5) return;
+    if (+d > 0) l.grid.push('.'.repeat(w)); else l.grid.pop();
+  }
+  changed();
+});
+$('#zoom').oninput = draw;
+
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('nav.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('[data-pane]').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== tab));
+  if (tab === 'export') $('#out').value = toLua();
+  draw();
+});
+document.querySelectorAll('[data-sol]').forEach(b => b.onclick = () => {
+  solName = b.dataset.sol;
+  document.querySelectorAll('[data-sol]').forEach(x => x.classList.toggle('on', x === b));
+  changed(false);
+});
+
+function changed(redraw = true) {
+  save();
+  const l = lv();
+  $('#wVal').textContent = dims(l).w; $('#hVal').textContent = dims(l).h;
+  const ob = costOf(l, 'obvious'), cl = costOf(l, 'clever');
+  $('#costLine').innerHTML = `Obvious costs <b>${ob}</b> (hard budget ${l.points.hard}) &middot; Clever costs <b>${cl}</b> (par ${l.par}) &middot; budgets ${l.points.easy} / ${l.points.normal} / ${l.points.hard}`;
+  const ps = problems(l);
+  $('#checks').innerHTML = ps.length ? ps.map(p => `<li class="bad">${p.replace(/</g, '&lt;')}</li>`).join('') : '<li class="ok">Looks playable. The tests still have to prove it.</li>';
+  if (tab === 'export') $('#out').value = toLua();
+  draw();
+}
+function refreshAll() { refreshPicker(); fillDetails(); buildPalette(); changed(); }
+
+// ---------------------------------------------------------------- save and load
+const token = (location.hash.match(/token=([\w-]+)/) || [])[1];
+$('#saveGame').disabled = !token;
+$('#saveStatus').textContent = token ? 'Save writes src/arcade_levels.lua (the old one goes to .bak).'
+  : 'Open the address tools/serve_editor.py prints to save straight into the game. Otherwise download or copy the Lua.';
+$('#loadGame').onclick = async () => {
+  try {
+    const r = await fetch('../src/arcade_levels.lua', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const parsed = parseLua(await r.text());
+    if (state.levels.length > 1 && !confirm(`Replace the ${state.levels.length} levels here with the game's ${parsed.levels.length}?`)) return;
+    state = { header: parsed.header, levels: parsed.levels, current: 0 };
+    refreshAll(); toast(`Loaded ${parsed.levels.length} levels`);
+  } catch (e) { toast('Could not load the game\'s levels (serve the repo with tools/serve_editor.py): ' + e.message); }
+};
+$('#saveGame').onclick = async () => {
+  const bad = state.levels.map((l, i) => problems(l).length ? i + 1 : null).filter(Boolean);
+  if (bad.length && !confirm(`Levels ${bad.join(', ')} still have problems. Save anyway?`)) return;
+  try {
+    const r = await fetch('/save-arcade-levels', { method: 'POST', headers: { 'X-Editor-Token': token }, body: toLua() });
+    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+    toast('Saved into src/arcade_levels.lua');
+  } catch (e) { toast('Save failed: ' + e.message); }
+};
+$('#download').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([toLua()], { type: 'text/plain' }));
+  a.download = 'arcade_levels.lua'; a.click();
+};
+async function copy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(what + ' copied'); }
+  catch (e) { $('#out').value = text; $('#out').select(); toast('Select the box and copy it'); }
+}
+$('#copyLua').onclick = () => copy(toLua(), 'Lua');
+$('#exportJson').onclick = () => copy(JSON.stringify(state, null, 1), 'JSON');
+$('#importJson').onclick = () => {
+  try {
+    const s = JSON.parse($('#out').value);
+    if (!s.levels || !s.levels.length) throw new Error('no levels in it');
+    state = { header: s.header || DEFAULT_HEADER, levels: s.levels, current: 0 };
+    refreshAll(); toast(`Loaded ${s.levels.length} levels`);
+  } catch (e) { toast('That is not a JSON backup: ' + e.message); }
+};
+
+// a phone: fit the map to the screen width to start with
+$('#zoom').value = Math.max(12, Math.min(40, Math.floor((Math.min(window.innerWidth, 900) - 50) / dims(lv()).w)));
+refreshAll();
+</script>
+</body>
+</html>
