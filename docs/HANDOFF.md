@@ -16,8 +16,9 @@ everything lives, what is done, and what was asked for next.
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and
   `Claude-Session: https://claude.ai/code/session_01NHhqKHNRvgVpjJCoSRjVua`.
   Author identity: `-c user.name="Micah Turner" -c user.email="turner.micah@gmail.com"`.
-- makelove packs only files git knows about: commit (or at least `git add`)
-  new files before building locally, or the build will miss them.
+- makelove packs the committed tree (`git ls-tree HEAD`): commit new files
+  before building locally. Staging alone is not enough; the web build will
+  fail to require a file that is only in the index.
 - After each push the habit has been to schedule a check of the Actions run
   and report the itch link.
 
@@ -78,9 +79,25 @@ Key rules in the current build:
 - Jobs: nearest job the morphi can path to, claimed atomically. Unreachable
   jobs stay queued. Morale system: hardships and hunger wear morphis down,
   at zero they leave. Hunger complaints are one per cooldown per morphi.
-- Modes: campaign of 5 hand built survival levels (`src/levels.lua`), and
-  free play (random map, rivers, seasons, migrants). Title picks a level or
-  free play. Points spent vs par, three stars at par, progress persists.
+- Modes: arcade, the default, six hand built levels (`src/arcade_levels.lua`);
+  survival, retired but on the title, five levels (`src/levels.lua`); and
+  free play (random map, rivers, seasons, migrants). Points spent vs par,
+  three stars at par, progress persists per set (`arcadeN_*`, `levelN_*`).
+- Arcade rules (`world.arcade`): no hunger, morale or breaks. Every morphi
+  has one job (`ARCADE_ROLE`: Twins builds, Pupper and Woofoof forage,
+  Cwab and Blob mine) and eats anything, once, but only after the level's
+  `needs` are met (`ARCADE_NEED_ORDER`: bins, floors, enclosed, binsInside;
+  `World:arcadeReady`). The level is clear when everyone has eaten. Tools:
+  SELECT MINE FLOOR BIN WALL DOOR BRIDGE (`TOOLS_ARCADE`; main swaps
+  `ABILITY_ORDER` per mode and relays the HUD). Floors are living space
+  (`World:markFloor`, capacity 0); walls block, doors pass. Enclosure
+  (`World:enclosure`): fill from each floor over walkable tiles with doors
+  shut, must never touch the map edge, and every floor must be reachable
+  from camp, so a room needs a door. Stone and water count as walls. A
+  builder stands on the camp side of a wall site (`World:reachableAvoiding`)
+  so it never walls itself in. `Campaign.goals` is the live checklist, shown
+  in the goal panel and in the bottom right of the HUD. `tst/arcade_test.lua`
+  plays every level's obvious and par solutions with the real AI.
 - UI: HUD laid out in a virtual space scaled to the window (`UI:layout`),
   touch screens get a bigger font set and near 1:1 scale, quick buttons GOAL
   UNITS FOLLOW - + MUTE MENU, G opens the goal panel (levels open on it),
@@ -93,41 +110,23 @@ For phones, the game's embed on itch should be "Click to launch in
 fullscreen" with "Mobile friendly" ticked and landscape orientation. The
 game fits any frame it is given but cannot change the itch frame.
 
+## Done on 2026-10-11
+
+Arcade mode, as specified: six levels, default on the title, survival
+retired but selectable. Level 2 pairs Pupper with Twins because only the
+builder can bridge. Arcade has no fail state and no clock: the top bar
+shows elapsed time, and MENU starts a level over if the points run out.
+
 ## Next up (asked for, not done)
 
-1. Arcade mode, to become the default. Survival stays selectable but
-   retired. Spec from the owner:
-   - every morphi has exactly one job; building is a job, only builder
-     morphis build (Twins as builder);
-   - no hunger in this mode; the level is won when every morphi has eaten
-     once;
-   - level 1: no obstacle, the morphi just goes and eats;
-   - level 2: a river; bridge it, then both eat;
-   - level 3: they are picky and only eat food gathered into bins;
-   - level 4: they need living conditions: enough floor tiles for all of
-     them (not picky about where);
-   - level 5: four walls enclosing the floors, and bins to eat;
-   - level 6: the bins must be inside the walls.
-   Design notes already decided: new tile types wall (blocks) and door
-   (walkable, counts as a wall for the enclosure check); tools in arcade
-   SELECT MINE FLOOR BIN WALL DOOR BRIDGE; floors in arcade are living
-   space (storage capacity 0); enclosure = flood fill from a floor over
-   walkable tiles with doors closed never reaches the map edge; a GOAL
-   checklist with live ticks; "ATE n/m" in the top bar; morphis in arcade
-   skip hunger, morale and breaks, eat any food, and an arcade test should
-   play each level's obvious and par solutions until everyone has eaten.
-   `docs/arcade-wip.patch` holds the partial edits made so far (constants,
-   jobs, abilities, part of world); apply with `git apply docs/arcade-wip.patch`
-   or start clean. It is not committed as code because it was half done and
-   broke tests.
-2. Walking animations: Cwab and Pupper look great; Woofoof, Twins and Blob
+1. Walking animations: Cwab and Pupper look great; Woofoof, Twins and Blob
    do not. Compare the sheets in `assets/images/morphis/*-worker-walk.png`
    (16x16 frames in a row, read by `View.new` with anim8) and redraw frames
    where needed.
-3. One more morphi: owner said "surprise me". Needs a sheet, a name in
+2. One more morphi: owner said "surprise me". Needs a sheet, a name in
    `MORPHI_SHEET_NAMES`, a diet in `MORPHI_DIET`, a role in `MORPHI_ROLE`
    and `ARCADE_ROLE`, and a food sprite in `FOOD_SPRITE`.
-4. The bridge tool's mouse cursor still uses the old line cursor image
+3. The bridge tool's mouse cursor still uses the old line cursor image
    (`assets/images/ui/line_cursor.png`); draw a bridge cursor to match the
    new bridge icon (`UI:iconBridge`).
 
