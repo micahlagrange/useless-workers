@@ -22,6 +22,8 @@ local C = {
     good = { 0.55, 0.82, 0.55 },
 }
 
+local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
+
 function UI.new()
     local self = setmetatable({}, UI)
     -- LOVE's own face (Vera Sans): plain and readable at any size. Two
@@ -266,8 +268,6 @@ function UI:buttonAt(mx, my)
     end
     return nil
 end
-
-local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
 
 function UI:centered(text, y, font, color)
     love.graphics.setFont(font)
