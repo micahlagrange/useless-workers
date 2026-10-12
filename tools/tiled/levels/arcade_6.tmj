@@ -15,52 +15,52 @@
   {
    "name": "name",
    "type": "string",
-   "value": "Inside"
+   "value": "Walls"
   },
   {
    "name": "blurb",
    "type": "string",
-   "value": "Ribbit joins, a second builder. The bins have to be inside the walls too."
+   "value": "Blob joins. The floors must be walled in, with a DOOR to get in."
   },
   {
    "name": "intro",
    "type": "string",
-   "value": "Ribbit the frog joins and builds alongside Twins. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it."
+   "value": "Living space now means a house: WALLS all the way round the floors and a DOOR so they can get in. Stone and water count as walls. A wall or a door is 1 log. There is a nook in the stone."
   },
   {
    "name": "morphis",
    "type": "string",
-   "value": "pupper,woofoof,twins,cwab,blue,ribbit"
+   "value": "pupper,woofoof,twins,cwab,blue"
   },
   {
    "name": "needs",
    "type": "string",
-   "value": "bins,floors,enclosed,binsInside"
+   "value": "bins,floors,enclosed"
   },
   {
    "name": "easy",
    "type": "int",
-   "value": 38
+   "value": 36
   },
   {
    "name": "normal",
    "type": "int",
-   "value": 26
+   "value": 24
   },
   {
    "name": "hard",
    "type": "int",
-   "value": 19
+   "value": 17
   },
   {
    "name": "easyTarget",
    "type": "int",
-   "value": 17
+   "value": 15
   },
   {
    "name": "cleverTarget",
    "type": "int",
-   "value": 3
+   "value": 4
   }
  ],
  "tilesets": [
@@ -114,7 +114,8 @@
     2,
     2,
     2,
-    2,
+    1,
+    1,
     1,
     1,
     1,
@@ -134,13 +135,13 @@
     1,
     1,
     1,
-    1,
     2,
     1,
     1,
     1,
-    1,
     2,
+    1,
+    1,
     1,
     1,
     1,
@@ -160,13 +161,12 @@
     1,
     1,
     1,
-    1,
     2,
     1,
     1,
     1,
-    1,
     2,
+    1,
     1,
     1,
     1,
@@ -191,8 +191,8 @@
     1,
     1,
     1,
-    1,
     2,
+    1,
     1,
     1,
     1,
@@ -213,12 +213,12 @@
     1,
     1,
     1,
-    2,
-    2,
     1,
     1,
-    2,
-    2,
+    1,
+    1,
+    1,
+    1,
     1,
     1,
     1,
@@ -283,7 +283,7 @@
     1,
     1,
     1,
-    10,
+    1,
     1,
     1,
     1,
@@ -325,7 +325,7 @@
     1,
     1,
     1,
-    10,
+    1,
     1,
     1,
     1,

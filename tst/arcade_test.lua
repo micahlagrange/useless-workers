@@ -48,11 +48,11 @@ local function play(index, solutionName, cap, difficulty)
 end
 
 TestArcadeLevels = {}
-function TestArcadeLevels:testSixWellFormedLevels()
-    lu.assertEquals(Campaign.count('arcade'), 6)
+function TestArcadeLevels:testWellFormedLevels()
+    lu.assertEquals(Campaign.count('arcade'), 7)
     lu.assertEquals(Campaign.count(), 5) -- survival untouched
     local seen = {}
-    for i = 1, 6 do
+    for i = 1, Campaign.count('arcade') do
         local def = Campaign.arcade[i]
         local ok, why = Campaign.validate(def, 'arcade')
         lu.assertTrue(ok, 'arcade ' .. i .. ': ' .. tostring(why))
@@ -72,10 +72,10 @@ function TestArcadeLevels:testSixWellFormedLevels()
     for _, species in ipairs({ 'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit' }) do
         lu.assertTrue(seen[species], species .. ' never shows up')
     end
-    lu.assertEquals(#Campaign.arcade[6].morphis, 6)
+    lu.assertEquals(#Campaign.arcade[Campaign.count('arcade')].morphis, 6) -- the last level has everyone
     -- each level asks for everything the one before did, and then some
     local last = 0
-    for i = 1, 6 do
+    for i = 1, Campaign.count('arcade') do
         local n = 0
         for _ in pairs(Campaign.arcade[i].needs) do n = n + 1 end
         lu.assertTrue(n >= last, 'arcade ' .. i .. ' asks for less than the level before')
@@ -121,7 +121,7 @@ function TestArcadeLevels:testCanReachFoodFollowsTheBridge()
 end
 
 function TestArcadeLevels:testPickyLevelCountsAnEmptyBinAsFoodOnItsWay()
-    local run = Campaign.load(3, Rng.new(3), 'arcade', 2)
+    local run = Campaign.load(4, Rng.new(4), 'arcade', 2) -- Picky
     local jobs = Jobs.new()
     local scoring = Scoring.new(2)
     local workers = spawn(run, jobs, scoring)
@@ -185,14 +185,14 @@ function TestArcadeLevels:testNobodyEatsBeforeTheNeedsAreMet()
         lu.assertTrue(w.alive)
         lu.assertEquals(w.hunger, HUNGER_MAX)
     end
-    -- level 3 with no bin: food within reach, but they are picky
-    allAte, _, _, workers = play(3, nil, 40)
+    -- level 4 (Picky) with no bin: food within reach, but they are picky
+    allAte, _, _, workers = play(4, nil, 40)
     lu.assertFalse(allAte)
     lu.assertEquals(Campaign.ateCount(workers), 0)
 end
 
 function TestArcadeLevels:testGoalChecklistTicksLive()
-    local run = Campaign.load(6, Rng.new(6), 'arcade')
+    local run = Campaign.load(7, Rng.new(7), 'arcade') -- Inside
     local workers = spawn(run, Jobs.new(), Scoring.new(2))
     local goals = Campaign.goals(run, workers)
     lu.assertEquals(#goals, 5)

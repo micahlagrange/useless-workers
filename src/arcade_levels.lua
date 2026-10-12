@@ -1,4 +1,4 @@
--- Six arcade levels. Nobody gets hungry; every morphi just wants one meal,
+-- Seven arcade levels. Nobody gets hungry; every morphi just wants one meal,
 -- and the level is won when they have all had it. Each level adds one more
 -- thing they insist on before they will eat, and the maps are drawn so the
 -- obvious build works and a sharper eye spends far less: a narrow crossing,
@@ -64,6 +64,27 @@ Levels[2] = {
 }
 
 Levels[3] = {
+    name = 'Between a rock and a hard place',
+    blurb = "Dig 'n bridge",
+    intro = 'You have seen water. Now see what Cwab can do with those pincers.',
+    morphis = { 'cwab', 'ribbit' },
+    points = { easy = 16, normal = 4, hard = 2 }, targets = { easy = 2, clever = 1 },
+    needs = {},
+    grid = {
+        'TTT###########~~~#G###',
+        'TT...########~~#####G#',
+        'TTBB.########~##G#G###',
+        'TTBB.######~~~######..',
+        'TT....#####~~....##hT.',
+        'TTT....###~~bbb....bbb',
+        'TTTT.....#~~..kb....b.',
+        'TTTT....##~~bbb.....b.',
+    },
+    obvious = { bridge = { { 11, 7, 12, 7 } }, mine = { { 10, 7, 10, 7 } } },
+    clever = { bridge = { { 14, 3, 14, 3 } }, mine = { { 6, 3, 13, 3 }, { 15, 3, 15, 4 } } },
+}
+
+Levels[4] = {
     name = 'Picky',
     blurb = 'Woofoof joins. From now on they only eat out of a BIN.',
     intro = 'They have grown picky: nobody eats off a bush any more. Place a BIN (1 log); the foragers fill it and everyone eats from it. Look at what grows on your own bank before you build a bridge.',
@@ -84,7 +105,7 @@ Levels[3] = {
     clever = { bin = { { 6, 3 } } },
 }
 
-Levels[4] = {
+Levels[5] = {
     name = 'Home',
     blurb = 'Cwab joins and mines. Now they want a FLOOR tile each to live on.',
     intro = 'A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab can MINE stone for nothing. The food is behind stone and across water; one of those is free to open.',
@@ -106,7 +127,7 @@ Levels[4] = {
     clever = { mine = { { 5, 4, 5, 4 } }, bin = { { 7, 7 } }, floor = { { 6, 5 }, { 7, 5 }, { 8, 5 }, { 9, 5 } } },
 }
 
-Levels[5] = {
+Levels[6] = {
     name = 'Walls',
     blurb = 'Blob joins. The floors must be walled in, with a DOOR to get in.',
     intro = 'Living space now means a house: WALLS all the way round the floors and a DOOR so they can get in. Stone and water count as walls. A wall or a door is 1 log. There is a nook in the stone.',
@@ -139,7 +160,7 @@ Levels[5] = {
     },
 }
 
-Levels[6] = {
+Levels[7] = {
     name = 'Inside',
     blurb = 'Ribbit joins, a second builder. The bins have to be inside the walls too.',
     intro = 'Ribbit the frog joins and builds alongside Twins. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it.',
