@@ -82,7 +82,12 @@ function View:rebuildCanvas()
                 love.graphics.rectangle('fill', px, py + 8, TILE_SIZE, 1)
                 love.graphics.rectangle('fill', px, py + 13, TILE_SIZE, 1)
             elseif t.type == TILE_STONE then
-                love.graphics.setColor(0, 0, 0, 0.18)
+                -- a lit top edge and a shadowed foot, so stone reads as raised rock
+                love.graphics.setColor(1, 1, 1, 0.14)
+                love.graphics.rectangle('fill', px, py, TILE_SIZE, 1)
+                love.graphics.setColor(0, 0, 0, 0.3)
+                love.graphics.rectangle('fill', px, py + TILE_SIZE - 2, TILE_SIZE, 2)
+                love.graphics.setColor(0, 0, 0, 0.22)
                 love.graphics.rectangle('fill', px + 3, py + 4, 5, 2)
                 love.graphics.rectangle('fill', px + 9, py + 10, 4, 2)
             elseif t.type == TILE_BREAKROOM then

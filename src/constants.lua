@@ -195,7 +195,7 @@ DEFAULT_SEED       = 'PUPPER'
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow
 GRASS_COLORS     = { '#94a35b', '#849151', '#737f47' }
 DIRT_COLORS      = { '#a38f5b', '#917f51', '#7f6f47' }
-STONE_COLORS     = { '#3b3b3b', '#2f2f2f', '#232323', '#4f4f4f' }
+STONE_COLORS     = { '#6d6a64', '#625f5a', '#58554f', '#77746d' }
 WATER_COLORS     = { '#5f8fa8', '#5786a0', '#4f7d97' }
 SNOW_COLORS      = { '#e9ecf0', '#dfe3e8', '#d3d8de' }
 BRIDGE_COLORS    = { '#8a6f3f', '#7d6437', '#96773f' }
