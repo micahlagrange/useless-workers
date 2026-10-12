@@ -16,8 +16,10 @@ end
 function Highscore.load(difficultyIndex)
     if memory[difficultyIndex] then return memory[difficultyIndex] end
     local value = 0
-    if canUseDisk() then
-        local ok, data = pcall(love.filesystem.read, fileName(difficultyIndex))
+    -- love.js stalls on a read of a missing file, so look before reading
+    local name = fileName(difficultyIndex)
+    if canUseDisk() and love.filesystem.getInfo(name) then
+        local ok, data = pcall(love.filesystem.read, name)
         if ok and data then value = tonumber(data) or 0 end
     end
     memory[difficultyIndex] = value
