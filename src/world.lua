@@ -6,7 +6,7 @@ local World = {}
 World.__index = World
 
 local function newTile(kind, altitude)
-    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, items = {}, site = nil, storage = 0, bed = false, restingBy = nil, reservations = {}, colorSeed = 0.5 }
+    return { type = kind, altitude = altitude or 0.5, passable = PASSABLE[kind] or false, node = nil, items = {}, site = nil, storage = 0, bed = false, floor = false, restingBy = nil, reservations = {}, colorSeed = 0.5 }
 end
 
 function World.new(w, h, rng)
@@ -24,6 +24,12 @@ function World.new(w, h, rng)
     self.nextAreaId = 1
     self.storageList = {}
     self.beds = {}
+    self.floors = {}        -- arcade: living space, one tile each
+    self.arcade = false     -- arcade rules: floors are living space, not storage
+    self.arcadeNeeds = {}   -- what must be true before an arcade morphi eats, see ARCADE_NEED_ORDER
+    self.arcadePopulation = 0
+    self.enclosureCache = nil
+    self.enclosureCacheVersion = -1
     self.stock = { logs = 0, gold = 0 }
     self.spent = 0 -- logs and gold spent on designations, net of refunds
     self.version = 0
@@ -115,6 +121,7 @@ end
 -- Hand built worlds for tests.
 -- '.' grass  '#' stone  '~' water  'B' camp  'b' ripe bush  'T' tree  'G' gold ore (in stone)  'S' floor storage (1 item)  'N' bin (4 items)  'd' bed
 -- food bushes, ripe at the start: 'k' steak  'f' fish  'c' cheese  'h' chili  'y' candy
+-- 'W' wall  'D' door  'F' floor (arcade living space)
 function World.fromGrid(rows, rng)
     local h = #rows
     local w = #rows[1]
@@ -123,12 +130,15 @@ function World.fromGrid(rows, rng)
     local nodeTiles = {}
     local storageTiles = {}
     local bedTiles = {}
+    local floorTiles = {}
     for y = 1, h do
         for x = 1, w do
             local ch = rows[y]:sub(x, x)
             local kind = TILE_GRASS
             if ch == '#' or ch == 'G' then kind = TILE_STONE
             elseif ch == '~' then kind = TILE_WATER
+            elseif ch == 'W' then kind = TILE_WALL
+            elseif ch == 'D' then kind = TILE_DOOR
             elseif ch == 'B' then kind = TILE_BREAKROOM; breakroomTiles[#breakroomTiles + 1] = { x = x, y = y }
             end
             if ch == 'b' then nodeTiles[#nodeTiles + 1] = { kind = NODE_BUSH, x = x, y = y }
@@ -142,6 +152,7 @@ function World.fromGrid(rows, rng)
             if ch == 'S' then storageTiles[#storageTiles + 1] = { x = x, y = y, capacity = STORAGE_FLOOR_CAPACITY } end
             if ch == 'N' then storageTiles[#storageTiles + 1] = { x = x, y = y, capacity = STORAGE_BIN_CAPACITY } end
             if ch == 'd' then bedTiles[#bedTiles + 1] = { x = x, y = y } end
+            if ch == 'F' then floorTiles[#floorTiles + 1] = { x = x, y = y } end
         end
     end
     if #breakroomTiles > 0 then
@@ -156,6 +167,7 @@ function World.fromGrid(rows, rng)
     end
     for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y, st.capacity) end
     for _, bt in ipairs(bedTiles) do self:markBed(bt.x, bt.y) end
+    for _, ft in ipairs(floorTiles) do self:markFloor(ft.x, ft.y) end
     self.version = self.version + 1
     return self
 end
@@ -315,6 +327,29 @@ end
 function World:isReachable(x, y)
     local reach = self:reachableFromBreakroom()
     return reach[x] ~= nil and reach[x][y] == true
+end
+
+-- Reachable from camp if (bx, by) were blocked. Not cached: used to pick
+-- the side a builder stands on for a wall, so it is never walled in.
+function World:reachableAvoiding(bx, by)
+    local reach = {}
+    for x = 1, self.w do reach[x] = {} end
+    if not self.breakroom then return reach end
+    local start = self.breakroom.tiles[1]
+    local stack = { { start.x, start.y } }
+    reach[start.x][start.y] = true
+    while #stack > 0 do
+        local p = table.remove(stack)
+        local px, py = p[1], p[2]
+        for _, q in ipairs({ { px + 1, py }, { px - 1, py }, { px, py + 1 }, { px, py - 1 } }) do
+            local qx, qy = q[1], q[2]
+            if self:inBounds(qx, qy) and self.tiles[qx][qy].passable and not reach[qx][qy] and not (qx == bx and qy == by) then
+                reach[qx][qy] = true
+                stack[#stack + 1] = { qx, qy }
+            end
+        end
+    end
+    return reach
 end
 
 -- Break room -------------------------------------------------------------
@@ -675,6 +710,7 @@ function World:markStorage(x, y, capacity)
     local t = self:get(x, y)
     if not t or t.storage > 0 then return false end
     t.storage = capacity or STORAGE_FLOOR_CAPACITY
+    self.version = self.version + 1
     local d = 0
     if self.breakroom then
         d = (x - (self.breakroom.x + 0.5)) ^ 2 + (y - (self.breakroom.y + 0.5)) ^ 2
@@ -685,6 +721,103 @@ function World:markStorage(x, y, capacity)
         if a.y ~= b.y then return a.y < b.y end
         return a.x < b.x
     end)
+    return true
+end
+
+-- Floors (arcade) ----------------------------------------------------------
+-- Living space: one tile per morphi. Holds nothing, just has to exist, and
+-- in later levels has to sit behind walls.
+
+function World:markFloor(x, y)
+    local t = self:get(x, y)
+    if not t or t.floor then return false end
+    t.floor = true
+    self.floors[#self.floors + 1] = { x = x, y = y }
+    self.version = self.version + 1
+    return true
+end
+
+function World:binCount()
+    local n = 0
+    for _, s in ipairs(self.storageList) do
+        if s.capacity > STORAGE_FLOOR_CAPACITY then n = n + 1 end
+    end
+    return n
+end
+
+-- The rooms the floors sit in. A fill from every floor over walkable tiles
+-- with the doors shut: if no fill touches the map edge the floors are
+-- enclosed. `inside` holds every tile the fills reached, so a bin whose tile
+-- is in there stands inside the walls.
+function World:enclosure()
+    if self.enclosureCache and self.enclosureCacheVersion == self.version then return self.enclosureCache end
+    local inside = {}
+    local enclosed = #self.floors > 0
+    for _, f in ipairs(self.floors) do
+        if not inside[Util.key(f.x, f.y)] then
+            local stack = { { f.x, f.y } }
+            inside[Util.key(f.x, f.y)] = true
+            while #stack > 0 do
+                local p = table.remove(stack)
+                local px, py = p[1], p[2]
+                if px == 1 or py == 1 or px == self.w or py == self.h then enclosed = false end
+                for _, q in ipairs({ { px + 1, py }, { px - 1, py }, { px, py + 1 }, { px, py - 1 } }) do
+                    local qx, qy = q[1], q[2]
+                    local k = Util.key(qx, qy)
+                    if self:inBounds(qx, qy) and not inside[k] then
+                        local t = self.tiles[qx][qy]
+                        if t.passable and t.type ~= TILE_DOOR then
+                            inside[k] = true
+                            stack[#stack + 1] = { qx, qy }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    self.enclosureCache = { enclosed = enclosed, inside = inside }
+    self.enclosureCacheVersion = self.version
+    return self.enclosureCache
+end
+
+-- Enclosed, and every floor can be walked to from camp: a room needs a door.
+function World:floorsEnclosed()
+    if #self.floors == 0 or not self:enclosure().enclosed then return false end
+    for _, f in ipairs(self.floors) do
+        if not self:isReachable(f.x, f.y) then return false end
+    end
+    return true
+end
+
+-- How many bins stand inside the floors' rooms.
+function World:binsInsideCount()
+    local inside = self:enclosure().inside
+    local n = 0
+    for _, s in ipairs(self.storageList) do
+        if s.capacity > STORAGE_FLOOR_CAPACITY and inside[Util.key(s.x, s.y)] then n = n + 1 end
+    end
+    return n
+end
+
+function World:binsInside()
+    local bins = self:binCount()
+    return bins > 0 and self:floorsEnclosed() and self:binsInsideCount() == bins
+end
+
+-- Is one arcade need met right now?
+function World:arcadeNeedMet(need)
+    if need == 'bins' then return self:binCount() > 0 end
+    if need == 'floors' then return #self.floors >= self.arcadePopulation end
+    if need == 'enclosed' then return self:floorsEnclosed() end
+    if need == 'binsInside' then return self:binsInside() end
+    return true
+end
+
+-- Nobody in arcade eats before the level's needs are all met.
+function World:arcadeReady()
+    for _, need in ipairs(ARCADE_NEED_ORDER) do
+        if self.arcadeNeeds[need] and not self:arcadeNeedMet(need) then return false end
+    end
     return true
 end
 
@@ -906,7 +1039,11 @@ function World:addSite(kind, x, y, area)
     if kind == SITE_MINE then
         if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
     elseif kind == SITE_STORAGE or kind == SITE_BIN or kind == SITE_BED then
-        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.bed then return nil, 'needs open ground' end
+        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.bed or t.floor then return nil, 'needs open ground' end
+        if self.arcade and kind == SITE_STORAGE and t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return nil, 'goes on the ground' end
+    elseif kind == SITE_WALL or kind == SITE_DOOR then
+        if t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return nil, 'goes on open ground' end
+        if #t.items > 0 or t.node or t.storage > 0 or t.bed or t.floor then return nil, 'needs open ground' end
     elseif kind == SITE_BRIDGE then
         if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
     end
@@ -942,7 +1079,8 @@ function World:siteApproachTile(site)
         if self:isReachable(site.x, site.y) then return { x = site.x, y = site.y } end
         return nil
     end
-    local reach = self:reachableFromBreakroom()
+    -- a wall is built from the camp side, so the builder is never shut in
+    local reach = site.kind == SITE_WALL and self:reachableAvoiding(site.x, site.y) or self:reachableFromBreakroom()
     for _, c in ipairs({ { site.x + 1, site.y }, { site.x - 1, site.y }, { site.x, site.y + 1 }, { site.x, site.y - 1 } }) do
         if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
             return { x = c[1], y = c[2] }
@@ -968,7 +1106,11 @@ function World:completeSite(site)
         end
         self:setType(site.x, site.y, TILE_DIRT)
     elseif site.kind == SITE_STORAGE then
-        self:markStorage(site.x, site.y, STORAGE_FLOOR_CAPACITY)
+        if self.arcade then self:markFloor(site.x, site.y) else self:markStorage(site.x, site.y, STORAGE_FLOOR_CAPACITY) end
+    elseif site.kind == SITE_WALL then
+        self:setType(site.x, site.y, TILE_WALL)
+    elseif site.kind == SITE_DOOR then
+        self:setType(site.x, site.y, TILE_DOOR)
     elseif site.kind == SITE_BIN then
         self:markStorage(site.x, site.y, STORAGE_BIN_CAPACITY)
     elseif site.kind == SITE_BED then

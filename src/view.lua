@@ -87,6 +87,10 @@ function View:rebuildCanvas()
             elseif t.type == TILE_BREAKROOM then
                 love.graphics.setColor(0.35, 0.28, 0.16)
                 love.graphics.rectangle('line', px + 0.5, py + 0.5, TILE_SIZE - 1, TILE_SIZE - 1)
+            elseif t.type == TILE_WALL then
+                self:drawWallTile(px, py, 1)
+            elseif t.type == TILE_DOOR then
+                self:drawDoorTile(px, py, 1)
             end
         end
     end
@@ -229,6 +233,46 @@ function View:drawBed(px, py, a)
     love.graphics.rectangle('fill', px + 3, py + 7, 10, 1)
 end
 
+-- A wall from above: dark timber courses with the mortar showing, lit
+-- along the top edge so it reads as standing up.
+function View:drawWallTile(px, py, a)
+    love.graphics.setColor(0.42, 0.31, 0.16, a)
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
+    love.graphics.setColor(0.24, 0.17, 0.08, a)
+    love.graphics.rectangle('fill', px, py + 5, TILE_SIZE, 1)
+    love.graphics.rectangle('fill', px, py + 10, TILE_SIZE, 1)
+    love.graphics.rectangle('fill', px, py + 15, TILE_SIZE, 1)
+    love.graphics.rectangle('fill', px + 8, py, 1, 5)
+    love.graphics.rectangle('fill', px + 4, py + 6, 1, 4)
+    love.graphics.rectangle('fill', px + 12, py + 6, 1, 4)
+    love.graphics.rectangle('fill', px + 8, py + 11, 1, 4)
+    love.graphics.setColor(0.6, 0.46, 0.26, a)
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, 1)
+end
+
+-- A door: a light plank in a dark frame, knob on the right.
+function View:drawDoorTile(px, py, a)
+    love.graphics.setColor(0.24, 0.17, 0.08, a)
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
+    love.graphics.setColor(0.72, 0.56, 0.3, a)
+    love.graphics.rectangle('fill', px + 2, py + 2, 12, 12)
+    love.graphics.setColor(0.55, 0.42, 0.22, a)
+    love.graphics.rectangle('fill', px + 8, py + 2, 1, 12)
+    love.graphics.setColor(0.95, 0.85, 0.4, a)
+    love.graphics.rectangle('fill', px + 11, py + 7, 2, 2)
+end
+
+-- Arcade living space: a rug of pale planks with a stitched border.
+function View:drawFloorTile(px, py, a)
+    love.graphics.setColor(0.78, 0.66, 0.42, a)
+    love.graphics.rectangle('fill', px + 1, py + 1, 14, 14)
+    love.graphics.setColor(0.66, 0.54, 0.32, a)
+    love.graphics.rectangle('fill', px + 1, py + 5, 14, 1)
+    love.graphics.rectangle('fill', px + 1, py + 10, 14, 1)
+    love.graphics.setColor(0.5, 0.38, 0.2, 0.9 * a)
+    love.graphics.rectangle('line', px + 1.5, py + 1.5, 13, 13)
+end
+
 function View:drawBridgePlanks(px, py, a)
     love.graphics.setColor(0.62, 0.47, 0.27, a)
     love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
@@ -246,6 +290,13 @@ function View:drawStorage()
         else
             self:drawBin(px, py, 1)
         end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function View:drawFloors()
+    for _, f in ipairs(self.world.floors) do
+        self:drawFloorTile((f.x - 1) * TILE_SIZE, (f.y - 1) * TILE_SIZE, 1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -271,9 +322,12 @@ function View:drawSites(clock)
             love.graphics.line(px + 12, py + 4, px + 4, py + 12)
         else
             local a = site.claimedBy and 0.7 or (0.3 + 0.15 * pulse)
-            if site.kind == SITE_STORAGE then self:drawFloorSpot(px, py, a)
+            if site.kind == SITE_STORAGE then
+                if self.world.arcade then self:drawFloorTile(px, py, a) else self:drawFloorSpot(px, py, a) end
             elseif site.kind == SITE_BIN then self:drawBin(px, py, a)
             elseif site.kind == SITE_BED then self:drawBed(px, py, a)
+            elseif site.kind == SITE_WALL then self:drawWallTile(px, py, a)
+            elseif site.kind == SITE_DOOR then self:drawDoorTile(px, py, a)
             elseif site.kind == SITE_BRIDGE then self:drawBridgePlanks(px, py, a)
             end
         end
@@ -429,8 +483,15 @@ function View:drawWorker(w, clock, selected)
         love.graphics.setColor(1, 1, 1, 0.8)
         love.graphics.print('z', w.x + 6, w.y - 14)
     end
+    -- arcade: a tick once the meal is had, nothing before
+    if w.arcade then
+        if w.ate then
+            love.graphics.setColor(0.45, 0.85, 0.4, 0.95)
+            love.graphics.setLineWidth(1)
+            love.graphics.line(w.x - 5, feetY + 4, w.x - 2, feetY + 6.5, w.x + 4, feetY + 1.5)
+        end
     -- hunger bar, always shown so it never pops in: green, then amber, then red
-    if w:isWorking() then
+    elseif w:isWorking() then
         local frac = w.hunger / HUNGER_MAX
         local width = 12 * frac
         love.graphics.setColor(0, 0, 0, 0.5)

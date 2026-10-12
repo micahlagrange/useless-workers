@@ -22,24 +22,39 @@ local ui
 local game = {}
 local title = { difficultyIndex = DEFAULT_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false, options = {}, option = 1 }
 
--- The title offers each level (locked until the one before is clear) and
--- free play. Progress lives in the high score store under string keys.
-local function levelsUnlocked()
-    return math.max(1, Highscore.load('levels_unlocked'))
+-- The title offers the arcade levels first, then the retired survival
+-- levels, then free play. A level is locked until the one before it is
+-- clear. Progress lives in the high score store under string keys.
+local function levelsUnlocked(set)
+    return math.max(1, Highscore.load(Campaign.unlockKey[set]))
 end
 
 local function buildTitleOptions()
-    local unlocked = levelsUnlocked()
     title.options = {}
-    for i = 1, Campaign.count() do
-        local cleared = Highscore.load('level' .. i .. '_cleared') == 1
-        title.options[#title.options + 1] = {
-            kind = 'level', index = i, def = Campaign.levels[i], locked = i > unlocked,
-            best = cleared and Highscore.load('level' .. i .. '_best') or nil,
-        }
+    for _, set in ipairs({ 'arcade', 'survival' }) do
+        local unlocked = levelsUnlocked(set)
+        local key = Campaign.saveKey[set]
+        for i = 1, Campaign.count(set) do
+            local cleared = Highscore.load(key .. i .. '_cleared') == 1
+            title.options[#title.options + 1] = {
+                kind = 'level', set = set, index = i, def = Campaign.list(set)[i], locked = i > unlocked,
+                best = cleared and Highscore.load(key .. i .. '_best') or nil,
+            }
+        end
     end
     title.options[#title.options + 1] = { kind = 'free' }
     if title.option > #title.options then title.option = 1 end
+end
+
+-- 'level' (survival) and 'arcade' are both hand built levels.
+local function isLevelMode()
+    return game.mode == 'level' or game.mode == 'arcade'
+end
+
+-- Each mode has its own tool bar; the HUD lays itself out around it.
+local function setTools(order)
+    ABILITY_ORDER = order
+    ui:layout(love.graphics.getDimensions())
 end
 -- touch: every finger on the screen, by id. Two fingers pinch to zoom and pan.
 local touches = {}
@@ -154,6 +169,7 @@ end
 
 local function newGame(seedString, difficultyIndex)
     game = {}
+    setTools(TOOLS_SURVIVAL)
     game.seedString = seedString
     game.seedNumber = Rng.seedToNumber(seedString)
     game.rng = Rng.new(game.seedNumber)
@@ -195,19 +211,22 @@ local function newGame(seedString, difficultyIndex)
     love.mouse.setVisible(true)
 end
 
--- A hand built level: its own map, morphis, points and clock. The season
--- machinery still counts hardships, but the clock ending means a clear.
-local function newLevel(index)
-    local run = Campaign.load(index, Rng.new(index))
+-- A hand built level: its own map, morphis and points. Survival has a
+-- clock, and the clock ending means a clear. Arcade has no clock: the
+-- level is clear when every morphi has eaten.
+local function newLevel(index, set)
+    set = set or 'arcade'
+    local run = Campaign.load(index, Rng.new(index), set)
     game = {}
-    game.mode = 'level'
+    game.mode = set == 'arcade' and 'arcade' or 'level'
+    setTools(set == 'arcade' and TOOLS_ARCADE or TOOLS_SURVIVAL)
     game.level = run
-    game.levels = Campaign.levels
-    game.seedString = 'level ' .. index
+    game.levels = Campaign.list(set)
+    game.seedString = set .. ' ' .. index
     game.rng = Rng.new(index)
     game.scoring = Scoring.new(DEFAULT_DIFFICULTY)
-    game.scoring.drain = run.def.drain
-    game.scoring.quarterTimer = run.def.seconds
+    game.scoring.drain = run.def.drain or 0
+    game.scoring.quarterTimer = run.def.seconds or 1e9
     game.world = run.world
     game.jobs = Jobs.new()
     for _, node in ipairs(game.world.nodes) do
@@ -218,7 +237,7 @@ local function newLevel(index)
     game.roleHires = {}
     game.clock = 0
     game.staffCount = #run.specs
-    game.averageHunger = run.def.hunger
+    game.averageHunger = run.def.hunger or HUNGER_MAX
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
@@ -259,12 +278,12 @@ local function levelClear()
     local lv = game.level
     local spent = game.world.spent
     lv.stars = Campaign.stars(spent, lv.def.par)
-    local key = 'level' .. lv.index
+    local key = Campaign.saveKey[lv.set] .. lv.index
     local cleared = Highscore.load(key .. '_cleared') == 1
     lv.isNewBest = not cleared or spent < Highscore.load(key .. '_best')
     if lv.isNewBest then Highscore.set(key .. '_best', spent) end
     Highscore.set(key .. '_cleared', 1)
-    Highscore.set('levels_unlocked', math.max(levelsUnlocked(), lv.index + 1))
+    Highscore.set(Campaign.unlockKey[lv.set], math.max(levelsUnlocked(lv.set), lv.index + 1))
     state = 'levelclear'
     love.mouse.setVisible(true)
     Audio.playSFX('win')
@@ -351,15 +370,15 @@ function love.load()
     ui = UI.new()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
-    -- start on the furthest unlocked level
-    title.option = math.min(levelsUnlocked(), Campaign.count())
+    -- start on the furthest unlocked arcade level
+    title.option = math.min(levelsUnlocked('arcade'), Campaign.count('arcade'))
 end
 
 function love.resize(w, h)
     ui:layout(w, h)
     if game and game.camera then
         game.camera:setView(w, h)
-        if game.mode == 'level' and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+        if isLevelMode() and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
     end
 end
 
@@ -380,8 +399,12 @@ local function updatePlaying(dt)
     local count, avg = staffStats()
     game.staffCount = count
     game.averageHunger = avg or game.averageHunger
-    if count == 0 and game.mode ~= 'level' then
+    if count == 0 and not isLevelMode() then
         finishGame('gameover')
+        return
+    end
+    if game.mode == 'arcade' and Campaign.allAte(game.workers) then
+        levelClear()
         return
     end
     if game.scoring:update(dt, avg) then
@@ -433,6 +456,7 @@ local function drawWorld()
     game.view:drawWorld()
     game.view:drawBreakroom()
     game.view:drawStorage()
+    game.view:drawFloors()
     game.view:drawBeds()
     game.view:drawNodes(game.clock)
     game.view:drawItems(game.clock)
@@ -522,9 +546,9 @@ end
 local function startFromTitle()
     local opt = title.options[title.option]
     if opt.kind == 'level' then
-        if opt.locked then ui:toast('Clear level ' .. (opt.index - 1) .. ' first') return end
+        if opt.locked then ui:toast('Clear ' .. Campaign.title[opt.set]:lower() .. ' level ' .. (opt.index - 1) .. ' first') return end
         startMusic()
-        newLevel(opt.index)
+        newLevel(opt.index, opt.set)
         return
     end
     startMusic()
@@ -582,7 +606,7 @@ local function noteTouch()
     ui:layout(love.graphics.getDimensions())
     if game and game.camera then
         game.camera:setView(love.graphics.getDimensions())
-        if game.mode == 'level' and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+        if isLevelMode() and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
     end
 end
 
@@ -623,12 +647,12 @@ function love.mousepressed(x, y, button, istouch)
     elseif state == 'levelclear' then
         if button ~= 1 then return end
         if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
-        if game.level.index < Campaign.count() then newLevel(game.level.index + 1) else goToTitle() end
+        if game.level.index < Campaign.count(game.level.set) then newLevel(game.level.index + 1, game.level.set) else goToTitle() end
         return
     elseif state == 'levelfailed' then
         if button ~= 1 then return end
         if vy < TOP_BAR_H and ui:topButtonAt(vx, vy) == 'menu' then goToTitle() return end
-        newLevel(game.level.index)
+        newLevel(game.level.index, game.level.set)
         return
     elseif state == 'annual' then
         if button == 1 then
@@ -862,13 +886,13 @@ function love.keypressed(key)
         closeGoal()
     elseif state == 'levelclear' then
         if key == 'return' or key == 'kpenter' or key == 'space' then
-            if game.level.index < Campaign.count() then newLevel(game.level.index + 1) else goToTitle() end
+            if game.level.index < Campaign.count(game.level.set) then newLevel(game.level.index + 1, game.level.set) else goToTitle() end
         elseif key == 'escape' then
             goToTitle()
         end
     elseif state == 'levelfailed' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'r' then
-            newLevel(game.level.index)
+            newLevel(game.level.index, game.level.set)
         elseif key == 'escape' then
             goToTitle()
         end

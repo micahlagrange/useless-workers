@@ -59,7 +59,7 @@ end
 function Jobs.typeForSite(site)
     if site.kind == SITE_MINE then return 'mine' end
     if site.kind == SITE_BED then return 'woodwork' end
-    return 'build'
+    return 'build' -- floors, bins, walls, doors, bridges
 end
 
 function Jobs:hasJobForSite(site)

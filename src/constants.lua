@@ -13,8 +13,10 @@ TILE_STONE      = 'stone'
 TILE_SNOW       = 'snow'
 TILE_BRIDGE     = 'bridge'
 TILE_BREAKROOM  = 'breakroom'
+TILE_WALL       = 'wall'      -- built, blocks the way
+TILE_DOOR       = 'door'      -- built, walkable, closes a wall for the enclosure check
 
-PASSABLE        = { grass = true, dirt = true, bridge = true, breakroom = true }
+PASSABLE        = { grass = true, dirt = true, bridge = true, breakroom = true, door = true }
 
 -- Instead of fixed altitude bands the generator sorts every tile's altitude and
 -- cuts the map into these fractions, so every seed has a playable mix.
@@ -65,11 +67,17 @@ BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break 
 
 -- Morphis and their roles
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
+ROLE_BUILDER = 'builder'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
     lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins' }, alsoTakes = { 'woodwork' } },
     miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
+    -- arcade only: building is a job of its own
+    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins' }, alsoTakes = { 'woodwork' } },
 }
+-- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
+-- Nobody chops: the points a level starts with are all the logs there are.
+ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner' }
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
 -- Every morphi eats one thing and nothing else. Food grows on bushes of
 -- that kind; a forager picks any kind into storage, and everyone takes only
@@ -116,8 +124,13 @@ ABILITY_STORAGE = 'storage'   -- place a free floor storage spot, holds one item
 ABILITY_BIN     = 'bin'       -- place a bin site (costs logs), holds four items
 ABILITY_BED     = 'bed'       -- place a bed site; a bed is a quicker, better break
 ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
-ABILITY_ORDER   = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', bridge = 'BRIDGE' }
+ABILITY_WALL    = 'wall'      -- place a wall site (costs a log); built, it blocks the way
+ABILITY_DOOR    = 'door'      -- place a door site (costs a log); walkable, counts as wall for enclosure
+-- each mode has its own tool bar; main sets ABILITY_ORDER when a game starts
+TOOLS_SURVIVAL  = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
+TOOLS_ARCADE    = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_WALL, ABILITY_DOOR, ABILITY_BRIDGE }
+ABILITY_ORDER   = TOOLS_ARCADE
+ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
 -- Storage: a floor spot is free and holds one item. A bin costs logs and
 -- holds four, shown in the order they came in, quadrant by quadrant.
 STORAGE_FLOOR_CAPACITY = 1
@@ -126,6 +139,8 @@ STORAGE_BIN_CAPACITY   = 4
 COSTS = {
     storage = { logs = 0 },
     bin     = { logs = 1 },
+    wall    = { logs = 1 },
+    door    = { logs = 1 },
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
 }
@@ -136,8 +151,15 @@ MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting h
 MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
 
 SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'bin', 'bridge', 'bed'
-SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED }
+SITE_WALL, SITE_DOOR = 'wall', 'door'
+SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED, wall = SITE_WALL, door = SITE_DOOR }
 SITE_CAPACITY = { storage = STORAGE_FLOOR_CAPACITY, bin = STORAGE_BIN_CAPACITY }
+-- Arcade: no hunger, no morale, no breaks. Every morphi eats once and the
+-- level is won when they all have. A level lists what has to be true before
+-- anyone will eat: bins (picky, eat only from a bin), floors (one living
+-- space tile per morphi), enclosed (walls all round the floors, a door to
+-- get in), binsInside (every bin behind the walls).
+ARCADE_NEED_ORDER = { 'bins', 'floors', 'enclosed', 'binsInside' }
 
 -- Seasons and the tally. A year is four seasons; the wilds grade each one.
 -- Internally a season is still a 'quarter' and migrants are 'hires'.
@@ -167,9 +189,12 @@ WATER_COLORS     = { '#5f8fa8', '#5786a0', '#4f7d97' }
 SNOW_COLORS      = { '#e9ecf0', '#dfe3e8', '#d3d8de' }
 BRIDGE_COLORS    = { '#8a6f3f', '#7d6437', '#96773f' }
 BREAKROOM_COLORS = { '#c9b27a', '#bfa870' }
+WALL_COLORS      = { '#6b4f2a', '#5e4524' }
+DOOR_COLORS      = { '#a6823f', '#9a7838' }
 TILE_PALETTE     = {
     grass = GRASS_COLORS, dirt = DIRT_COLORS, stone = STONE_COLORS, water = WATER_COLORS,
     snow = SNOW_COLORS, bridge = BRIDGE_COLORS, breakroom = BREAKROOM_COLORS,
+    wall = WALL_COLORS, door = DOOR_COLORS,
 }
 
 MORPHI_NAMES = {

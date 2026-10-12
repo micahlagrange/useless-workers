@@ -2,6 +2,7 @@
 require('src.constants')
 local Util = require('src.util')
 local Scoring = require('src.scoring')
+local Campaign = require('src.campaign')
 
 local UI = {}
 UI.__index = UI
@@ -49,6 +50,8 @@ function UI.new()
         storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bin = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
+        wall = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
+        door = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bridge = love.graphics.newImage('assets/images/ui/line_cursor.png'),
     }
     self.alerts = {}
@@ -355,6 +358,34 @@ function UI:iconBed(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.44, y + s * 0.3, s * 0.4, s * 0.45)
 end
 
+-- A wall from above: dark timber with the mortar lines showing.
+function UI:iconWall(x, y, s)
+    love.graphics.setColor(0.42, 0.31, 0.16)
+    love.graphics.rectangle('fill', x + s * 0.06, y + s * 0.1, s * 0.88, s * 0.8)
+    love.graphics.setColor(0.24, 0.17, 0.08)
+    for i = 0, 2 do
+        love.graphics.rectangle('fill', x + s * 0.06, y + s * (0.1 + 0.27 * i + 0.24), s * 0.88, s * 0.04)
+    end
+    love.graphics.rectangle('fill', x + s * 0.5, y + s * 0.1, s * 0.04, s * 0.24)
+    love.graphics.rectangle('fill', x + s * 0.28, y + s * 0.37, s * 0.04, s * 0.24)
+    love.graphics.rectangle('fill', x + s * 0.7, y + s * 0.37, s * 0.04, s * 0.24)
+    love.graphics.rectangle('fill', x + s * 0.5, y + s * 0.64, s * 0.04, s * 0.26)
+    love.graphics.setColor(0.6, 0.46, 0.26)
+    love.graphics.rectangle('fill', x + s * 0.06, y + s * 0.1, s * 0.88, s * 0.04)
+end
+
+-- A door: a lighter plank in a dark frame, with a knob.
+function UI:iconDoor(x, y, s)
+    love.graphics.setColor(0.24, 0.17, 0.08)
+    love.graphics.rectangle('fill', x + s * 0.18, y + s * 0.06, s * 0.64, s * 0.88)
+    love.graphics.setColor(0.72, 0.56, 0.3)
+    love.graphics.rectangle('fill', x + s * 0.26, y + s * 0.12, s * 0.48, s * 0.8)
+    love.graphics.setColor(0.55, 0.42, 0.22)
+    love.graphics.rectangle('fill', x + s * 0.49, y + s * 0.12, s * 0.03, s * 0.8)
+    love.graphics.setColor(0.95, 0.85, 0.4)
+    love.graphics.rectangle('fill', x + s * 0.62, y + s * 0.5, s * 0.08, s * 0.08)
+end
+
 function UI:iconForKind(kind, x, y, s)
     if kind == ITEM_FOOD or kind == CARGO_FOOD then self:iconFood(x, y, s)
     elseif kind == CARGO_LOGS then self:iconLog(x, y, s)
@@ -401,30 +432,39 @@ function UI:drawTopBar(game)
         x = x + self.fonts.hud:getWidth(word) + 8
         return true
     end
-    local qLabel = sc:seasonLabel():upper()
-    if game.mode == 'level' then qLabel = 'LEVEL ' .. game.level.index end
+    local arcade = game.mode == 'arcade'
+    local isLevel = game.mode == 'level' or arcade
+    local qLabel, short = sc:seasonLabel():upper(), nil
+    if game.mode == 'level' then qLabel, short = 'LEVEL ' .. game.level.index, 'L' .. game.level.index end
+    if arcade then qLabel, short = 'ARCADE ' .. game.level.index, 'A' .. game.level.index end
     local timeColor = C.text
-    if sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
-    label(self.narrow and qLabel:gsub('LEVEL ', 'L'):sub(1, 3) or qLabel)
-    text(Util.formatTime(sc.quarterTimer), timeColor)
-    if game.mode == 'level' and label('PTS') then
+    if not arcade and sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
+    label(self.narrow and (short or qLabel:sub(1, 3)) or qLabel)
+    -- survival counts down; arcade has no clock, it just keeps time
+    text(Util.formatTime(arcade and game.clock or sc.quarterTimer), timeColor)
+    if isLevel and label('PTS') then
         local spent, par = game.world.spent, game.level.def.par
         text(spent .. '/' .. par, spent > par and C.warn or C.good)
     end
     -- what matters most comes first, so a tight bar drops the tail end
     icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
     local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
-    icon(UI.iconFood, stored .. '/' .. cap, cap == 0 and C.warn or C.text)
+    icon(UI.iconFood, stored .. '/' .. cap, (cap == 0 and not arcade) and C.warn or C.text)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
-    local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
-    if label('FED') then text(fed .. '%', fed < 35 and C.warn or C.text) end
+    if arcade then
+        local ate, pop = Campaign.ateCount(game.workers), #game.level.def.morphis
+        if label('ATE') then text(ate .. '/' .. pop, ate >= pop and C.good or C.text) end
+    else
+        local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
+        if label('FED') then text(fed .. '%', fed < 35 and C.warn or C.text) end
+    end
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
-    icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text)
-    if game.mode ~= 'level' and not self.narrow and label('HAUL') then text(tostring(sc.output)) end
+    if not arcade then icon(UI.iconComplaint, tostring(sc.complaints), sc.complaints > 0 and C.warn or C.text) end
+    if game.mode == 'free' and not self.narrow and label('HAUL') then text(tostring(sc.output)) end
     -- following / seed, in whatever room is left before the buttons
     local right = ''
     if game.follow and game.selectedWorker then right = 'following ' .. game.selectedWorker.name end
-    if limit - x > 220 and not self.narrow and game.mode ~= 'level' then right = right .. (right ~= '' and '   ' or '') .. 'seed ' .. tostring(game.seedString) end
+    if limit - x > 220 and not self.narrow and game.mode == 'free' then right = right .. (right ~= '' and '   ' or '') .. 'seed ' .. tostring(game.seedString) end
     if right ~= '' and limit - x > 60 then
         self:printFit(right, x, 14, limit - x, 'right', C.dim, { self.fonts.small, self.fonts.tiny })
     end
@@ -469,6 +509,8 @@ function UI:drawToolIcon(tool, x, y, size, affordable)
     if tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
     elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
     elseif tool == ABILITY_BED then self:iconBed(x, y, size)
+    elseif tool == ABILITY_WALL then self:iconWall(x, y, size)
+    elseif tool == ABILITY_DOOR then self:iconDoor(x, y, size)
     elseif tool == ABILITY_BRIDGE then self:iconBridge(x, y, size)
     end
     if not affordable then
@@ -542,19 +584,30 @@ function UI:drawBottomBar(game)
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
-            love.graphics.print('HUNGER', bx, py + 22)
-            love.graphics.setColor(0, 0, 0, 0.6)
-            love.graphics.rectangle('fill', bx, py + 36, 140, 10)
-            if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
-            love.graphics.rectangle('fill', bx, py + 36, 140 * (w.hunger / HUNGER_MAX), 10)
-            setColor(C.dim)
-            love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
-            love.graphics.setColor(0, 0, 0, 0.6)
-            love.graphics.rectangle('fill', bx, py + 61, 140, 6)
-            if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
-            love.graphics.rectangle('fill', bx, py + 61, 140 * (w.morale / MORALE_MAX), 6)
-            setColor(C.dim)
+            if w.arcade then
+                love.graphics.print('MEAL', bx, py + 22)
+                self:printFit(w.ate and 'eaten' or 'not yet', bx, py + 36, 140, 'left', w.ate and C.good or C.warn, { self.fonts.small, self.fonts.tiny })
+                setColor(C.dim)
+                love.graphics.setFont(self.fonts.tiny)
+                love.graphics.print('JOB ' .. w.roleInfo.label:lower(), bx, py + 52)
+            else
+                love.graphics.print('HUNGER', bx, py + 22)
+                love.graphics.setColor(0, 0, 0, 0.6)
+                love.graphics.rectangle('fill', bx, py + 36, 140, 10)
+                if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
+                love.graphics.rectangle('fill', bx, py + 36, 140 * (w.hunger / HUNGER_MAX), 10)
+                setColor(C.dim)
+                love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
+                love.graphics.setColor(0, 0, 0, 0.6)
+                love.graphics.rectangle('fill', bx, py + 61, 140, 6)
+                if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
+                love.graphics.rectangle('fill', bx, py + 61, 140 * (w.morale / MORALE_MAX), 6)
+                setColor(C.dim)
+            end
             love.graphics.print(self.touch and 'FOLLOW and UNITS are up top' or 'F: follow  U: units', bx, py + 70)
+        elseif game.mode == 'arcade' then
+            -- the live checklist: what the band insists on before eating
+            self:drawGoalList(game, px, py + 2, pw, 15)
         else
             local lines
             if self.touch then
@@ -577,7 +630,7 @@ function UI:drawBottomBar(game)
         end
     elseif w and w.alive then
         -- narrow: one line above the bar
-        local line = w.name .. ': ' .. w:describeState() .. '  hunger ' .. math.floor(w.hunger + 0.5) .. '%  ' .. w:mood()
+        local line = w.name .. ': ' .. w:describeState() .. (w.arcade and (w.ate and '  (eaten)' or '') or ('  hunger ' .. math.floor(w.hunger + 0.5) .. '%  ' .. w:mood()))
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
@@ -596,6 +649,17 @@ function UI:drawBottomBar(game)
         love.graphics.setFont(self.fonts.hud)
     end
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The arcade checklist with its ticks. Returns the height used.
+function UI:drawGoalList(game, x, y, w, rowH)
+    local goals = Campaign.goals(game.level, game.workers)
+    local ly = y
+    for _, g in ipairs(goals) do
+        local mark = g.done and '[x] ' or '[ ] '
+        ly = ly + self:printFit(mark .. g.label, x, ly, w, 'left', g.done and C.good or C.text, { self.fonts.small, self.fonts.tiny }) + (rowH - self.fonts.small:getHeight())
+    end
+    return ly - y
 end
 
 function UI:drawHUD(game)
@@ -634,10 +698,11 @@ function UI:drawUnits(game, view)
     local wide = pw >= 760
     love.graphics.setFont(self.fonts.tiny)
     setColor(C.dim)
+    local arcade = game.mode == 'arcade'
     love.graphics.print('MORPHI', cName, y + 56)
     love.graphics.print('TASK', cTask, y + 56)
-    love.graphics.print('HUNGER', cHunger, y + 56)
-    if wide then love.graphics.print('MORALE', cMorale, y + 56) end
+    love.graphics.print(arcade and 'MEAL' or 'HUNGER', cHunger, y + 56)
+    if wide and not arcade then love.graphics.print('MORALE', cMorale, y + 56) end
     self.unitButtons = {}
     local ry = y + 70
     local spriteScale = (rowH - 6) / 16
@@ -667,17 +732,21 @@ function UI:drawUnits(game, view)
         end
         self:printFit(w:describeState(), cTask, ry + 8, cHunger - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
         local barW = (wide and cMorale or (x + pw - 140)) - cHunger - 12
-        love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle('fill', cHunger, ry + 10, barW, 10)
-        local frac = w.hunger / HUNGER_MAX
-        if frac > 0.6 then setColor(C.good)
-        elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then love.graphics.setColor(0.95, 0.75, 0.3)
-        else setColor(C.warn) end
-        love.graphics.rectangle('fill', cHunger, ry + 10, barW * frac, 10)
-        if rowH >= 40 then
-            self:printFit(math.floor(w.hunger + 0.5) .. '%', cHunger, ry + 24, barW, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        if arcade then
+            self:printFit(w.ate and 'eaten' or 'not yet', cHunger, ry + 8, barW, 'left', w.ate and C.good or C.warn, { self.fonts.small, self.fonts.tiny })
+        else
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle('fill', cHunger, ry + 10, barW, 10)
+            local frac = w.hunger / HUNGER_MAX
+            if frac > 0.6 then setColor(C.good)
+            elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then love.graphics.setColor(0.95, 0.75, 0.3)
+            else setColor(C.warn) end
+            love.graphics.rectangle('fill', cHunger, ry + 10, barW * frac, 10)
+            if rowH >= 40 then
+                self:printFit(math.floor(w.hunger + 0.5) .. '%', cHunger, ry + 24, barW, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            end
         end
-        if wide then
+        if wide and not arcade then
             local mw = (x + pw - 140) - cMorale - 12
             love.graphics.setColor(0, 0, 0, 0.6)
             love.graphics.rectangle('fill', cMorale, ry + 10, mw, 10)
@@ -783,7 +852,7 @@ function UI:drawTitle(title, highScore)
     local opt = title.options[title.option]
     local row1
     if opt.kind == 'level' then
-        row1 = 'LEVEL ' .. opt.index .. ': ' .. (opt.locked and 'LOCKED' or opt.def.name:upper())
+        row1 = Campaign.title[opt.set] .. ' ' .. opt.index .. ': ' .. (opt.locked and 'LOCKED' or opt.def.name:upper())
     else
         row1 = 'FREE PLAY'
     end
@@ -798,7 +867,7 @@ function UI:drawTitle(title, highScore)
     local diff = DIFFICULTIES[title.difficultyIndex]
     if opt.kind == 'level' then
         if opt.locked then
-            self:centered('clear level ' .. (opt.index - 1) .. ' first', y, self.fonts.small, C.dim)
+            self:centered('clear ' .. Campaign.title[opt.set]:lower() .. ' level ' .. (opt.index - 1) .. ' first', y, self.fonts.small, C.dim)
         else
             self:centeredFit(opt.def.blurb, y, self.vw - 80, C.dim, { self.fonts.small, self.fonts.tiny })
             y = y + 14
@@ -841,8 +910,8 @@ function UI:drawTitle(title, highScore)
         self:centered('LEFT / RIGHT: level     UP / DOWN: difficulty     M: mute     F11: fullscreen', y, self.fonts.small, C.dim)
         y = y + 11 + gap(14)
     end
-    y = y + self:centeredFit('Every morphi eats one food and nothing else. Bridges and bins cost points, mining is free, logs are points.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
-    self:centeredFit('You never control a morphi. Keep them all fed to the end of the level, and spend as little as you can.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
+    y = y + self:centeredFit('ARCADE: every morphi wants one meal. Give the band what it insists on, spend as few points as you can.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
+    self:centeredFit('SURVIVAL (retired): keep everyone fed to the clock. You never control a morphi.', y, self.vw - 60, C.dim, { self.fonts.small, self.fonts.tiny })
     self.titleButtons.mute = { x = self.vw - 90, y = 10, w = 80, h = 28 }
     self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
 end
@@ -856,12 +925,12 @@ end
 function UI:drawLevelClear(game)
     local lv = game.level
     local x, y, pw, ph = self:panel(720, 360)
-    self:centeredFit('LEVEL ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+    self:centeredFit(Campaign.title[lv.set] .. ' ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
     self:centered(starText(lv.stars), y + 78, self.fonts.title, lv.stars == 3 and C.good or C.text)
     local spent, par = game.world.spent, lv.def.par
     self:centeredFit('spent ' .. spent .. ' point' .. (spent == 1 and '' or 's') .. ', par ' .. par, y + 150, pw - 40, C.text, { self.fonts.hud })
     if spent > par then
-        self:centeredFit('a sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin wall, the grove.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+        self:centeredFit('a sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin stone, the nook.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     else
         self:centeredFit('That is as cheap as it gets.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     end
@@ -870,12 +939,13 @@ function UI:drawLevelClear(game)
     if lv.index < #game.levels then
         self:centeredFit(go .. ': level ' .. (lv.index + 1) .. '     ' .. (self.touch and 'MENU: title' or 'ESC: title'), y + ph - 40, pw - 40, C.dim)
     else
-        self:centeredFit('All five levels clear. ' .. go .. ': back to the title', y + ph - 40, pw - 40, C.dim)
+        self:centeredFit('All ' .. #game.levels .. ' levels clear. ' .. go .. ': back to the title', y + ph - 40, pw - 40, C.dim)
     end
 end
 
 -- What this level asks for. Opens paused at the start and from GOAL up top.
 function UI:drawGoal(game)
+    if game.mode == 'arcade' then return self:drawArcadeGoal(game) end
     local x, y, pw, ph = self:panel(760, 310)
     local lines = {}
     if game.mode == 'level' then
@@ -921,6 +991,41 @@ function UI:drawGoal(game)
     end
     local go = self.touch and 'tap' or 'ENTER, G or click'
     self:centeredFit(go .. ': ' .. (game.started and 'back to it' or 'begin') .. '     GOAL up top brings this back', y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+end
+
+-- Arcade: the story, the checklist with live ticks, the points, the band.
+function UI:drawArcadeGoal(game)
+    local def = game.level.def
+    local x, y, pw, ph = self:panel(760, 400)
+    self:centeredFit('ARCADE ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+    local ly = y + 64
+    ly = ly + self:printFit(def.intro, x + 24, ly, pw - 48, 'left', C.text, { self.fonts.hud, self.fonts.small, self.fonts.tiny }) + 10
+    love.graphics.setFont(self.fonts.small)
+    setColor(C.dim)
+    love.graphics.print('THE BAND INSISTS ON', x + 24, ly)
+    ly = ly + 18
+    ly = ly + self:drawGoalList(game, x + 24, ly, pw - 48, 18) + 6
+    local costs = def.points .. ' points to spend, par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
+    if def.points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
+    ly = ly + self:printFit(costs, x + 24, ly, pw - 48, 'left', C.dim, { self.fonts.small, self.fonts.tiny }) + 10
+    love.graphics.setFont(self.fonts.small)
+    setColor(C.dim)
+    love.graphics.print('THE BAND', x + 24, ly)
+    ly = ly + 18
+    local cx = x + 24
+    for _, w in ipairs(game.workers) do
+        if w.alive then
+            local label = w.species .. ' the ' .. w.roleInfo.label:lower()
+            local lw = self.fonts.small:getWidth(label)
+            if cx + lw > x + pw - 24 then cx = x + 24; ly = ly + 18 end
+            love.graphics.setFont(self.fonts.small)
+            setColor(C.text)
+            love.graphics.print(label, cx, ly)
+            cx = cx + lw + 22
+        end
+    end
+    local go = self.touch and 'tap' or 'ENTER, G or click'
+    self:centeredFit(go .. ': ' .. (game.started and 'back to it' or 'begin') .. '     GOAL up top brings this back     MENU starts over', y + ph - 36, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
 end
 
 function UI:drawLevelFailed(game)

@@ -3,6 +3,10 @@
 -- carries a work item in slot 1 and a personal snack in slot 2, and takes a
 -- break in the break room after enough work. Nothing interrupts a job:
 -- eating, fetching a snack and taking a break are all chosen while idle.
+--
+-- Arcade (world.arcade): no hunger, morale or breaks. Every morphi wants to
+-- eat once, any food, but only once the level's needs are met; picky levels
+-- eat only out of a bin. Building is the builder's job alone.
 require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
@@ -25,7 +29,9 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.name = opts.name or ('Morphi ' .. self.id)
     local c = Util.tileCenter(opts.x or 1, opts.y or 1)
     self.x, self.y = c.x, c.y
-    self.hunger = opts.hunger or HUNGER_MAX
+    self.arcade = world.arcade == true
+    self.ate = false
+    self.hunger = self.arcade and HUNGER_MAX or (opts.hunger or HUNGER_MAX)
     self.drain = opts.drain or 0.7
     self.speed = opts.speed or WORKER_SPEED
     self.state = 'idle'
@@ -44,7 +50,7 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.slots = {}           -- [SLOT_WORK] = {kind, food}, [SLOT_PERSONAL] = {kind, food}
     self.eatingSlot = nil
     self.workTime = 0         -- accumulated work since the last break
-    self.breakAfter = BREAK_AFTER_SECONDS
+    self.breakAfter = self.arcade and math.huge or BREAK_AFTER_SECONDS
     self.wantsBreak = false
     self.restSpot = nil
     self.breaksTaken = 0
@@ -71,9 +77,14 @@ function Worker:carrying()
     return self.slots[SLOT_WORK]
 end
 
--- Something I would actually eat: food of my own kind.
+-- Something I would actually eat: food of my own kind (anything in arcade).
 function Worker:edible(item)
-    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and item.food == self.diet
+    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and (self.arcade or item.food == self.diet)
+end
+
+-- Does this bush grow something I eat?
+function Worker:eatsFrom(node)
+    return node.kind == NODE_BUSH and (self.arcade or node.food == self.diet)
 end
 
 function Worker:snackInPocket()
@@ -82,7 +93,12 @@ end
 
 function Worker:hasFoodInSlot(i)
     local s = self.slots[i]
-    return s ~= nil and s.kind == ITEM_FOOD and s.food == self.diet
+    return s ~= nil and s.kind == ITEM_FOOD and (self.arcade or s.food == self.diet)
+end
+
+-- Arcade: still waiting for my one meal?
+function Worker:wantsMeal()
+    return self.arcade and not self.ate
 end
 
 function Worker:tile()
@@ -187,7 +203,7 @@ function Worker:complain(reason, node)
     if node then node.complainedAt = self.clock end
     self.scoring:addComplaint()
     self.complaintCount = self.complaintCount + 1
-    self.morale = self.morale - MORALE_COMPLAINT_HIT
+    if not self.arcade then self.morale = self.morale - MORALE_COMPLAINT_HIT end
     self:say('!!')
     if node then self:ick(node.x, node.y) end
     if self.onComplain then self.onComplain(self, reason, node) end
@@ -276,6 +292,7 @@ function Worker:finishEating()
         if self:hasFoodInSlot(self.eatingSlot) then
             self.slots[self.eatingSlot] = nil
             self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+            self.ate = true
             self:emit('eat')
         end
         self.eatingSlot = nil
@@ -283,6 +300,7 @@ function Worker:finishEating()
         -- eating straight off a bush
         self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
         self.world:harvestNode(self.targetNode)
+        self.ate = true
         self:emit('eat')
         self:releaseNode()
     end
@@ -297,7 +315,7 @@ function Worker:nearestRipeBush()
     local best, bestD = nil, math.huge
     local blocked, blockedD = nil, math.huge
     for _, node in ipairs(self.world.nodes) do
-        if node.kind == NODE_BUSH and node.food == self.diet and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
+        if self:eatsFrom(node) and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
             local c = Util.tileCenter(node.x, node.y)
             local d = Util.dist(self.x, self.y, c.x, c.y)
             if self.world:isReachable(node.x, node.y) then
@@ -314,7 +332,7 @@ end
 function Worker:fetchFood()
     if self.slots[SLOT_PERSONAL] then return false end
     local t = self:tile()
-    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, self.diet)
+    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil)
     if not item then return false end
     local path = self:pathTo(item.x, item.y)
     if not path then return false end
@@ -327,7 +345,11 @@ end
 function Worker:eatSomething()
     if self:snackInPocket() then return self:snack(SLOT_PERSONAL) end
     if self:fetchFood() then return true end
+    -- picky arcade morphis eat out of a bin or not at all; the rest of
+    -- arcade waits quietly, no grumbling, when the bush is out of reach
+    if self.arcade and self.world.arcadeNeeds.bins then return false end
     local bush, blocked = self:nearestRipeBush()
+    if self.arcade then blocked = nil end
     if bush then
         local path = self:pathTo(bush.x, bush.y)
         if path then
@@ -376,8 +398,9 @@ end
 -- Decisions ---------------------------------------------------------------
 
 function Worker:decide()
-    -- 1. Survival beats output
-    if self.hunger < HUNGER_EAT_THRESHOLD then
+    -- 1. Survival beats output. In arcade: the one meal, once the level's
+    --    needs are met.
+    if self.hunger < HUNGER_EAT_THRESHOLD or (self:wantsMeal() and self.world:arcadeReady()) then
         if self:eatSomething() then return end
     end
     -- 2. Earned a break
@@ -404,7 +427,8 @@ function Worker:decide()
         types[#types + 1] = self.roleInfo.jobType
     end
     for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do types[#types + 1] = extra end
-    types[#types + 1] = 'build'
+    -- survival: anyone builds; arcade: one job each, building is the builder's
+    if not self.arcade then types[#types + 1] = 'build' end
     local function usable(j)
         if j.node then
             return j.node.ready and j.node.claimedBy == nil and not self:isIcked(j.x, j.y) and self.world:nodeReachable(j.node)
@@ -623,7 +647,7 @@ function Worker:arrive()
         self.goal = nil
         self.state = 'idle'
         self.decideTimer = 0
-        if self.hunger < HUNGER_EAT_THRESHOLD and self:snackInPocket() then
+        if (self.hunger < HUNGER_EAT_THRESHOLD or self:wantsMeal()) and self:snackInPocket() then
             self:snack(SLOT_PERSONAL)
         elseif self.wantsBreak then
             self:goRest()
@@ -773,13 +797,15 @@ function Worker:update(dt, clock)
         if not self.world:inBounds(t.x, t.y) then self.alive = false end
         return
     end
-    self.hunger = self.hunger - self.drain * dt
-    if self.hunger <= 0 then
-        self.hunger = 0
-        self:quit('starved')
-        return
+    if not self.arcade then
+        self.hunger = self.hunger - self.drain * dt
+        if self.hunger <= 0 then
+            self.hunger = 0
+            self:quit('starved')
+            return
+        end
+        if self:updateMorale(dt) then return end
     end
-    if self:updateMorale(dt) then return end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
@@ -801,6 +827,7 @@ end
 
 function Worker:describeState()
     if self.state == 'quitting' then return 'Leaving the band' end
+    if self.arcade and self.state == 'idle' and self:wantsMeal() and not self.world:arcadeReady() then return 'Waiting to eat' end
     if self.state == 'sulking' then return 'Grumbling' end
     if self.state == 'eating' then return 'Eating' end
     if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end

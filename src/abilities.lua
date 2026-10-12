@@ -23,9 +23,11 @@ function Abilities:select(tool)
 end
 
 function Abilities:costText(tool)
-    if tool == ABILITY_STORAGE then return 'free, 1 item' end
+    if tool == ABILITY_STORAGE then return self.world.arcade and 'free, living space' or 'free, 1 item' end
     if tool == ABILITY_BIN then return COSTS.bin.logs .. ' log, 4 items' end
     if tool == ABILITY_BED then return COSTS.bed.logs .. ' logs' end
+    if tool == ABILITY_WALL then return COSTS.wall.logs .. ' log' end
+    if tool == ABILITY_DOOR then return COSTS.door.logs .. ' log' end
     if tool == ABILITY_BRIDGE then return COSTS.bridge.logs .. ' log/tile' end
     if tool == ABILITY_MINE then return 'drag, free' end
     return 'free'
@@ -35,6 +37,8 @@ function Abilities:canAfford(tool)
     if tool == ABILITY_STORAGE then return self.world:canAfford(COSTS.storage) end
     if tool == ABILITY_BIN then return self.world:canAfford(COSTS.bin) end
     if tool == ABILITY_BED then return self.world:canAfford(COSTS.bed) end
+    if tool == ABILITY_WALL then return self.world:canAfford(COSTS.wall) end
+    if tool == ABILITY_DOOR then return self.world:canAfford(COSTS.door) end
     if tool == ABILITY_BRIDGE then return self.world:canAfford(COSTS.bridge) end
     return true
 end
@@ -43,7 +47,7 @@ local function stoneOrSnow(t)
     return t and (t.type == TILE_STONE or t.type == TILE_SNOW)
 end
 
-local BUILD_KINDS = { [SITE_STORAGE] = true, [SITE_BIN] = true, [SITE_BED] = true, [SITE_BRIDGE] = true }
+local BUILD_KINDS = { [SITE_STORAGE] = true, [SITE_BIN] = true, [SITE_BED] = true, [SITE_BRIDGE] = true, [SITE_WALL] = true, [SITE_DOOR] = true }
 
 -- Take a designation back. Logs come back unless someone has started on it.
 function Abilities:cancelSite(site)
