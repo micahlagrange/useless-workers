@@ -9,11 +9,12 @@
     --bg: #171a14; --panel: #22261d; --panel2: #2b3024; --line: #46503a;
     --text: #e9e6d2; --dim: #a7ab92; --good: #8fd18a; --warn: #f08a6a; --accent: #c9d17a;
     --grass: #94a35b; --stone: #6d6a64; --water: #5f8fa8; --camp: #c9b27a;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; }
   body { padding: 0 0 env(safe-area-inset-bottom); }
-  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   header h1 { font-size: 16px; margin: 0 8px 0 0; letter-spacing: .5px; }
   select, input, textarea, button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
   select, input { padding: 6px 8px; min-height: 36px; }
@@ -46,6 +47,8 @@
   .grid3 input { width: 100%; }
   .hidden { display: none !important; }
   .cost { font-variant-numeric: tabular-nums; }
+  button.arm { background: #4a2a20; border-color: var(--warn); color: var(--warn); }
+  #copyLevel { background: #3a4428; border-color: var(--accent); color: var(--good); font-weight: 600; }
   .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #000c; border: 1px solid var(--accent); padding: 8px 14px; border-radius: 8px; z-index: 9; }
   code { color: var(--accent); }
 </style>
@@ -59,6 +62,7 @@
   <button id="upLevel" title="Move earlier">&uarr;</button>
   <button id="downLevel" title="Move later">&darr;</button>
   <button id="delLevel" class="danger">Delete</button>
+  <button id="copyLevel" title="Copy this level as Lua, to paste into a chat or the game">Copy level</button>
 </header>
 
 <nav class="tabs">
@@ -123,12 +127,20 @@
         <button id="loadGame">Load levels from the game</button>
         <button id="saveGame">Save into the game</button>
         <button id="download">Download arcade_levels.lua</button>
-        <button id="copyLua">Copy Lua</button>
+        <button id="copyLua">Copy all levels</button>
       </div>
       <div class="status" id="saveStatus"></div>
       <div class="row">
         <button id="exportJson">Copy JSON backup</button>
         <button id="importJson">Load JSON from the box</button>
+      </div>
+      <div class="field"><span>Tiled (mapeditor.org): open a level made with the tools/tiled tileset, or take this one to Tiled</span>
+        <div class="row">
+          <label class="tool" for="tiledFile">Import a Tiled map (.tmj)</label>
+          <input id="tiledFile" type="file" accept=".tmj,.json,application/json" hidden>
+          <button id="copyTiled">Copy as Tiled map</button>
+          <button id="downloadTiled">Download .tmj</button>
+        </div>
       </div>
       <label class="field"><span>Lua for <code>src/arcade_levels.lua</code> (or paste JSON here to load it)</span><textarea id="out" rows="14" spellcheck="false"></textarea></label>
       <div class="status">Everything also saves in this browser as you go. After saving into the game, run <code>python tst/run.py</code>: the arcade tests play every level's obvious and clever solutions.</div>
@@ -184,9 +196,12 @@ require('src.constants')
 
 // ---------------------------------------------------------------- images
 const img = {};
+// The standalone build puts the sprites in window.EMBEDDED_ASSETS; served from
+// the repo they load from assets/images.
+function assetURL(path) { return (window.EMBEDDED_ASSETS && window.EMBEDDED_ASSETS[path]) || ASSETS + path; }
 function loadImg(key, src) { const i = new Image(); i.onload = () => draw(); i.src = src; img[key] = i; }
-for (const [food, file] of Object.entries(FOOD_SPRITE)) loadImg(food, ASSETS + 'fruit/' + file);
-for (const m of MORPHIS) loadImg('m_' + m.key, ASSETS + 'morphis/' + m.key + '-worker-walk.png');
+for (const [food, file] of Object.entries(FOOD_SPRITE)) loadImg(food, assetURL('fruit/' + file));
+for (const m of MORPHIS) loadImg('m_' + m.key, assetURL('morphis/' + m.key + '-worker-walk.png'));
 function ready(i) { return i && i.complete && i.naturalWidth > 0; }
 
 // ---------------------------------------------------------------- state
@@ -199,12 +214,19 @@ function blankLevel() {
            needs: {}, grid, obvious: {}, clever: {} };
 }
 let state = { header: DEFAULT_HEADER, levels: [blankLevel()], current: 0 };
-try { const saved = JSON.parse(localStorage.getItem(STORE)); if (saved && saved.levels && saved.levels.length) state = saved; } catch (e) {}
+let fresh = true;
+try { const saved = JSON.parse(localStorage.getItem(STORE)); if (saved && saved.levels && saved.levels.length) { state = saved; fresh = false; } } catch (e) {}
 const lv = () => state.levels[state.current];
 function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
 
 let tab = 'map', tool = '#', solName = 'obvious', solTool = 'bridge';
 const $ = (s) => document.querySelector(s);
+// A button that needs a second tap to do something it cannot take back.
+function armed(btn, label, action) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('arm'); btn.textContent = btn.dataset.label; action(); return; }
+  btn.dataset.label = btn.textContent; btn.dataset.armed = '1'; btn.classList.add('arm'); btn.textContent = label;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('arm'); btn.textContent = btn.dataset.label; } }, 3500);
+}
 const toastEl = document.createElement('div');
 function toast(msg) {
   toastEl.className = 'toast'; toastEl.textContent = msg; document.body.appendChild(toastEl);
@@ -481,9 +503,8 @@ function luaSol(s) {
   if (parts.join(', ').length < 90) return '{ ' + parts.join(', ') + ' }';
   return '{\n        ' + parts.join(',\n        ') + ',\n    }';
 }
-function toLua() {
-  const out = [state.header.trimEnd(), '', 'local Levels = {}', ''];
-  state.levels.forEach((l, i) => {
+function levelLua(l, i) {
+    const out = [];
     const needs = Object.keys(l.needs).filter(k => l.needs[k]);
     out.push(`Levels[${i + 1}] = {`);
     out.push(`    name = ${luaStr(l.name)},`);
@@ -497,8 +518,12 @@ function toLua() {
     out.push('    },');
     out.push(`    obvious = ${luaSol(l.obvious)},`);
     out.push(`    clever = ${luaSol(l.clever)},`);
-    out.push('}', '');
-  });
+    out.push('}');
+    return out.join('\n');
+}
+function toLua() {
+  const out = [state.header.trimEnd(), '', 'local Levels = {}', ''];
+  state.levels.forEach((l, i) => out.push(levelLua(l, i), ''));
   out.push('return Levels', '');
   return out.join('\n');
 }
@@ -550,6 +575,131 @@ function parseLua(text) {
   }
   return { header, levels };
 }
+
+// ---------------------------------------------------------------- Tiled
+// Tile ids in tools/tiled/morphis.tsj, in order. Keep in step with build_tiled.py.
+const TILED_CHARS = ['.', '#', '~', 'B', 'k', 'f', 'c', 'h', 'y', 'g', 'T', 'G', 'b', 'W', 'D', 'F', 'N', 'S', 'd'];
+const TILED_MARKS = ['bridge', 'mine', 'floor', 'bin', 'wall', 'door'];
+
+function tiledLayerData(layer, w, h) {
+  if (Array.isArray(layer.data)) return layer.data;
+  if (layer.compression) throw new Error('the map is compressed: in Tiled set Map > Map Properties > Tile Layer Format to CSV and save again');
+  if (layer.encoding === 'base64') {
+    const bin = atob(layer.data.trim()), out = [];
+    for (let i = 0; i + 3 < bin.length; i += 4) out.push((bin.charCodeAt(i) | bin.charCodeAt(i + 1) << 8 | bin.charCodeAt(i + 2) << 16 | bin.charCodeAt(i + 3) << 24) >>> 0);
+    return out;
+  }
+  if (layer.chunks) throw new Error('infinite maps are not supported: untick Infinite in Map Properties');
+  throw new Error('layer ' + layer.name + ' has no tile data');
+}
+
+// A Tiled map (JSON) as an editor level.
+function fromTiled(map) {
+  if (!map || !map.layers || !map.width) throw new Error('that is not a Tiled map');
+  const w = map.width, h = map.height;
+  // every tileset: its first gid and, per tile, a grid letter or a solution mark
+  const sets = (map.tilesets || []).map(ts => {
+    const tiles = {};
+    if (ts.tiles) for (const t of ts.tiles) for (const pr of t.properties || []) {
+      if (pr.name === 'char') tiles[t.id] = { char: pr.value };
+      if (pr.name === 'mark') tiles[t.id] = { mark: pr.value };
+    }
+    if (!ts.tiles) { TILED_CHARS.forEach((c, i) => tiles[i] = { char: c }); TILED_MARKS.forEach((m, i) => tiles[TILED_CHARS.length + i] = { mark: m }); }
+    return { first: ts.firstgid, tiles };
+  }).sort((a, b) => b.first - a.first);
+  const look = (gid) => {
+    const g = gid & 0x1FFFFFFF;
+    if (!g) return null;
+    const ts = sets.find(t => t.first <= g);
+    return ts ? ts.tiles[g - ts.first] || null : null;
+  };
+  const layers = map.layers.filter(l => l.type === 'tilelayer');
+  const terrain = layers.find(l => l.name.toLowerCase() === 'terrain') || layers[0];
+  if (!terrain) throw new Error('the map has no tile layer');
+  const tdata = tiledLayerData(terrain, w, h);
+  const grid = [];
+  for (let y = 0; y < h; y++) {
+    let row = '';
+    for (let x = 0; x < w; x++) { const t = look(tdata[y * w + x]); row += (t && t.char) || '.'; }
+    grid.push(row);
+  }
+  const solution = (name) => {
+    const layer = layers.find(l => l.name.toLowerCase() === name);
+    if (!layer) return {};
+    const data = tiledLayerData(layer, w, h), s = {};
+    const at = (x, y) => { const t = look(data[y * w + x]); return t && t.mark; };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const m = at(x, y);
+        if (!m) continue;
+        if (m === 'bridge' || m === 'mine') {
+          // a run of the same mark along the row becomes one line or rectangle
+          if (x > 0 && at(x - 1, y) === m) continue;
+          let end = x;
+          while (end + 1 < w && at(end + 1, y) === m && end - x + 1 < LINE_MAX) end++;
+          (s[m] = s[m] || []).push([x + 1, y + 1, end + 1, y + 1]);
+        } else (s[m] = s[m] || []).push([x + 1, y + 1]);
+      }
+    }
+    return s;
+  };
+  const prop = (n, d) => { const p = (map.properties || []).find(p => p.name === n); return p ? p.value : d; };
+  const list = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  const needs = {};
+  for (const n of list(prop('needs', ''))) if (NEEDS.some(x => x.key === n)) needs[n] = true;
+  const morphis = list(prop('morphis', 'pupper')).filter(k => MORPHIS.some(m => m.key === k));
+  return { name: String(prop('name', 'Tiled level')), blurb: String(prop('blurb', '')), intro: String(prop('intro', '')),
+    morphis: morphis.length ? morphis : ['pupper'],
+    points: { easy: +prop('easy', 10), normal: +prop('normal', 6), hard: +prop('hard', 3) }, par: +prop('par', 2),
+    needs, grid, obvious: solution('obvious'), clever: solution('clever') };
+}
+
+// An editor level as a Tiled map, using tools/tiled/morphis.tsj.
+function toTiled(l) {
+  const { w, h } = dims(l);
+  const terrain = [];
+  for (const row of l.grid) for (const ch of row) terrain.push(Math.max(0, TILED_CHARS.indexOf(ch)) + 1);
+  const marks = (sol) => {
+    const data = new Array(w * h).fill(0), s = l[sol] || {};
+    const put = (x, y, m) => { if (x >= 1 && y >= 1 && x <= w && y <= h) data[(y - 1) * w + x - 1] = TILED_CHARS.length + TILED_MARKS.indexOf(m) + 1; };
+    for (const b of s.bridge || []) for (const [x, y] of lineTiles(b[0] - 1, b[1] - 1, b[2] - 1, b[3] - 1)) if (tileChar(l, x, y) === '~') put(x + 1, y + 1, 'bridge');
+    for (const m of s.mine || []) for (const [x, y] of rectTiles(m[0] - 1, m[1] - 1, m[2] - 1, m[3] - 1)) if ('#G'.includes(tileChar(l, x, y))) put(x + 1, y + 1, 'mine');
+    for (const k of ['floor', 'bin', 'wall', 'door']) for (const [x, y] of s[k] || []) put(x, y, k);
+    return data;
+  };
+  const layer = (id, name, data, opacity) => ({ id, name, type: 'tilelayer', width: w, height: h, x: 0, y: 0, opacity, visible: true, data });
+  const needs = NEEDS.map(n => n.key).filter(k => l.needs[k]);
+  const props = [['name', 'string', l.name], ['blurb', 'string', l.blurb], ['intro', 'string', l.intro],
+    ['morphis', 'string', l.morphis.join(',')], ['needs', 'string', needs.join(',')],
+    ['easy', 'int', l.points.easy], ['normal', 'int', l.points.normal], ['hard', 'int', l.points.hard], ['par', 'int', l.par]];
+  return { type: 'map', version: '1.10', tiledversion: '1.10.2', orientation: 'orthogonal', renderorder: 'right-down',
+    width: w, height: h, tilewidth: 16, tileheight: 16, infinite: false, nextlayerid: 4, nextobjectid: 1,
+    properties: props.map(([name, type, value]) => ({ name, type, value })),
+    tilesets: [{ firstgid: 1, source: 'morphis.tsj' }],
+    layers: [layer(1, 'terrain', terrain, 1), layer(2, 'obvious', marks('obvious'), 0.8), layer(3, 'clever', marks('clever'), 0.8)] };
+}
+
+function addTiledLevel(map) {
+  const level = fromTiled(map);
+  state.levels.splice(state.current + 1, 0, level);
+  state.current++;
+  refreshAll();
+  toast(`Imported "${level.name}" from Tiled as level ${state.current + 1}`);
+}
+$('#tiledFile').onchange = (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { addTiledLevel(JSON.parse(r.result)); } catch (err) { toast('Could not import: ' + err.message); } };
+  r.readAsText(f);
+  e.target.value = '';
+};
+$('#copyTiled').onclick = () => copy(JSON.stringify(toTiled(lv()), null, 1), 'Tiled map');
+$('#downloadTiled').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(toTiled(lv()), null, 1)], { type: 'application/json' }));
+  a.download = (lv().name || 'level').toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.tmj'; a.click();
+};
 
 // ---------------------------------------------------------------- UI wiring
 function buildPalette() {
@@ -621,10 +771,12 @@ function refreshPicker() {
 $('#levelPick').onchange = (e) => { state.current = +e.target.value; refreshAll(); };
 $('#newLevel').onclick = () => { state.levels.splice(state.current + 1, 0, blankLevel()); state.current++; refreshAll(); changed(); };
 $('#dupLevel').onclick = () => { state.levels.splice(state.current + 1, 0, JSON.parse(JSON.stringify(lv()))); state.current++; lv().name += ' copy'; refreshAll(); changed(); };
-$('#delLevel').onclick = () => {
+$('#delLevel').onclick = (e) => {
   if (state.levels.length === 1) { toast('There has to be one level'); return; }
-  if (!confirm(`Delete level ${state.current + 1}, "${lv().name}"?`)) return;
-  state.levels.splice(state.current, 1); state.current = Math.max(0, state.current - 1); refreshAll(); changed();
+  armed(e.target, 'Tap to delete', () => {
+    state.levels.splice(state.current, 1); state.current = Math.max(0, state.current - 1); refreshAll(); changed();
+    toast('Level deleted');
+  });
 };
 function move(d) {
   const i = state.current, j = i + d;
@@ -678,19 +830,24 @@ const token = (location.hash.match(/token=([\w-]+)/) || [])[1];
 $('#saveGame').disabled = !token;
 $('#saveStatus').textContent = token ? 'Save writes src/arcade_levels.lua (the old one goes to .bak).'
   : 'Open the address tools/serve_editor.py prints to save straight into the game. Otherwise download or copy the Lua.';
-$('#loadGame').onclick = async () => {
+async function gameLevelsText() {
   try {
     const r = await fetch('../src/arcade_levels.lua', { cache: 'no-store' });
-    if (!r.ok) throw new Error(r.status);
-    const parsed = parseLua(await r.text());
-    if (state.levels.length > 1 && !confirm(`Replace the ${state.levels.length} levels here with the game's ${parsed.levels.length}?`)) return;
+    if (r.ok) return await r.text();
+  } catch (e) {}
+  if (window.GAME_LEVELS_LUA) return window.GAME_LEVELS_LUA; // the standalone file carries a copy
+  throw new Error('serve the repo with tools/serve_editor.py');
+}
+$('#loadGame').onclick = (e) => armed(e.target, `Tap to replace the ${state.levels.length} here`, async () => {
+  try {
+    const parsed = parseLua(await gameLevelsText());
     state = { header: parsed.header, levels: parsed.levels, current: 0 };
     refreshAll(); toast(`Loaded ${parsed.levels.length} levels`);
-  } catch (e) { toast('Could not load the game\'s levels (serve the repo with tools/serve_editor.py): ' + e.message); }
-};
+  } catch (e) { toast('Could not load the game\'s levels: ' + e.message); }
+});
 $('#saveGame').onclick = async () => {
   const bad = state.levels.map((l, i) => problems(l).length ? i + 1 : null).filter(Boolean);
-  if (bad.length && !confirm(`Levels ${bad.join(', ')} still have problems. Save anyway?`)) return;
+  if (bad.length) toast(`Saving; levels ${bad.join(', ')} still have problems`);
   try {
     const r = await fetch('/save-arcade-levels', { method: 'POST', headers: { 'X-Editor-Token': token }, body: toLua() });
     if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
@@ -702,15 +859,25 @@ $('#download').onclick = () => {
   a.href = URL.createObjectURL(new Blob([toLua()], { type: 'text/plain' }));
   a.download = 'arcade_levels.lua'; a.click();
 };
-async function copy(text, what) {
-  try { await navigator.clipboard.writeText(text); toast(what + ' copied'); }
-  catch (e) { $('#out').value = text; $('#out').select(); toast('Select the box and copy it'); }
+function copy(text, what) {
+  const fallback = () => {
+    document.querySelector('[data-tab=export]').click();
+    const out = $('#out'); out.value = text; out.focus(); out.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    toast(ok ? what + ' copied' : 'Copy the selected text in the box');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(what + ' copied'), fallback);
+  else fallback();
 }
+$('#copyLevel').onclick = () => copy(
+  `-- Morphis arcade level ${state.current + 1}, from the level editor\n` + levelLua(lv(), state.current) + '\n',
+  `Level ${state.current + 1}`);
 $('#copyLua').onclick = () => copy(toLua(), 'Lua');
 $('#exportJson').onclick = () => copy(JSON.stringify(state, null, 1), 'JSON');
 $('#importJson').onclick = () => {
   try {
     const s = JSON.parse($('#out').value);
+    if (s.type === 'map' && s.layers) { addTiledLevel(s); return; }
     if (!s.levels || !s.levels.length) throw new Error('no levels in it');
     state = { header: s.header || DEFAULT_HEADER, levels: s.levels, current: 0 };
     refreshAll(); toast(`Loaded ${s.levels.length} levels`);
@@ -718,6 +885,13 @@ $('#importJson').onclick = () => {
 };
 
 // a phone: fit the map to the screen width to start with
+if (fresh && window.GAME_LEVELS_LUA) {
+  try { const parsed = parseLua(window.GAME_LEVELS_LUA); state = { header: parsed.header, levels: parsed.levels, current: 0 }; } catch (e) {}
+}
+let framed = false;
+try { framed = window.top !== window.self; } catch (e) { framed = true; }
+if (framed) { $('#download').hidden = true; $('#downloadTiled').hidden = true; }
+if (window.STANDALONE) { $('#saveGame').hidden = true; $('#saveStatus').textContent = 'Copy level copies the level you are on, ready to paste into a chat. Your levels stay in this browser between visits.'; }
 $('#zoom').value = Math.max(12, Math.min(40, Math.floor((Math.min(window.innerWidth, 900) - 50) / dims(lv()).w)));
 refreshAll();
 </script>

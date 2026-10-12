@@ -1,0 +1,362 @@
+{
+ "type": "tileset",
+ "version": "1.10",
+ "tiledversion": "1.10.2",
+ "name": "morphis",
+ "tilewidth": 16,
+ "tileheight": 16,
+ "tilecount": 25,
+ "columns": 25,
+ "margin": 0,
+ "spacing": 0,
+ "image": "morphis_tiles.png",
+ "imagewidth": 400,
+ "imageheight": 16,
+ "tiles": [
+  {
+   "id": 0,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "."
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "grass"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "#"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "stone"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "~"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "water"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "B"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "camp"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "k"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "steak"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "f"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "fish"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "c"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "cheese"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "h"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "chili"
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "y"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "candy"
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "g"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "grapes"
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "T"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "tree"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "G"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "gold ore"
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "b"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "bush"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "W"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "wall"
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "D"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "door"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "F"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "floor"
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "N"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "bin"
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "S"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "floor spot"
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "properties": [
+    {
+     "name": "char",
+     "type": "string",
+     "value": "d"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "value": "bed"
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "bridge"
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "mine"
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "floor"
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "bin"
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "wall"
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "properties": [
+    {
+     "name": "mark",
+     "type": "string",
+     "value": "door"
+    }
+   ]
+  }
+ ]
+}
