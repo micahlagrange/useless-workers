@@ -474,43 +474,9 @@ local function updatePlaying(dt, substep)
     if not substep then updateCamera(dt) end
 end
 
--- The web page's own text field (see tools/patch_lovejs.py) is the only way
--- to raise a phone's keyboard: the page focuses it when a tap lands on the
--- seed, so it has to know where the seed is. Lines starting @@ go to the page.
-local webSeedSent
-local function tellPageAboutSeed()
-    local r = ui.titleButtons.seed
-    local msg = '@@seed none'
-    if r then
-        local s = ui.scale
-        msg = string.format('@@seed %d %d %d %d %s %s', r.x * s, r.y * s, r.w * s, r.h * s,
-            love.filesystem.getSaveDirectory(), title.seed)
-    end
-    if msg ~= webSeedSent then
-        webSeedSent = msg
-        print(msg)
-    end
-end
-
--- What the page's field has typed so far; a newline at the end means done.
-local WEB_SEED_FILE = 'webseed.txt'
-local function readWebSeed()
-    if not love.filesystem.getInfo(WEB_SEED_FILE) then return end
-    local text = love.filesystem.read(WEB_SEED_FILE) or ''
-    love.filesystem.remove(WEB_SEED_FILE)
-    title.seed = text:upper():gsub('[^%w]', ''):sub(1, 12)
-    if text:find('\n') then
-        title.editingSeed = false
-        if title.seed == '' then title.seed = DEFAULT_SEED end
-    else
-        title.editingSeed = true
-    end
-end
-
 function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
-    if state == 'title' and isWeb() then readWebSeed() end
     if state == 'playing' or state == 'units' then
         game.speed = simSpeed
         if game.paused then
@@ -597,7 +563,6 @@ function love.draw()
         ui:beginScaled()
         ui:drawTitle(title, Highscore.load(title.difficultyIndex))
         ui:endScaled()
-        if isWeb() then tellPageAboutSeed() end
         return
     end
     drawWorld()
@@ -757,7 +722,6 @@ function love.mousepressed(x, y, button, istouch)
             elseif k == 'OK' then
                 title.editingSeed = false
                 if title.seed == '' then title.seed = DEFAULT_SEED end
-                if isWeb() then print('@@seedblur') end
             elseif #title.seed < 12 then
                 title.seed = title.seed .. k
             end
