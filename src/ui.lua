@@ -21,6 +21,7 @@ local C = {
     accent = { 0.58, 0.64, 0.36 },
     warn = { 0.92, 0.45, 0.35 },
     good = { 0.55, 0.82, 0.55 },
+    gold = { 1.0, 0.9, 0.45 },  -- the perfect clear, a cut above the stars' yellow
 }
 
 local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
@@ -248,7 +249,7 @@ function UI:checkbox(x, y, s, done)
 end
 
 -- A five point star, filled when earned.
-function UI:star(cx, cy, r, filled)
+function UI:star(cx, cy, r, filled, color)
     local pts = {}
     for i = 0, 9 do
         local a = -math.pi / 2 + i * math.pi / 5
@@ -256,7 +257,11 @@ function UI:star(cx, cy, r, filled)
         pts[#pts + 1] = cx + math.cos(a) * rad
         pts[#pts + 1] = cy + math.sin(a) * rad
     end
-    if filled then
+    if filled and color then
+        setColor(color)
+        love.graphics.polygon('fill', pts)
+        love.graphics.setColor(1, 1, 1, 0.9)
+    elseif filled then
         love.graphics.setColor(0.95, 0.8, 0.25)
         love.graphics.polygon('fill', pts)
         love.graphics.setColor(0.6, 0.45, 0.1)
@@ -577,8 +582,9 @@ function UI:topValues(game)
         pair('ATE', ate .. '/' .. pop, ate >= pop and C.good or C.text)
         key = #out
         -- points only mean something in arcade; survival levels hand out none
-        local spent, par = game.world.spent, game.level.def.par
-        pair('PTS', spent .. '/' .. par, spent > par and C.warn or C.good)
+        -- green at or under the clever target, plain to the easy one, red past it
+        local spent, t = game.world.spent, game.level.def.targets
+        pair('PTS', tostring(spent), spent <= t.clever and C.good or (spent <= t.easy and C.text or C.warn))
     elseif game.mode == 'level' then
         key = 1
     end
@@ -1293,8 +1299,14 @@ function UI:drawTitle(title, highScore)
         else
             y = y + self:centeredFit(opt.def.blurb, y, self.vw - 40, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
             local points = Campaign.points(opt.def, opt.set, title.arcadeDifficulty)
-            local best = opt.best and ('   best ' .. opt.best .. (opt.best <= opt.def.par and ' (3 stars)' or '')) or ''
-            local _, h = self:centered(points .. ' points to spend, par ' .. opt.def.par .. best, y, self.fonts.small, C.text)
+            local best, aim = '', ''
+            if opt.best then
+                local stars = Campaign.stars(opt.best, opt.def)
+                best = '   best ' .. opt.best .. (opt.best == 0 and opt.set == 'arcade' and ' (PERFECT)' or ' (' .. stars .. ' star' .. (stars == 1 and '' or 's') .. ')')
+            end
+            if opt.def.targets then aim = ', aim for ' .. opt.def.targets.easy .. ', clever ' .. opt.def.targets.clever
+            else aim = ', par ' .. opt.def.par end
+            local _, h = self:centered(points .. ' points to spend' .. aim .. best, y, self.fonts.small, C.text)
             y = y + h + 4 + gap(16)
             if opt.set == 'arcade' then
                 local ad = ARCADE_DIFFICULTIES[title.arcadeDifficulty]
@@ -1388,17 +1400,27 @@ function UI:drawLevelClear(game)
     local last = lv.index >= #game.levels
     local x, y, pw, ph = self:panel(720, last and 350 or 320)
     self:centeredFit(Campaign.title[lv.set] .. ' ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
-    for i = 1, 3 do
-        self:star(x + pw / 2 + (i - 2) * 64, y + 100, 24, i <= lv.stars)
+    -- a perfect clear (not a single log) earns a fourth star, in gold
+    local n = lv.perfect and 4 or 3
+    for i = 1, n do
+        local cx = x + pw / 2 + (i - (n + 1) / 2) * 64
+        if i == 4 then self:star(cx, y + 100, 28, true, C.gold) else self:star(cx, y + 100, 24, i <= lv.stars) end
     end
-    local spent, par = game.world.spent, lv.def.par
-    self:centeredFit('spent ' .. spent .. ' point' .. (spent == 1 and '' or 's') .. ', par ' .. par, y + 150, pw - 40, C.text, { self.fonts.hud })
-    if spent > par then
-        self:centeredFit('A sharper eye spends ' .. par .. '. Look for the narrow crossing, the thin stone, the nook.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    elseif spent < par then
-        self:centeredFit('UNDER PAR. Sharper than we planned for.', y + 180, pw - 40, C.good, { self.fonts.hud, self.fonts.small })
+    local spent = game.world.spent
+    local logs = spent .. ' log' .. (spent == 1 and '' or 's')
+    if lv.def.targets then
+        local t = lv.def.targets
+        self:centeredFit('spent ' .. logs .. ' (aim ' .. t.easy .. ', clever ' .. t.clever .. ')', y + 150, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
+        local line, color, fonts = '', C.dim, { self.fonts.small, self.fonts.tiny }
+        if lv.perfect then line, color, fonts = 'PERFECT. Not a single log.', C.gold, { self.fonts.hud, self.fonts.small }
+        elseif spent <= t.clever then line, color, fonts = 'Clever. Three stars.', C.good, { self.fonts.hud, self.fonts.small }
+        elseif spent <= t.easy then line = 'Two stars. A sharper eye spends ' .. t.clever .. '.'
+        else line = 'One star. Try for ' .. t.easy .. ' or fewer: the narrow crossing, the thin stone, the nook.' end
+        self:centeredFit(line, y + 180, pw - 40, color, fonts)
     else
-        self:centeredFit('Right on par.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+        local par = lv.def.par
+        self:centeredFit('spent ' .. logs .. ', par ' .. par, y + 150, pw - 40, C.text, { self.fonts.hud })
+        self:centeredFit(spent <= par and 'At or under par.' or 'A sharper eye spends ' .. par .. '.', y + 180, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     end
     if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
     if not last then
@@ -1490,7 +1512,8 @@ function UI:drawArcadeGoal(game)
     local small = self.fonts.small
     local points = game.level.points
     local diff = ARCADE_DIFFICULTIES[game.level.difficulty or DEFAULT_ARCADE_DIFFICULTY]
-    local costs = points .. ' points to spend on ' .. diff.name:lower() .. ', par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
+    local t = def.targets
+    local costs = points .. ' points to spend on ' .. diff.name:lower() .. '. Spend ' .. t.easy .. ' or fewer for two stars, ' .. t.clever .. ' or fewer for three, none at all for a PERFECT. Bins, walls, doors and bridge tiles cost a log each; floors and mining are free.'
     if points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
     local footer = 'GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.'
     local band = {}

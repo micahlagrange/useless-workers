@@ -5,12 +5,12 @@
  "name": "morphis",
  "tilewidth": 16,
  "tileheight": 16,
- "tilecount": 25,
- "columns": 25,
+ "tilecount": 19,
+ "columns": 19,
  "margin": 0,
  "spacing": 0,
  "image": "morphis_tiles.png",
- "imagewidth": 400,
+ "imagewidth": 304,
  "imageheight": 16,
  "tiles": [
   {
@@ -295,66 +295,6 @@
      "name": "label",
      "type": "string",
      "value": "bed"
-    }
-   ]
-  },
-  {
-   "id": 19,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "bridge"
-    }
-   ]
-  },
-  {
-   "id": 20,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "mine"
-    }
-   ]
-  },
-  {
-   "id": 21,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "floor"
-    }
-   ]
-  },
-  {
-   "id": 22,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "bin"
-    }
-   ]
-  },
-  {
-   "id": 23,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "wall"
-    }
-   ]
-  },
-  {
-   "id": 24,
-   "properties": [
-    {
-     "name": "mark",
-     "type": "string",
-     "value": "door"
     }
    ]
   }

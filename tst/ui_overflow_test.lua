@@ -186,8 +186,8 @@ local function arcadeScreens()
         end
         playingScreens('arcade ' .. i)
         local game = H.game()
-        local par = game.level.def.par
-        for _, spent in ipairs({ par + 3, par, math.max(0, par - 1) }) do
+        local t = game.level.def.targets
+        for _, spent in ipairs({ t.easy + 3, t.easy, t.clever, 0 }) do
             Highscore.resetMemory()
             game.world.spent = spent
             H.levelClear()

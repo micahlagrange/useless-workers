@@ -284,7 +284,8 @@ end
 local function levelClear()
     local lv = game.level
     local spent = game.world.spent
-    lv.stars = Campaign.stars(spent, lv.def.par)
+    lv.stars = Campaign.stars(spent, lv.def)
+    lv.perfect = lv.set == 'arcade' and spent == 0
     local key = Campaign.saveKey[lv.set] .. lv.index
     local cleared = Highscore.load(key .. '_cleared') == 1
     lv.isNewBest = not cleared or spent < Highscore.load(key .. '_best')

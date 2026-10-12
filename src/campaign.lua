@@ -62,8 +62,11 @@ function Campaign.validate(def, set)
     if set == 'arcade' then
         for _, d in ipairs(ARCADE_DIFFICULTIES) do
             if type(def.points[d.key]) ~= 'number' then return false, 'no ' .. d.key .. ' points' end
-            if def.par > def.points[d.key] then return false, 'par is more than the ' .. d.key .. ' points' end
         end
+        local t = def.targets
+        if type(t) ~= 'table' or type(t.easy) ~= 'number' or type(t.clever) ~= 'number' then return false, 'no targets' end
+        if t.clever < 0 or t.clever > t.easy then return false, 'the clever target has to be between 0 and the easy target' end
+        if t.easy > def.points.easy then return false, 'the easy target is more than the easy points' end
     elseif def.par > def.points then
         return false, 'par is more than the starting points'
     end
@@ -112,10 +115,16 @@ function Campaign.load(index, rng, set, difficulty)
     return { def = def, index = index, set = set, difficulty = difficulty, points = points, world = world, specs = specs }
 end
 
--- Three stars at par, two within a couple of points, one for surviving.
-function Campaign.stars(spent, par)
-    if spent <= par then return 3 end
-    if spent <= par + 2 then return 2 end
+-- Arcade: three stars at or under the clever target, two at or under the
+-- easy one, one for clearing. Survival: three at par, two within a couple.
+function Campaign.stars(spent, def)
+    if def.targets then
+        if spent <= def.targets.clever then return 3 end
+        if spent <= def.targets.easy then return 2 end
+        return 1
+    end
+    if spent <= def.par then return 3 end
+    if spent <= def.par + 2 then return 2 end
     return 1
 end
 

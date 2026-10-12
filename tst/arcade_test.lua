@@ -132,27 +132,49 @@ function TestArcadeLevels:testPickyLevelCountsAnEmptyBinAsFoodOnItsWay()
     lu.assertTrue(workers[1]:canReachFood(), 'a reachable bin and a ripe bush mean a meal is coming')
 end
 
-function TestArcadeLevels:testObviousSolutionsFeedEveryoneOnHard()
-    for i = 1, 6 do
-        local allAte, spent, clock = play(i, 'obvious', nil, 3)
-        print(string.format('  arcade %d obvious: spent %d, fed in %ds', i, spent, math.floor(clock)))
-        lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the obvious solution')
-        local p = Campaign.arcade[i].points
-        lu.assertTrue(spent <= p.hard, 'arcade ' .. i .. ' obvious solution does not fit the hard budget')
-        lu.assertTrue(p.easy >= spent * 2, 'arcade ' .. i .. ' easy should pay for the obvious build twice')
+-- A level's solutions are optional test data. Where a level has them, the
+-- obvious build feeds everyone on the hard budget within the easy target
+-- (two stars), and the clever one within the clever target (three).
+local function hasBuild(def, name)
+    return def[name] ~= nil and next(def[name]) ~= nil
+end
+
+function TestArcadeLevels:testObviousSolutionsMeetTheEasyTargetOnHard()
+    for i = 1, Campaign.count('arcade') do
+        local def = Campaign.arcade[i]
+        if hasBuild(def, 'obvious') or i == 1 then
+            local allAte, spent, clock = play(i, 'obvious', nil, 3)
+            print(string.format('  arcade %d obvious: spent %d (easy target %d), fed in %ds', i, spent, def.targets.easy, math.floor(clock)))
+            lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the obvious solution')
+            lu.assertTrue(spent <= def.points.hard, 'arcade ' .. i .. ' obvious solution does not fit the hard budget')
+            lu.assertTrue(spent <= def.targets.easy, 'arcade ' .. i .. ' obvious solution misses the easy target')
+            lu.assertEquals(Campaign.stars(spent, def) >= 2, true)
+        end
     end
 end
 
--- The clever build beats par: three stars and then some.
-function TestArcadeLevels:testCleverSolutionsBeatPar()
-    for i = 1, 6 do
-        local allAte, spent, clock = play(i, 'clever')
-        print(string.format('  arcade %d clever:  spent %d, par %d, fed in %ds', i, spent, Campaign.arcade[i].par, math.floor(clock)))
-        lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the clever solution')
-        local par = Campaign.arcade[i].par
-        lu.assertTrue(spent <= par, 'arcade ' .. i .. ' clever solution is over par')
-        if par > 0 then lu.assertTrue(spent < par, 'arcade ' .. i .. ' clever solution should come in under par') end
+function TestArcadeLevels:testCleverSolutionsMeetTheCleverTarget()
+    for i = 1, Campaign.count('arcade') do
+        local def = Campaign.arcade[i]
+        if hasBuild(def, 'clever') or i == 1 then
+            local allAte, spent, clock = play(i, 'clever')
+            print(string.format('  arcade %d clever:  spent %d (clever target %d), fed in %ds', i, spent, def.targets.clever, math.floor(clock)))
+            lu.assertTrue(allAte, 'arcade ' .. i .. ': not everyone ate on the clever solution')
+            lu.assertTrue(spent <= def.targets.clever, 'arcade ' .. i .. ' clever solution misses the clever target')
+            lu.assertEquals(Campaign.stars(spent, def), 3)
+        end
     end
+end
+
+function TestArcadeLevels:testStarsAndPerfect()
+    local def = { targets = { easy = 5, clever = 2 } }
+    lu.assertEquals(Campaign.stars(0, def), 3)
+    lu.assertEquals(Campaign.stars(2, def), 3)
+    lu.assertEquals(Campaign.stars(3, def), 2)
+    lu.assertEquals(Campaign.stars(5, def), 2)
+    lu.assertEquals(Campaign.stars(6, def), 1)
+    -- level 1 asks for nothing: watching it is a perfect clear
+    lu.assertEquals(Campaign.arcade[1].targets.clever, 0)
 end
 
 function TestArcadeLevels:testNobodyEatsBeforeTheNeedsAreMet()

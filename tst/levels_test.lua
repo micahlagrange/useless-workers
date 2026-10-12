@@ -83,10 +83,10 @@ function TestLevels:testFirstLevelIsPupperAndSteak()
 end
 
 function TestLevels:testStars()
-    lu.assertEquals(Campaign.stars(1, 1), 3)
-    lu.assertEquals(Campaign.stars(0, 1), 3)
-    lu.assertEquals(Campaign.stars(3, 1), 2)
-    lu.assertEquals(Campaign.stars(4, 1), 1)
+    lu.assertEquals(Campaign.stars(1, { par = 1 }), 3)
+    lu.assertEquals(Campaign.stars(0, { par = 1 }), 3)
+    lu.assertEquals(Campaign.stars(3, { par = 1 }), 2)
+    lu.assertEquals(Campaign.stars(4, { par = 1 }), 1)
 end
 
 function TestLevels:testObviousSolutionsWin()

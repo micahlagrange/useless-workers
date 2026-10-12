@@ -6,18 +6,18 @@ game's arcade levels as Tiled maps.
 
 Writes, next to this script:
   morphis_tiles.png  the tiles, 16x16 each
-  morphis.tsj        the tileset (JSON); every tile carries a `char` (a grid
-                     letter) or a `mark` (a solution mark) property
+  morphis.tsj        the tileset (JSON); every tile carries a `char` property,
+                     its grid letter
   blank.tmj          an empty 22x8 level to start from
   levels/arcade_N.tmj  each level in src/arcade_levels.lua
 
-A Morphis map has three tile layers: `terrain` (the grid), `obvious` and
-`clever` (the two solutions, drawn with the mark tiles), and the level's
+A Morphis map has one tile layer, `terrain` (the grid), and the level's
 details as custom map properties: name, blurb, intro (strings), morphis and
-needs (comma separated), easy, normal, hard and par (ints). Keep the tile
-layer format as CSV (the default for .tmj). tools/level_editor.html imports
-these maps and exports levels back to them. The tile order here must match
-TILED_CHARS and TILED_MARKS in the editor.
+needs (comma separated), easy, normal, hard (the points per difficulty),
+easyTarget and cleverTarget (logs spent for two and three stars). Keep the
+tile layer format as CSV (the default for .tmj). tools/level_editor.html
+imports these maps and exports levels back to them. The tile order here must
+match TILED_CHARS in the editor.
 """
 import json
 import os
@@ -34,7 +34,6 @@ TILES = [('.', 'grass'), ('#', 'stone'), ('~', 'water'), ('B', 'camp'),
          ('k', 'steak'), ('f', 'fish'), ('c', 'cheese'), ('h', 'chili'), ('y', 'candy'), ('g', 'grapes'),
          ('T', 'tree'), ('G', 'gold ore'), ('b', 'bush'), ('W', 'wall'), ('D', 'door'), ('F', 'floor'),
          ('N', 'bin'), ('S', 'floor spot'), ('d', 'bed')]
-MARKS = ['bridge', 'mine', 'floor', 'bin', 'wall', 'door']
 FOOD_SPRITE = {'k': 'yp_ham.png', 'f': 'yp_tuna.png', 'c': 'yp_cheese.png', 'h': 'yp_chilipepper.png',
                'y': 'yp_candy1.png', 'g': 'yp_grapes.png'}
 GRASS, STONE, WATER = (148, 163, 91), (109, 106, 100), (95, 143, 168)
@@ -79,33 +78,6 @@ def draw_tile(img, i, ch):
         d.rectangle([x0 + 3, 7, x0 + 12, 13], fill=(122, 160, 216))
 
 
-def draw_mark(img, i, mark):
-    """Solution marks: see-through, so the terrain shows under them."""
-    over = Image.new('RGBA', (T, T), (0, 0, 0, 0))
-    d = ImageDraw.Draw(over)
-    if mark == 'bridge':
-        d.rectangle([0, 2, T - 1, 13], fill=(138, 111, 63, 220))
-        for y in (5, 8, 11):
-            d.line([0, y, T - 1, y], fill=(80, 56, 28, 255))
-    elif mark == 'mine':
-        d.rectangle([1, 1, T - 2, T - 2], outline=(255, 153, 51, 255))
-        d.line([3, 3, T - 4, T - 4], fill=(255, 153, 51, 255), width=2)
-        d.line([T - 4, 3, 3, T - 4], fill=(255, 153, 51, 255), width=2)
-    elif mark == 'floor':
-        d.rectangle([2, 2, 13, 13], fill=(201, 166, 107, 200), outline=(125, 98, 56, 255))
-    elif mark == 'bin':
-        d.rectangle([1, 1, T - 1, 14], fill=(140, 107, 61, 220))
-        d.rectangle([3, 3, T - 1, 12], fill=(42, 31, 16, 230))
-        d.text((4, 2), '2', fill=(255, 255, 255, 255))
-    elif mark == 'wall':
-        for r in range(3):
-            d.rectangle([1, r * 5 + 1, T - 2, r * 5 + 4], fill=(138, 106, 58, 220))
-    elif mark == 'door':
-        d.rectangle([4, 2, 11, 14], fill=(107, 79, 42, 230))
-        d.point([10, 8], fill=(230, 196, 64, 255))
-    img.alpha_composite(over, (i * T, 0))
-
-
 def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
@@ -114,17 +86,13 @@ def write_json(path, data):
 
 
 def tileset():
-    n = len(TILES) + len(MARKS)
+    n = len(TILES)
     img = Image.new('RGBA', (T * n, T), (0, 0, 0, 0))
     tiles = []
     for i, (ch, name) in enumerate(TILES):
         draw_tile(img, i, ch)
         tiles.append({'id': i, 'properties': [{'name': 'char', 'type': 'string', 'value': ch},
                                               {'name': 'label', 'type': 'string', 'value': name}]})
-    for j, mark in enumerate(MARKS):
-        i = len(TILES) + j
-        draw_mark(img, i, mark)
-        tiles.append({'id': i, 'properties': [{'name': 'mark', 'type': 'string', 'value': mark}]})
     img.save(os.path.join(HERE, 'morphis_tiles.png'))
     write_json(os.path.join(HERE, 'morphis.tsj'), {
         'type': 'tileset', 'version': '1.10', 'tiledversion': '1.10.2', 'name': 'morphis',
@@ -138,35 +106,7 @@ def tmj(level, tileset_path):
     grid = level['grid']
     w, h = len(grid[0]), len(grid)
     gid = {ch: i + 1 for i, (ch, _) in enumerate(TILES)}
-    mgid = {m: len(TILES) + j + 1 for j, m in enumerate(MARKS)}
     terrain = [gid.get(ch, 1) for row in grid for ch in row]
-
-    def marks(sol):
-        data = [0] * (w * h)
-
-        def put(x, y, m):
-            if 1 <= x <= w and 1 <= y <= h:
-                data[(y - 1) * w + (x - 1)] = mgid[m]
-        for x1, y1, x2, y2 in sol.get('bridge', []):
-            dx, dy = x2 - x1, y2 - y1
-            if abs(dx) >= abs(dy):
-                step = 1 if dx >= 0 else -1
-                pts = [(x1 + i * step, y1) for i in range(abs(dx) + 1)]
-            else:
-                step = 1 if dy >= 0 else -1
-                pts = [(x1, y1 + i * step) for i in range(abs(dy) + 1)]
-            for x, y in pts:
-                if grid[y - 1][x - 1] == '~':
-                    put(x, y, 'bridge')
-        for x1, y1, x2, y2 in sol.get('mine', []):
-            for x in range(min(x1, x2), max(x1, x2) + 1):
-                for y in range(min(y1, y2), max(y1, y2) + 1):
-                    if grid[y - 1][x - 1] in '#G':
-                        put(x, y, 'mine')
-        for kind in ('floor', 'bin', 'wall', 'door'):
-            for x, y in sol.get(kind, []):
-                put(x, y, kind)
-        return data
 
     def layer(lid, name, data, opacity=1):
         return {'id': lid, 'name': name, 'type': 'tilelayer', 'width': w, 'height': h, 'x': 0, 'y': 0,
@@ -176,15 +116,14 @@ def tmj(level, tileset_path):
              ('intro', 'string', level['intro']), ('morphis', 'string', ','.join(level['morphis'])),
              ('needs', 'string', ','.join(k for k in ('bins', 'floors', 'enclosed', 'binsInside') if level['needs'].get(k))),
              ('easy', 'int', pts['easy']), ('normal', 'int', pts['normal']), ('hard', 'int', pts['hard']),
-             ('par', 'int', level['par'])]
+             ('easyTarget', 'int', level['targets']['easy']), ('cleverTarget', 'int', level['targets']['clever'])]
     return {
         'type': 'map', 'version': '1.10', 'tiledversion': '1.10.2', 'orientation': 'orthogonal',
         'renderorder': 'right-down', 'width': w, 'height': h, 'tilewidth': T, 'tileheight': T,
-        'infinite': False, 'nextlayerid': 4, 'nextobjectid': 1,
+        'infinite': False, 'nextlayerid': 2, 'nextobjectid': 1,
         'properties': [{'name': n, 'type': t, 'value': v} for n, t, v in props],
         'tilesets': [{'firstgid': 1, 'source': tileset_path}],
-        'layers': [layer(1, 'terrain', terrain), layer(2, 'obvious', marks(level.get('obvious', {})), 0.8),
-                   layer(3, 'clever', marks(level.get('clever', {})), 0.8)],
+        'layers': [layer(1, 'terrain', terrain)],
     }
 
 
@@ -215,7 +154,7 @@ def game_levels():
 def main():
     tileset()
     blank = {'name': 'New level', 'blurb': '', 'intro': '', 'morphis': ['pupper'],
-             'points': {'easy': 10, 'normal': 6, 'hard': 3}, 'par': 2, 'needs': {},
+             'points': {'easy': 10, 'normal': 6, 'hard': 3}, 'targets': {'easy': 3, 'clever': 1}, 'needs': {},
              'grid': ['.' * 22] * 2 + ['..BB' + '.' * 18] * 2 + ['.' * 22] * 4}
     write_json(os.path.join(HERE, 'blank.tmj'), tmj(blank, 'morphis.tsj'))
     for i, lv in enumerate(game_levels(), 1):
