@@ -19,8 +19,10 @@ local Highscore = require('src.highscore')
 love.load()
 
 local SIZES = {
-    { 1280, 720 }, { 1280, 800 }, { 1920, 1080 }, { 1024, 768 }, { 800, 600 }, { 480, 320 },
-    { 852, 393, touch = true }, { 740, 360, touch = true }, { 393, 852, touch = true },
+    { 1280, 720 }, { 1280, 800 }, { 1920, 1080 }, { 1024, 768 }, { 800, 600 }, { 480, 320 }, { 852, 393 },
+    { 852, 393, touch = true }, { 740, 360, touch = true }, { 932, 430, touch = true },
+    { 393, 852, touch = true }, { 360, 780, touch = true }, { 430, 932, touch = true },
+    { 768, 1024, touch = true }, { 1024, 768, touch = true },
 }
 
 -- Stamp each text with the layer (0 is the HUD, each panel opens a new one),
@@ -43,6 +45,14 @@ function UI:panel(w, h)
     Stub.ctx.layer = layer
     Stub.ctx.panel = { x = x, y = y, w = pw, h = ph }
     return x, y, pw, ph
+end
+-- a dropdown covers what is under it on purpose: it is a layer of its own
+local dropdown = UI.drawDropdown
+function UI:drawDropdown(game)
+    layer = layer + 1
+    Stub.ctx.layer = layer
+    Stub.ctx.panel = nil
+    return dropdown(self, game)
 end
 function UI:button(r, label, ...)
     local b = { x = r.x, y = r.y, w = r.w, h = r.h, label = label, layer = Stub.ctx.layer }
@@ -153,6 +163,18 @@ local function playingScreens(tag)
     frame(tag .. ' units')
     H.setState('confirmquit')
     frame(tag .. ' menu')
+    H.setState('playing')
+    for _, which in ipairs({ 'gear', 'values' }) do
+        ui.dropdown = which
+        frame(tag .. ' ' .. which .. ' open')
+        ui.dropdown = nil
+    end
+    game.paused = true
+    frame(tag .. ' paused')
+    game.selectedWorker = game.workers[1]
+    frame(tag .. ' paused, selected')
+    game.selectedWorker = nil
+    game.paused = false
     H.setState('playing')
 end
 

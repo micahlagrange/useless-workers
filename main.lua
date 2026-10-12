@@ -63,8 +63,8 @@ local pinch = nil
 local reportTimer = 0
 local musicStarted = false
 local PAN_SPEED = 700
--- Fast forward: the simulation runs this many steps a frame. It sticks from
--- level to level, since a player who likes it fast likes it fast.
+-- Fast forward: the simulation runs this many steps a frame. Every arcade
+-- level starts at 1x, so the opening is never a blur.
 local SIM_SPEEDS = { 1, 2, 4 }
 local simSpeed = 1
 
@@ -223,6 +223,7 @@ local function newLevel(index, set, difficulty)
     local run = Campaign.load(index, Rng.new(index), set, difficulty or title.arcadeDifficulty)
     game = {}
     game.mode = set == 'arcade' and 'arcade' or 'level'
+    if set == 'arcade' then simSpeed = 1 end
     setTools(set == 'arcade' and TOOLS_ARCADE or TOOLS_SURVIVAL)
     game.level = run
     game.levels = Campaign.list(set)
@@ -401,6 +402,28 @@ function love.resize(w, h)
 end
 
 
+-- Panning, following and effects: once a frame, paused or not.
+local function updateCamera(dt)
+    local dx, dy = 0, 0
+    if love.keyboard.isDown('w') or love.keyboard.isDown('up') then dy = dy - 1 end
+    if love.keyboard.isDown('s') or love.keyboard.isDown('down') then dy = dy + 1 end
+    if love.keyboard.isDown('a') or love.keyboard.isDown('left') then dx = dx - 1 end
+    if love.keyboard.isDown('d') or love.keyboard.isDown('right') then dx = dx + 1 end
+    if dx ~= 0 or dy ~= 0 then
+        game.follow = false
+        game.camera:pan(dx * PAN_SPEED * dt, dy * PAN_SPEED * dt)
+    end
+    if game.follow then
+        local w = game.selectedWorker
+        if w and w.alive then
+            game.camera:centerOn(w.x, w.y)
+        else
+            game.follow = false
+        end
+    end
+    Effects.update(dt)
+end
+
 -- substep: an extra fast forward step this frame; the camera and effects
 -- only move once a frame.
 local function updatePlaying(dt, substep)
@@ -448,25 +471,7 @@ local function updatePlaying(dt, substep)
         if game.mode == 'level' then levelClear() else closeQuarter() end
         return
     end
-    if substep then return end
-    local dx, dy = 0, 0
-    if love.keyboard.isDown('w') or love.keyboard.isDown('up') then dy = dy - 1 end
-    if love.keyboard.isDown('s') or love.keyboard.isDown('down') then dy = dy + 1 end
-    if love.keyboard.isDown('a') or love.keyboard.isDown('left') then dx = dx - 1 end
-    if love.keyboard.isDown('d') or love.keyboard.isDown('right') then dx = dx + 1 end
-    if dx ~= 0 or dy ~= 0 then
-        game.follow = false
-        game.camera:pan(dx * PAN_SPEED * dt, dy * PAN_SPEED * dt)
-    end
-    if game.follow then
-        local w = game.selectedWorker
-        if w and w.alive then
-            game.camera:centerOn(w.x, w.y)
-        else
-            game.follow = false
-        end
-    end
-    Effects.update(dt)
+    if not substep then updateCamera(dt) end
 end
 
 function love.update(dt)
@@ -474,9 +479,15 @@ function love.update(dt)
     Audio.update(dt)
     if state == 'playing' or state == 'units' then
         game.speed = simSpeed
-        for step = 1, simSpeed do
-            updatePlaying(dt, step > 1)
-            if state ~= 'playing' and state ~= 'units' then break end
+        if game.paused then
+            -- paused: nothing in the world moves, but the camera and the
+            -- tools still work
+            updateCamera(dt)
+        else
+            for step = 1, simSpeed do
+                updatePlaying(dt, step > 1)
+                if state ~= 'playing' and state ~= 'units' then break end
+            end
         end
         ui:update(dt)
     elseif state == 'report' then
@@ -514,24 +525,28 @@ local function drawWorld()
         if not ui:isOverBars(mx, my) then
             local tile = cam:toTile(mx, my)
             local tool = game.abilities.selected
-            if tool == ABILITY_MINE and game.lineStart then
-                local lx, hx = math.min(game.lineStart.x, tile.x), math.max(game.lineStart.x, tile.x)
-                local ly, hy = math.min(game.lineStart.y, tile.y), math.max(game.lineStart.y, tile.y)
-                for x = lx, hx do
-                    for y = ly, hy do
-                        local t = game.world:get(x, y)
-                        local minable = t and (t.type == TILE_STONE or t.type == TILE_SNOW)
-                        game.view:drawTileFill(x, y, minable and { 1, 0.6, 0.2, 0.45 } or { 1, 1, 1, 0.12 })
-                    end
-                end
-            elseif tool == ABILITY_BRIDGE and game.lineStart then
-                local tiles, cost = game.abilities:lineQuote(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+            if game.lineStart then
+                -- what the drag will do on release: red where it clears marks
+                local tiles, clearing = game.abilities:dragPlan(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
                 for _, p in ipairs(tiles) do
                     local t = game.world:get(p.x, p.y)
-                    local color = (t and t.type == TILE_WATER) and { 0.9, 0.7, 0.3, 0.55 } or { 1, 1, 1, 0.15 }
+                    local color = { 1, 1, 1, 0.15 }
+                    if clearing then
+                        if t and t.site then color = { 1, 0.3, 0.25, 0.5 } end
+                    elseif tool == ABILITY_MINE then
+                        if t and (t.type == TILE_STONE or t.type == TILE_SNOW) then color = { 1, 0.6, 0.2, 0.45 } end
+                    elseif tool == ABILITY_BRIDGE then
+                        if t and t.type == TILE_WATER then color = { 0.9, 0.7, 0.3, 0.55 } end
+                    else
+                        color = { 0.85, 0.9, 0.5, 0.4 }
+                    end
                     game.view:drawTileFill(p.x, p.y, color)
                 end
-                game.lineCost = cost
+                game.lineCost = nil
+                if tool == ABILITY_BRIDGE and not clearing then
+                    local _, cost = game.abilities:lineQuote(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+                    game.lineCost = cost
+                end
             else
                 game.view:drawTileOutline(tile.x, tile.y, { 1, 1, 1, 0.8 })
             end
@@ -645,8 +660,17 @@ local function cycleSpeed()
     game.speed = simSpeed
 end
 
+-- The world stops; building, tools, panning and zooming carry on.
+local function togglePause()
+    game.paused = not game.paused
+end
+
 local function pressTopButton(id)
-    if id == 'units' then openUnits()
+    if id == 'gear' or id == 'values' then
+        -- the folded buttons or values: open, or close again
+        ui.dropdown = ui.dropdown ~= id and id or nil
+    elseif id == 'units' then openUnits()
+    elseif id == 'pause' then togglePause()
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
@@ -753,6 +777,16 @@ function love.mousepressed(x, y, button, istouch)
         return
     end
     if button ~= 1 then return end
+    if ui.dropdown then
+        -- an open dropdown takes the press: a button in it, or a press
+        -- anywhere else just closes it
+        local id = ui:dropdownAt(vx, vy)
+        if id == 'inside' then return end
+        local top = vy < TOP_BAR_H and ui:topButtonAt(vx, vy)
+        if not (top == ui.dropdown) then ui.dropdown = nil end
+        if id then pressTopButton(id) return end
+        if not top then return end
+    end
     if vy < TOP_BAR_H then
         local id = ui:topButtonAt(vx, vy)
         if id then pressTopButton(id) end
@@ -781,12 +815,11 @@ function love.mousepressed(x, y, button, istouch)
     if tool == ABILITY_SELECT then
         -- a tap selects, a drag pans; decided on release
         game.panStart = { x = x, y = y, moved = false, tile = tile }
-    elseif tool == ABILITY_BRIDGE or tool == ABILITY_MINE then
+    else
+        -- every other tool acts on release, so a second finger (a pinch)
+        -- can still call it off
         game.lineStart = tile
         game.lineCost = nil
-    else
-        local ok, why = game.abilities:use(tile.x, tile.y)
-        if not ok and why then ui:toast(why) end
     end
 end
 
@@ -800,13 +833,8 @@ function love.mousereleased(x, y, button)
     elseif button == 1 and game.lineStart then
         if not ui:isOverBars(ui:toVirtual(x, y)) then
             local tile = game.camera:toTile(x, y)
-            local ok, why
-            if game.abilities.selected == ABILITY_MINE then
-                ok, why = game.abilities:designateMine(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
-            else
-                ok, why = game.abilities:useLine(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
-            end
-            if not ok and why then ui:toast(why) end
+            local ok, why = game.abilities:useDrag(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
+            if why then ui:toast(why) end
         end
         game.lineStart = nil
         game.lineCost = nil
@@ -920,7 +948,10 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'f' then
             toggleFollow()
-        elseif key == 'space' then
+        elseif key == 'space' or key == 'p' then
+            togglePause()
+            Audio.playSFX('click')
+        elseif key == 'tab' then
             cycleSpeed()
             Audio.playSFX('click')
         elseif key == 'u' then

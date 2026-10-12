@@ -26,11 +26,11 @@ function Camera:fitWorld(barsPx)
     self:centerOn(self.worldPxW / 2, self.worldPxH / 2)
 end
 
--- Zooming in is capped so at least twenty tiles stay on screen; a phone
--- never ends up looking at one giant tree.
+-- Zooming in stops when about seven tiles span the screen: close enough to
+-- read a morphi's face, not so close it is one giant tree.
 function Camera:setView(w, h)
     self.viewW, self.viewH = w, h
-    self.maxScale = Util.clamp(w / (20 * TILE_SIZE), 1.5, 4)
+    self.maxScale = Util.clamp(math.min(w, h * 1.6) / (7 * TILE_SIZE), 2, 12)
     self.scale = Util.clamp(self.scale, self.minScale, self.maxScale)
     self:clamp()
 end

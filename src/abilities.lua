@@ -147,6 +147,83 @@ function Abilities:useLine(x1, y1, x2, y2)
     return true
 end
 
+-- How each tool lays marks along a drag: a filled rectangle, a straight
+-- line, or a single tile where the drag ends.
+local DRAG_SHAPE = {
+    [ABILITY_MINE] = 'rect', [ABILITY_STORAGE] = 'rect',
+    [ABILITY_BRIDGE] = 'line', [ABILITY_WALL] = 'line',
+}
+
+local function siteKindFor(tool)
+    if tool == ABILITY_MINE then return SITE_MINE end
+    if tool == ABILITY_BRIDGE then return SITE_BRIDGE end
+    return SITE_FOR_TOOL[tool]
+end
+
+local function rect(x1, y1, x2, y2)
+    local tiles = {}
+    for x = math.min(x1, x2), math.max(x1, x2) do
+        for y = math.min(y1, y2), math.max(y1, y2) do tiles[#tiles + 1] = { x = x, y = y } end
+    end
+    return tiles
+end
+
+-- What a drag from (x1, y1) to (x2, y2) with the selected tool would touch.
+-- A drag that starts on one of the tool's own marks clears that kind of
+-- mark over the whole rectangle instead of laying new ones. Returns the
+-- tiles and whether it clears.
+function Abilities:dragPlan(x1, y1, x2, y2)
+    local tool = self.selected
+    local kind = siteKindFor(tool)
+    if not kind then return {}, false end
+    local start = self.world:get(x1, y1)
+    if start and start.site and start.site.kind == kind then
+        return rect(x1, y1, x2, y2), true
+    end
+    local shape = DRAG_SHAPE[tool]
+    if shape == 'rect' then return rect(x1, y1, x2, y2), false end
+    if shape == 'line' then return self.world:lineTiles(x1, y1, x2, y2), false end
+    return { { x = x2, y = y2 } }, false
+end
+
+-- A press, a drag and a release with any tool but SELECT. Marks are laid
+-- (or cleared) on release, never on the press.
+function Abilities:useDrag(x1, y1, x2, y2)
+    local tool = self.selected
+    local kind = siteKindFor(tool)
+    if not kind then return false, nil end
+    local tiles, clearing = self:dragPlan(x1, y1, x2, y2)
+    if tool == ABILITY_MINE then return self:designateMine(x1, y1, x2, y2) end
+    if clearing then
+        local count = 0
+        for _, p in ipairs(tiles) do
+            local t = self.world:get(p.x, p.y)
+            if t and t.site and t.site.kind == kind and not t.site.working then
+                self.jobs:removeSite(t.site)
+                self.world:removeSite(t.site)
+                self.world:refund(COSTS[kind] or {})
+                count = count + 1
+            end
+        end
+        if count == 0 then return false, 'Someone is already building that' end
+        self:effect('unmark', { count = count, kind = kind })
+        return true
+    end
+    if tool == ABILITY_BRIDGE then return self:useLine(x1, y1, x2, y2) end
+    -- build tools: one mark per tile, skipping tiles that already have this
+    -- kind, until the logs run out
+    local placed, why = 0, nil
+    for _, p in ipairs(tiles) do
+        local t = self.world:get(p.x, p.y)
+        if t and not (t.site and t.site.kind == kind) then
+            local ok, reason = self:use(p.x, p.y)
+            if ok then placed = placed + 1 else why = why or reason end
+        end
+    end
+    if placed == 0 then return false, why end
+    return true, (placed < #tiles and why) or nil
+end
+
 function Abilities:lineQuote(x1, y1, x2, y2)
     local tiles = self.world:lineTiles(x1, y1, x2, y2)
     local n = 0

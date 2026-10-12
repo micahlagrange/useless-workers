@@ -3,7 +3,7 @@
 -- tst/ui_overflow_test.lua measures text with it. Run from the repo root:
 --   "C:/Program Files/LOVE/lovec.exe" tools/font_metrics > tst/c64_metrics.lua
 local FONT = 'assets/fonts/commodore64.ttf'
-local SIZES = { 8, 9, 11, 13, 15, 16, 26, 44, 46 }
+local SIZES = { 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 26, 28, 44, 46 }
 
 function love.load()
     local f = assert(io.open(FONT, 'rb'))

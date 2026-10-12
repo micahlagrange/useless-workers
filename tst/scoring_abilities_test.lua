@@ -130,6 +130,50 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
     lu.assertFalse(ok)
 end
+function TestAbilities:testDragLaysOnReleaseInTheToolsShape()
+    -- a floor drag fills the rectangle
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:useDrag(6, 1, 8, 2)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_STORAGE), 6)
+    -- a wall drag is a straight line, one log a tile, until the logs run out
+    self.abilities:select(ABILITY_WALL)
+    local ok, why = self.abilities:useDrag(10, 1, 15, 1)
+    lu.assertTrue(ok)
+    lu.assertStrContains(why, 'logs')
+    lu.assertEquals(#self.world:sitesOfKind(SITE_WALL), 4)
+    lu.assertEquals(self.world.stock.logs, 0)
+    -- a bin goes where the drag ends, not where it started
+    self.world.stock.logs = 4
+    self.abilities:select(ABILITY_BIN)
+    lu.assertTrue((self.abilities:useDrag(10, 4, 12, 5)))
+    lu.assertNil(self.world:get(10, 4).site)
+    lu.assertEquals(self.world:get(12, 5).site.kind, SITE_BIN)
+end
+function TestAbilities:testDragFromAMarkClearsThatKind()
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:useDrag(6, 1, 9, 3)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_STORAGE), 12)
+    self.abilities:select(ABILITY_BIN)
+    lu.assertTrue((self.abilities:useDrag(11, 4, 11, 4)))
+    -- starting on a floor mark with the floor tool clears floors only
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:useDrag(6, 1, 11, 4)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_STORAGE), 0)
+    lu.assertEquals(self.world:get(11, 4).site.kind, SITE_BIN)
+    -- walls come back with their logs
+    self.abilities:select(ABILITY_WALL)
+    lu.assertTrue((self.abilities:useDrag(6, 5, 8, 5)))
+    lu.assertEquals(self.world.stock.logs, 0)
+    lu.assertTrue((self.abilities:useDrag(8, 5, 6, 5)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_WALL), 0)
+    lu.assertEquals(self.world.stock.logs, 3)
+    -- and a bridge drag from a bridge mark clears the line
+    self.abilities:select(ABILITY_BRIDGE)
+    lu.assertTrue((self.abilities:useDrag(4, 4, 5, 4)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_BRIDGE), 2)
+    lu.assertTrue((self.abilities:useDrag(4, 4, 5, 5)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_BRIDGE), 0)
+end
 function TestAbilities:testDesignationsCancelAndSwap()
     self.abilities:select(ABILITY_STORAGE)
     lu.assertTrue((self.abilities:use(3, 4)))
