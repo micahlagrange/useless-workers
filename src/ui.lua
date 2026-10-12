@@ -81,7 +81,13 @@ function UI:useFonts(set)
     self.fontSet = set
     if not self.fontCache[set] then
         local f = {}
-        for name, size in pairs(self.fontSets[set]) do f[name] = love.graphics.newFont(size) end
+        for name, size in pairs(self.fontSets[set]) do
+            f[name] = love.graphics.newFont(size)
+            -- the game's default filter is nearest, for the pixel art; text
+            -- drawn under the HUD's fractional scale needs linear or it
+            -- drops and doubles pixel columns
+            f[name]:setFilter('linear', 'linear')
+        end
         self.fontCache[set] = f
     end
     self.fonts = self.fontCache[set]

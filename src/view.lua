@@ -27,6 +27,7 @@ function View.new(world)
         self.foodImages[food] = love.graphics.newImage('assets/images/fruit/' .. file)
     end
     self.bubbleFont = love.graphics.newFont(9)
+    self.bubbleFont:setFilter('linear', 'linear')
     self.rgb = {}
     return self
 end
