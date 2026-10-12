@@ -176,14 +176,25 @@ function Abilities:dragPlan(x1, y1, x2, y2)
     local tool = self.selected
     local kind = siteKindFor(tool)
     if not kind then return {}, false end
+    local shape = DRAG_SHAPE[tool]
+    if not shape then
+        -- furniture: one per tap, where the finger lifts; lifting on one
+        -- of its own takes it back
+        local at = self.world:get(x2, y2)
+        return self.world:siteTiles(kind, x2, y2), at ~= nil and at.site ~= nil and at.site.kind == kind
+    end
     local start = self.world:get(x1, y1)
     if start and start.site and start.site.kind == kind then
         return rect(x1, y1, x2, y2), true
     end
-    local shape = DRAG_SHAPE[tool]
     if shape == 'rect' then return rect(x1, y1, x2, y2), false end
-    if shape == 'line' then return self.world:lineTiles(x1, y1, x2, y2), false end
-    return { { x = x2, y = y2 } }, false
+    return self.world:lineTiles(x1, y1, x2, y2), false
+end
+
+-- The furniture a tool puts down one at a time, or nil for the drag tools.
+function Abilities:ghostKind()
+    if DRAG_SHAPE[self.selected] then return nil end
+    return siteKindFor(self.selected)
 end
 
 -- A press, a drag and a release with any tool but SELECT. Marks are laid
@@ -194,6 +205,12 @@ function Abilities:useDrag(x1, y1, x2, y2)
     if not kind then return false, nil end
     local tiles, clearing = self:dragPlan(x1, y1, x2, y2)
     if tool == ABILITY_MINE then return self:designateMine(x1, y1, x2, y2) end
+    if not DRAG_SHAPE[tool] then
+        -- furniture: exactly one, at the release tile
+        local at = self.world:get(x2, y2)
+        if clearing then return self:cancelSite(at.site) end
+        return self:use(x2, y2)
+    end
     if clearing then
         local count = 0
         for _, p in ipairs(tiles) do

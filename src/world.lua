@@ -165,7 +165,9 @@ function World.fromGrid(rows, rng)
         local node = self:addNode(n.kind, n.x, n.y, n.food)
         node.ready = true
     end
-    for _, st in ipairs(storageTiles) do self:markStorage(st.x, st.y, st.capacity) end
+    for _, st in ipairs(storageTiles) do
+        if st.capacity == STORAGE_BIN_CAPACITY then self:markBin(st.x, st.y) else self:markStorage(st.x, st.y, st.capacity) end
+    end
     for _, bt in ipairs(bedTiles) do self:markBed(bt.x, bt.y) end
     for _, ft in ipairs(floorTiles) do self:markFloor(ft.x, ft.y) end
     self.version = self.version + 1
@@ -439,7 +441,7 @@ function World:randomNearbyPassable(rng, x, y, radius)
         local ny = y + rng:int(-radius, radius)
         if (nx ~= x or ny ~= y) and self:inBounds(nx, ny) and reach[nx][ny] then
             local t = self.tiles[nx][ny]
-            if #t.items == 0 and t.storage == 0 and not t.bed and t.type ~= TILE_BREAKROOM then
+            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and t.type ~= TILE_BREAKROOM then
                 return { x = nx, y = ny }
             end
             fallback = fallback or { x = nx, y = ny }
@@ -454,7 +456,7 @@ function World:freeNeighbour(x, y)
     for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
         if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
             local t = self.tiles[c[1]][c[2]]
-            if #t.items == 0 and t.storage == 0 and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
+            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
         end
     end
     return nil
@@ -724,6 +726,29 @@ function World:markStorage(x, y, capacity)
     return true
 end
 
+-- A bin is two tiles wide: its items sit on the left tile (where morphis
+-- come to it) and the right one is part of the bin, held by nothing else.
+function World:markBinPart(x, y, ax, ay)
+    local t = self:get(x, y)
+    if not t then return false end
+    t.binPart = { x = ax, y = ay }
+    self.version = self.version + 1
+    return true
+end
+
+-- A finished bin at (x, y): storage on the left tile, the right one its part.
+function World:markBin(x, y)
+    if not self:markStorage(x, y, STORAGE_BIN_CAPACITY) then return false end
+    self:markBinPart(x + 1, y, x, y)
+    return true
+end
+
+-- The tiles a site covers: two for a bin, one for everything else.
+function World:siteTiles(kind, x, y)
+    if kind == SITE_BIN then return { { x = x, y = y }, { x = x + 1, y = y } } end
+    return { { x = x, y = y } }
+end
+
 -- Floors (arcade) ----------------------------------------------------------
 -- Living space: one tile per morphi. Holds nothing, just has to exist, and
 -- in later levels has to sit behind walls.
@@ -794,7 +819,7 @@ function World:binsInsideCount()
     local inside = self:enclosure().inside
     local n = 0
     for _, s in ipairs(self.storageList) do
-        if s.capacity > STORAGE_FLOOR_CAPACITY and inside[Util.key(s.x, s.y)] then n = n + 1 end
+        if s.capacity > STORAGE_FLOOR_CAPACITY and inside[Util.key(s.x, s.y)] and inside[Util.key(s.x + 1, s.y)] then n = n + 1 end
     end
     return n
 end
@@ -855,7 +880,7 @@ function World:claimRestSpot(worker, fromX, fromY)
     if not best and self.breakroom then
         for _, sp in ipairs(self:spawnTiles(2)) do
             local t = self.tiles[sp.x][sp.y]
-            if t.type ~= TILE_BREAKROOM and #t.items == 0 and t.storage == 0 and t.restingBy == nil then
+            if t.type ~= TILE_BREAKROOM and #t.items == 0 and t.storage == 0 and not t.binPart and t.restingBy == nil then
                 best = { x = sp.x, y = sp.y, bed = false }
                 break
             end
@@ -1033,24 +1058,40 @@ function World:nextSiteInArea(area, x, y)
     return best, bestSpot
 end
 
-function World:addSite(kind, x, y, area)
+-- Can a site of this kind go on (x, y)? A bin checks both its tiles.
+function World:canSite(kind, x, y)
+    for _, p in ipairs(self:siteTiles(kind, x, y)) do
+        local ok, why = self:canSiteTile(kind, p.x, p.y)
+        if not ok then return false, why end
+    end
+    return true
+end
+
+function World:canSiteTile(kind, x, y)
     local t = self:get(x, y)
-    if not t or t.site then return nil, 'already marked' end
+    if not t then return false, 'needs room' end
+    if t.site then return false, 'already marked' end
     if kind == SITE_MINE then
         if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
     elseif kind == SITE_STORAGE or kind == SITE_BIN or kind == SITE_BED then
-        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.bed or t.floor then return nil, 'needs open ground' end
-        if self.arcade and kind == SITE_STORAGE and t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return nil, 'goes on the ground' end
+        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.floor then return false, 'needs open ground' end
+        if self.arcade and kind == SITE_STORAGE and t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return false, 'goes on the ground' end
     elseif kind == SITE_WALL or kind == SITE_DOOR then
-        if t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return nil, 'goes on open ground' end
-        if #t.items > 0 or t.node or t.storage > 0 or t.bed or t.floor then return nil, 'needs open ground' end
+        if t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return false, 'goes on open ground' end
+        if #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.floor then return false, 'needs open ground' end
     elseif kind == SITE_BRIDGE then
-        if t.type ~= TILE_WATER then return nil, 'bridges go over water' end
+        if t.type ~= TILE_WATER then return false, 'bridges go over water' end
     end
+    return true
+end
+
+function World:addSite(kind, x, y, area)
+    local ok, why = self:canSite(kind, x, y)
+    if not ok then return nil, why end
     local site = { id = self.nextSiteId, kind = kind, x = x, y = y, claimedBy = nil, done = false, area = area }
     self.nextSiteId = self.nextSiteId + 1
     self.sites[#self.sites + 1] = site
-    t.site = site
+    for _, p in ipairs(self:siteTiles(kind, x, y)) do self.tiles[p.x][p.y].site = site end
     if area then area.sites[#area.sites + 1] = site end
     return site
 end
@@ -1061,8 +1102,10 @@ function World:removeSite(site)
     for i = #self.sites, 1, -1 do
         if self.sites[i] == site then table.remove(self.sites, i) end
     end
-    local t = self:get(site.x, site.y)
-    if t and t.site == site then t.site = nil end
+    for _, p in ipairs(self:siteTiles(site.kind, site.x, site.y)) do
+        local t = self:get(p.x, p.y)
+        if t and t.site == site then t.site = nil end
+    end
     local area = site.area
     if area then
         for i = #area.sites, 1, -1 do
@@ -1112,7 +1155,7 @@ function World:completeSite(site)
     elseif site.kind == SITE_DOOR then
         self:setType(site.x, site.y, TILE_DOOR)
     elseif site.kind == SITE_BIN then
-        self:markStorage(site.x, site.y, STORAGE_BIN_CAPACITY)
+        self:markBin(site.x, site.y)
     elseif site.kind == SITE_BED then
         self:markBed(site.x, site.y)
     elseif site.kind == SITE_BRIDGE then

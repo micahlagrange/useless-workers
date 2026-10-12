@@ -545,7 +545,21 @@ local function drawWorld()
         if not ui:isOverBars(mx, my) then
             local tile = cam:toTile(mx, my)
             local tool = game.abilities.selected
-            if game.lineStart then
+            -- furniture shows a ghost where it will go: under the mouse, or
+            -- under the finger while it is down (a lifted finger has no hover)
+            local ghost = game.abilities:ghostKind()
+            if ghost and (game.lineStart or not ui.touch) then
+                local t = game.world:get(tile.x, tile.y)
+                if t and t.site and t.site.kind == ghost then
+                    -- lifting here takes it back
+                    for _, p in ipairs(game.world:siteTiles(ghost, t.site.x, t.site.y)) do
+                        game.view:drawTileFill(p.x, p.y, { 1, 0.3, 0.25, 0.5 })
+                    end
+                else
+                    local ok = game.world:canSite(ghost, tile.x, tile.y) and game.abilities:canAfford(tool)
+                    game.view:drawGhost(ghost, tile.x, tile.y, ok)
+                end
+            elseif game.lineStart then
                 -- what the drag will do on release: red where it clears marks
                 local tiles, clearing = game.abilities:dragPlan(game.lineStart.x, game.lineStart.y, tile.x, tile.y)
                 for _, p in ipairs(tiles) do

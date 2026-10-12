@@ -124,7 +124,7 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     lu.assertEquals(self.world.stock.logs, 4 - COSTS.bin.logs)
     lu.assertEquals(self.world:get(6, 1).site.kind, SITE_BIN)
     self.world.stock.logs = 0
-    ok, why = self.abilities:use(7, 1)
+    ok, why = self.abilities:use(9, 1)
     lu.assertFalse(ok)
     lu.assertStrContains(why, 'logs')
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
@@ -174,23 +174,59 @@ function TestAbilities:testDragFromAMarkClearsThatKind()
     lu.assertTrue((self.abilities:useDrag(4, 4, 5, 5)))
     lu.assertEquals(#self.world:sitesOfKind(SITE_BRIDGE), 0)
 end
+function TestAbilities:testBinsAreTwoWide()
+    self.abilities:select(ABILITY_BIN)
+    lu.assertTrue((self.abilities:use(7, 4)))
+    local bin = self.world:get(7, 4).site
+    lu.assertEquals(self.world:get(8, 4).site, bin)           -- the right half is the same mark
+    -- nothing else goes on the right half, and a bin needs room on its right
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertFalse((self.world:canSite(SITE_STORAGE, 8, 4)))
+    lu.assertFalse((self.world:canSite(SITE_BIN, 6, 4)))       -- its right half would be the bin's
+    lu.assertFalse((self.world:canSite(SITE_BIN, 15, 1)))      -- off the map's edge
+    lu.assertFalse((self.world:canSite(SITE_BIN, 2, 4)))       -- water on the right
+    -- a tap on either half takes it back
+    self.abilities:select(ABILITY_BIN)
+    lu.assertTrue((self.abilities:use(8, 4)))
+    lu.assertNil(self.world:get(7, 4).site)
+    lu.assertNil(self.world:get(8, 4).site)
+    -- built, it is storage on the left and part of the bin on the right
+    self.world:completeSite(self.world:addSite(SITE_BIN, 10, 2))
+    lu.assertEquals(self.world:get(10, 2).storage, STORAGE_BIN_CAPACITY)
+    lu.assertNotNil(self.world:get(11, 2).binPart)
+    lu.assertFalse((self.world:canSite(SITE_BED, 11, 2)))
+end
+function TestAbilities:testFurnitureIsOnePerTapWhereTheFingerLifts()
+    self.abilities:select(ABILITY_BIN)
+    -- a drag across the map still places one bin, at the end
+    lu.assertTrue((self.abilities:useDrag(6, 1, 10, 3)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_BIN), 1)
+    lu.assertEquals(self.world:get(10, 3).site.kind, SITE_BIN)
+    lu.assertNil(self.world:get(6, 1).site)
+    -- lifting on a bin takes that one back
+    lu.assertTrue((self.abilities:useDrag(6, 1, 11, 3)))
+    lu.assertEquals(#self.world:sitesOfKind(SITE_BIN), 0)
+    lu.assertEquals(self.abilities:ghostKind(), SITE_BIN)
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertNil(self.abilities:ghostKind())                   -- floors drag a rectangle
+end
 function TestAbilities:testDesignationsCancelAndSwap()
     self.abilities:select(ABILITY_STORAGE)
-    lu.assertTrue((self.abilities:use(3, 4)))
-    local floor = self.world:get(3, 4).site
+    lu.assertTrue((self.abilities:use(7, 4)))
+    local floor = self.world:get(7, 4).site
     lu.assertEquals(floor.kind, SITE_STORAGE)
     -- the bin tool on a floor mark turns it into a bin mark and charges the log
     self.abilities:select(ABILITY_BIN)
-    lu.assertTrue((self.abilities:use(3, 4)))
-    local bin = self.world:get(3, 4).site
+    lu.assertTrue((self.abilities:use(7, 4)))
+    local bin = self.world:get(7, 4).site
     lu.assertEquals(bin.kind, SITE_BIN)
     lu.assertTrue(floor.done)
     lu.assertFalse(self.jobs:hasJobForSite(floor))
     lu.assertTrue(self.jobs:hasJobForSite(bin))
     lu.assertEquals(self.world.stock.logs, 3)
     -- the same tool on its own mark cancels it and refunds
-    lu.assertTrue((self.abilities:use(3, 4)))
-    lu.assertNil(self.world:get(3, 4).site)
+    lu.assertTrue((self.abilities:use(7, 4)))
+    lu.assertNil(self.world:get(7, 4).site)
     lu.assertFalse(self.jobs:hasJobForSite(bin))
     lu.assertEquals(self.world.stock.logs, 4)
     lu.assertEquals(#self.world.sites, 0)

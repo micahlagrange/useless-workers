@@ -176,7 +176,7 @@ function TestArcadeLevels:testGoalChecklistTicksLive()
     lu.assertEquals(#goals, 5)
     for _, g in ipairs(goals) do lu.assertFalse(g.done, g.label) end
     local world = run.world
-    world:markStorage(7, 5, STORAGE_BIN_CAPACITY)
+    world:markBin(6, 4)
     goals = Campaign.goals(run, workers)
     lu.assertTrue(goals[1].done)   -- a bin
     lu.assertFalse(goals[2].done)  -- floors
@@ -188,7 +188,7 @@ function TestArcadeLevels:testGoalChecklistTicksLive()
     world:setType(6, 6, TILE_DOOR)
     goals = Campaign.goals(run, workers)
     lu.assertTrue(goals[3].done)
-    lu.assertTrue(goals[4].done)   -- the bin at 7,5 is inside
+    lu.assertTrue(goals[4].done)   -- the bin at 6,4 is inside
     lu.assertFalse(goals[5].done)
     workers[1].ate = true
     goals = Campaign.goals(run, workers)
@@ -242,9 +242,9 @@ end
 function TestEnclosure:testBinsInsideCountsOnlyBinsBehindTheWalls()
     local w = self.world
     w:markFloor(4, 3)
-    w:markStorage(5, 4, STORAGE_BIN_CAPACITY)
+    w:markBin(4, 4) -- both its tiles inside
     lu.assertTrue(w:binsInside())
-    w:markStorage(8, 2, STORAGE_BIN_CAPACITY)
+    w:markBin(7, 2)
     lu.assertEquals(w:binCount(), 2)
     lu.assertEquals(w:binsInsideCount(), 1)
     lu.assertFalse(w:binsInside())
@@ -275,7 +275,7 @@ function TestEnclosure:testNeedsGateEating()
     w.arcadeNeeds = { bins = true, floors = true, enclosed = true, binsInside = true }
     w.arcadePopulation = 2
     lu.assertFalse(w:arcadeReady())
-    w:markStorage(5, 4, STORAGE_BIN_CAPACITY)
+    w:markBin(4, 4)
     lu.assertFalse(w:arcadeReady())
     w:markFloor(4, 3)
     lu.assertFalse(w:arcadeReady(), 'one floor for two morphis')

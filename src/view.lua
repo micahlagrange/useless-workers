@@ -207,23 +207,45 @@ end
 
 -- A bin seen from above: a wooden frame with a dark open inside, lit from
 -- the top left. Items sit in the four quadrants of the opening.
+-- A bin, top down, two tiles wide from (px, py).
 function View:drawBin(px, py, a)
+    local w = 2 * TILE_SIZE - 2
     love.graphics.setColor(0, 0, 0, 0.2 * a)
-    love.graphics.rectangle('fill', px + 2, py + 2, 14, 14)
+    love.graphics.rectangle('fill', px + 2, py + 2, w, 14)
     love.graphics.setColor(0.55, 0.42, 0.24, a)
-    love.graphics.rectangle('fill', px + 1, py + 1, 14, 14)
+    love.graphics.rectangle('fill', px + 1, py + 1, w, 14)
     love.graphics.setColor(0.16, 0.12, 0.06, a)
-    love.graphics.rectangle('fill', px + 3, py + 3, 10, 10)
+    love.graphics.rectangle('fill', px + 3, py + 3, w - 4, 10)
     love.graphics.setColor(0.8, 0.64, 0.38, a)
-    love.graphics.rectangle('fill', px + 1, py + 1, 14, 1)
+    love.graphics.rectangle('fill', px + 1, py + 1, w, 1)
     love.graphics.rectangle('fill', px + 1, py + 1, 1, 14)
     love.graphics.setColor(0.36, 0.26, 0.14, a)
-    love.graphics.rectangle('fill', px + 1, py + 14, 14, 1)
-    love.graphics.rectangle('fill', px + 14, py + 1, 1, 14)
+    love.graphics.rectangle('fill', px + 1, py + 14, w, 1)
+    love.graphics.rectangle('fill', px + w, py + 1, 1, 14)
+    -- a plank down the middle and iron corners
+    love.graphics.setColor(0.55, 0.42, 0.24, a)
+    love.graphics.rectangle('fill', px + TILE_SIZE - 1, py + 3, 2, 10)
     love.graphics.setColor(0.42, 0.31, 0.17, a)
-    for _, c in ipairs({ { 1, 1 }, { 13, 1 }, { 1, 13 }, { 13, 13 } }) do
+    for _, c in ipairs({ { 1, 1 }, { w - 1, 1 }, { 1, 13 }, { w - 1, 13 } }) do
         love.graphics.rectangle('fill', px + c[1], py + c[2], 2, 2)
     end
+end
+
+-- What a tool will build, drawn faint where it will go; red where it cannot.
+function View:drawGhost(kind, tx, ty, ok)
+    local px, py = (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
+    local a = ok and 0.65 or 0.35
+    if kind == SITE_BIN then self:drawBin(px, py, a)
+    elseif kind == SITE_BED then self:drawBed(px, py, a)
+    elseif kind == SITE_DOOR then self:drawDoorTile(px, py, a)
+    elseif kind == SITE_WALL then self:drawWallTile(px, py, a)
+    elseif kind == SITE_STORAGE then self:drawFloorSpot(px, py, a)
+    end
+    local w = kind == SITE_BIN and 2 or 1
+    love.graphics.setColor(ok and 1 or 1, ok and 1 or 0.3, ok and 1 or 0.25, ok and 0.9 or 0.8)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle('line', px + 0.5, py + 0.5, TILE_SIZE * w - 1, TILE_SIZE - 1)
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function View:drawBed(px, py, a)
@@ -342,7 +364,7 @@ function View:drawSites(clock)
 end
 
 -- Quadrant offsets inside a bin, in the order items were stored.
-local BIN_SLOTS = { { 5.5, 5.5 }, { 10.5, 5.5 }, { 5.5, 10.5 }, { 10.5, 10.5 } }
+local BIN_SLOTS = { { 6, 8 }, { 12, 8 }, { 20, 8 }, { 26, 8 } }
 
 function View:drawItems(clock)
     for _, item in ipairs(self.world.items) do
@@ -359,7 +381,7 @@ function View:drawItems(clock)
                 love.graphics.setColor(1, 1, 1, 1)
                 if inBin then
                     local q = BIN_SLOTS[((item.slot or 1) - 1) % #BIN_SLOTS + 1]
-                    love.graphics.draw(img, px + q[1], py + q[2], 0, 0.3, 0.3, 8, 8)
+                    love.graphics.draw(img, px + q[1], py + q[2], 0, 0.36, 0.36, 8, 8)
                 else
                     love.graphics.draw(img, px + 8, py + 8, 0, 0.6, 0.6, 8, 8)
                 end
