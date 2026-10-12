@@ -149,7 +149,7 @@ function Campaign.goals(run, workers)
         out[#out + 1] = { label = 'a FLOOR tile each (' .. math.min(#world.floors, pop) .. '/' .. pop .. ')', done = world:arcadeNeedMet('floors') }
     end
     if needs.enclosed then
-        out[#out + 1] = { label = 'WALLS all round the floors, a DOOR in', done = world:arcadeNeedMet('enclosed') }
+        out[#out + 1] = { label = 'WALLS round the floors, a DOOR', done = world:arcadeNeedMet('enclosed') }
     end
     if needs.binsInside then
         local bins = world:binCount()

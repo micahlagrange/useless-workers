@@ -9,6 +9,7 @@ UI.__index = UI
 
 TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
+FONT_PATH = 'assets/fonts/commodore64.ttf'
 local ALERT_TTL = 7
 local MAX_ALERTS = 4
 
@@ -24,14 +25,18 @@ local C = {
 
 local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
 
+UI.FONT_SETS = {
+    desk = { tiny = 9, small = 11, hud = 15, big = 26, title = 46 },
+    touch = { tiny = 11, small = 13, hud = 16, big = 26, title = 44 },
+}
+
 function UI.new()
     local self = setmetatable({}, UI)
-    -- LOVE's own face (Vera Sans): plain and readable at any size. Two
-    -- sets: the desk set, and a bigger one for fingers and small screens.
-    self.fontSets = {
-        desk = { tiny = 10, small = 12, hud = 15, big = 24, title = 40 },
-        touch = { tiny = 12, small = 14, hud = 17, big = 26, title = 40 },
-    }
+    -- The C64 face. It is wide, so every string has to be fitted to its
+    -- box: tst/ui_overflow_test.lua draws every screen with its real glyph
+    -- widths and fails on anything that spills. Two sets: the desk set, and
+    -- a bigger one for fingers and small screens where 9 px is a smudge.
+    self.fontSets = UI.FONT_SETS
     self.fontCache = {}
     self:useFonts('desk')
     self.foodIcon = love.graphics.newImage('assets/images/fruit/yp_apple.png')
@@ -82,7 +87,7 @@ function UI:useFonts(set)
     if not self.fontCache[set] then
         local f = {}
         for name, size in pairs(self.fontSets[set]) do
-            f[name] = love.graphics.newFont(size)
+            f[name] = love.graphics.newFont(FONT_PATH, size)
             -- the game's default filter is nearest, for the pixel art; text
             -- drawn under the HUD's fractional scale needs linear or it
             -- drops and doubles pixel columns
@@ -303,6 +308,27 @@ function UI:printFit(text, x, y, maxWidth, align, color, fonts)
     local _, lines = font:getWrap(text, maxWidth)
     love.graphics.printf(text, x, y, maxWidth, align or 'left')
     return font:getHeight() * #lines
+end
+
+-- One line, never wrapped: the largest font that fits, else the smallest
+-- with the end trimmed to '..'. For slots with something right under them.
+function UI:printLine(text, x, y, maxWidth, align, color, fonts)
+    fonts = fonts or { self.fonts.hud, self.fonts.small, self.fonts.tiny }
+    local font = fonts[#fonts]
+    for _, f in ipairs(fonts) do
+        if f:getWidth(text) <= maxWidth then font = f break end
+    end
+    if font:getWidth(text) > maxWidth then
+        while #text > 1 and font:getWidth(text .. '..') > maxWidth do text = text:sub(1, -2) end
+        text = text:gsub('%s+$', '') .. '..'
+    end
+    setColor(color or C.text)
+    love.graphics.setFont(font)
+    local w = font:getWidth(text)
+    local px = x
+    if align == 'center' then px = x + (maxWidth - w) / 2 elseif align == 'right' then px = x + maxWidth - w end
+    love.graphics.print(text, math.floor(px), y)
+    return font:getHeight()
 end
 
 -- A paragraph: wrapped in the largest font that keeps it to maxLines.
@@ -623,6 +649,20 @@ function UI:drawBottomBar(game)
     local abilities = game.abilities
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
+    -- one label size for the whole bar: the largest every label fits in
+    local labelFont = self.fonts.tiny
+    local b1 = self.buttons[1]
+    if b1 and not self.compactButtons then
+        local room = b1.w - 5 - 26 - 4 - 4
+        if not self.touch then room = room - self.fonts.tiny:getWidth('7') - 6 end -- the key number
+        for _, f in ipairs({ self.fonts.hud, self.fonts.small }) do
+            local fits = true
+            for _, b in ipairs(self.buttons) do
+                if f:getWidth(ABILITY_LABEL[b.tool]) > room then fits = false break end
+            end
+            if fits then labelFont = f break end
+        end
+    end
     for _, b in ipairs(self.buttons) do
         local selected = abilities.selected == b.tool
         local affordable = abilities:canAfford(b.tool)
@@ -640,17 +680,25 @@ function UI:drawBottomBar(game)
             -- icon on top, label under it, cost only when affordable is in doubt
             local IS = 24
             self:drawToolIcon(b.tool, b.x + math.floor((b.w - IS) / 2), b.y + 5, IS, affordable)
-            self:printFit(ABILITY_LABEL[b.tool], b.x, b.y + 32, b.w, 'center', affordable and C.text or C.dim, { self.fonts.tiny })
-            self:printFit((abilities:costText(b.tool):gsub(',.*', '')), b.x, b.y + 44, b.w, 'center', C.dim, { self.fonts.tiny })
+            self:printLine(ABILITY_LABEL[b.tool], b.x, b.y + 32, b.w, 'center', affordable and C.text or C.dim, { self.fonts.tiny })
+            self:printLine((abilities:costText(b.tool):gsub(',.*', '')), b.x, b.y + 44, b.w, 'center', C.dim, { self.fonts.tiny })
         else
             local IS = 26
             self:drawToolIcon(b.tool, b.x + 5, b.y + 8, IS, affordable)
             local lx = b.x + 5 + IS + 4
-            self:printFit(ABILITY_LABEL[b.tool], lx, b.y + 8, b.x + b.w - lx - 4, 'left', affordable and C.text or C.dim, { self.fonts.hud, self.fonts.small, self.fonts.tiny })
-            self:printFit(self:fitLine(abilities:costText(b.tool), b.x + b.w - lx - 4), lx, b.y + 30, b.x + b.w - lx - 4, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-            love.graphics.setFont(self.fonts.tiny)
-            setColor(C.dim)
-            love.graphics.print(b.key, b.x + b.w - 4 - self.fonts.tiny:getWidth(b.key), b.y + 3)
+            local room = b.x + b.w - lx - 4
+            -- the key number sits in the corner when the label leaves it room
+            local keyW = self.fonts.tiny:getWidth(b.key) + 6
+            local label = ABILITY_LABEL[b.tool]
+            local showKey = not self.touch and labelFont:getWidth(label) <= room - keyW
+            local labelFonts = { labelFont, self.fonts.tiny }
+            self:printLine(label, lx, b.y + 8, showKey and room - keyW or room, 'left', affordable and C.text or C.dim, labelFonts)
+            self:printLine(self:fitLine(abilities:costText(b.tool), room), lx, b.y + 30, room, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            if showKey then
+                love.graphics.setFont(self.fonts.tiny)
+                setColor(C.dim)
+                love.graphics.print(b.key, b.x + b.w - 4 - self.fonts.tiny:getWidth(b.key), b.y + 3)
+            end
         end
     end
     -- right side: selected worker or hints
@@ -664,9 +712,9 @@ function UI:drawBottomBar(game)
             setColor(C.good)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
-            self:printFit('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - nx - 24, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printLine('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             self:iconFoodKind(w.diet, px + pw - 160, py - 2, 18)
-            self:printFit(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+            self:printLine(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             local sx = px
             for i = 1, INVENTORY_SLOTS do
                 love.graphics.setColor(0, 0, 0, 0.5)
@@ -677,19 +725,14 @@ function UI:drawBottomBar(game)
                 if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
                 sx = sx + 30
             end
-            love.graphics.setFont(self.fonts.tiny)
-            setColor(C.dim)
-            love.graphics.print('work  pocket', px, py + 65 - 2)
-            self:printFit('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printLine('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
             if w.arcade then
                 love.graphics.print('MEAL', bx, py + 22)
-                self:printFit(w.ate and 'eaten' or 'not yet', bx, py + 36, 140, 'left', w.ate and C.good or C.warn, { self.fonts.small, self.fonts.tiny })
-                setColor(C.dim)
-                love.graphics.setFont(self.fonts.tiny)
-                love.graphics.print('JOB ' .. w.roleInfo.label:lower(), bx, py + 52)
+                self:printLine(w.ate and 'eaten' or 'not yet', bx, py + 36, 140, 'left', w.ate and C.good or C.warn, { self.fonts.small, self.fonts.tiny })
+                self:printLine('JOB ' .. w.roleInfo.label:lower(), bx, py + 52, 140, 'left', C.dim, { self.fonts.tiny })
             else
                 love.graphics.print('HUNGER', bx, py + 22)
                 love.graphics.setColor(0, 0, 0, 0.6)
@@ -704,7 +747,6 @@ function UI:drawBottomBar(game)
                 love.graphics.rectangle('fill', bx, py + 61, 140 * (w.morale / MORALE_MAX), 6)
                 setColor(C.dim)
             end
-            love.graphics.print('F follows, U lists everyone', bx, py + 70)
         elseif game.mode == 'arcade' then
             -- the live checklist: what the band insists on before eating
             self:drawGoalList(game, px, self.vh - BOTTOM_BAR_H + 6, pw, 15, BOTTOM_BAR_H - 10)
@@ -732,7 +774,7 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        self:printFit(line, 14, ty + 4, self.vw - 28, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        self:printLine(line, 14, ty + 4, self.vw - 28, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     end
     if self.toastText then
         love.graphics.setFont(self.fonts.hud)
@@ -758,7 +800,7 @@ function UI:drawGoalList(game, x, y, w, rowH, maxH)
     local box = rowH - 4
     for _, g in ipairs(goals) do
         self:checkbox(x, ly + 1, box, g.done)
-        self:printFit(g.label, x + box + 8, ly + math.floor((box - self.fonts.small:getHeight()) / 2) + 1, w - box - 8, 'left', g.done and C.good or C.text, { self.fonts.small, self.fonts.tiny })
+        self:printLine(g.label, x + box + 8, ly + math.floor((box - self.fonts.small:getHeight()) / 2) + 1, w - box - 8, 'left', g.done and C.good or C.text, { self.fonts.small, self.fonts.tiny })
         ly = ly + rowH
     end
     return ly - y
@@ -768,7 +810,8 @@ function UI:drawHUD(game)
     self:drawTopBar(game)
     self:drawAlerts()
     self:drawBottomBar(game)
-    if self.touch and self.winH > self.winW * 1.2 then
+    local status = game.selectedWorker and game.selectedWorker.alive and self.panelW == 0
+    if self.touch and self.winH > self.winW * 1.2 and not status then
         self:centeredFit('Turn your phone sideways for the best view', self.vh - BOTTOM_BAR_H - 26, self.vw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     end
 end
@@ -967,8 +1010,7 @@ function UI:drawTitle(title, highScore)
             self:centered('clear ' .. Campaign.title[opt.set]:lower() .. ' level ' .. (opt.index - 1) .. ' first', y, self.fonts.small, C.dim)
             y = y + 11 + gap(30)
         else
-            self:centeredFit(opt.def.blurb, y, self.vw - 80, C.dim, { self.fonts.small, self.fonts.tiny })
-            y = y + 16
+            y = y + self:centeredFit(opt.def.blurb, y, self.vw - 80, C.dim, { self.fonts.small, self.fonts.tiny }) + 4
             local points = Campaign.points(opt.def, opt.set, title.arcadeDifficulty)
             local best = opt.best and ('   best ' .. opt.best .. (opt.best <= opt.def.par and ' (3 stars)' or '')) or ''
             self:centered(points .. ' points to spend, par ' .. opt.def.par .. best, y, self.fonts.small, C.text)
@@ -982,8 +1024,8 @@ function UI:drawTitle(title, highScore)
                 self.titleButtons.diffRight = { x = cx + dw / 2 + 16, y = y - 8, w = 36, h = 30 }
                 self:button(self.titleButtons.diffLeft, '<', false)
                 self:button(self.titleButtons.diffRight, '>', false)
-                y = y + 20
-                self:centered(ad.blurb, y, self.fonts.small, C.dim)
+                y = y + 24 -- clear of the arrow buttons
+                self:centeredFit(ad.blurb, y, self.vw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
             end
             y = y + 11 + gap(20)
         end
@@ -995,8 +1037,8 @@ function UI:drawTitle(title, highScore)
         self.titleButtons.diffRight = { x = cx + dw / 2 + 16, y = y - 8, w = 36, h = 30 }
         self:button(self.titleButtons.diffLeft, '<', false)
         self:button(self.titleButtons.diffRight, '>', false)
-        y = y + 18
-        self:centered(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.fonts.small, C.dim)
+        y = y + 24 -- clear of the arrow buttons
+        self:centeredFit(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.vw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
         y = y + 11 + gap(30)
         local seedText = 'SEED: ' .. title.seed
         if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
@@ -1108,41 +1150,69 @@ end
 -- Arcade: the story, the checklist with live ticks, the points, the band.
 function UI:drawArcadeGoal(game)
     local def = game.level.def
-    -- sized to what the last frame measured, so short levels get a short panel
-    local x, y, pw, ph = self:panel(760, self.arcadeGoalH or 440)
-    self:centeredFit('ARCADE ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
-    local ly = y + 64
-    -- a short screen (a phone on its side) cannot afford the big intro font
-    local introFonts = self.vh < 600 and { self.fonts.small, self.fonts.tiny } or nil
-    ly = ly + self:printWrap(def.intro, x + 24, ly, pw - 48, C.text, introFonts) + 10
-    love.graphics.setFont(self.fonts.small)
-    setColor(C.dim)
-    love.graphics.print('THE BAND INSISTS ON', x + 24, ly)
-    ly = ly + 18
-    ly = ly + self:drawGoalList(game, x + 24, ly, pw - 48, 22) + 6
+    local pw = math.min(760, self.vw - 16)
+    local inner = pw - 48
+    local small = self.fonts.small
     local points = game.level.points
     local diff = ARCADE_DIFFICULTIES[game.level.difficulty or DEFAULT_ARCADE_DIFFICULTY]
     local costs = points .. ' points to spend on ' .. diff.name:lower() .. ', par ' .. def.par .. '. Bins, walls, doors and bridge tiles cost a log each. Floors and mining are free.'
     if points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
-    ly = ly + self:printWrap(costs, x + 24, ly, pw - 48, C.dim, { self.fonts.small, self.fonts.tiny }, 2) + 10
-    love.graphics.setFont(self.fonts.small)
+    local footer = 'GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.'
+    local band = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive then band[#band + 1] = w.species .. ' the ' .. w.roleInfo.label:lower() end
+    end
+    -- Measure first, so the panel fits its content: everything but the intro,
+    -- then the intro in the largest font (three lines at most) that still
+    -- keeps the panel on screen.
+    local function wrapH(text, fonts, maxLines)
+        for i, f in ipairs(fonts) do
+            local _, lines = f:getWrap(text, inner)
+            if #lines <= maxLines or i == #fonts then return #lines * f:getHeight(), f end
+        end
+    end
+    local costsH = wrapH(costs, { small, self.fonts.tiny }, 2)
+    local footerH = wrapH(footer, { small, self.fonts.tiny }, 1)
+    local bandRows, cx = 1, 0
+    for _, label in ipairs(band) do
+        local lw = small:getWidth(label)
+        if cx > 0 and cx + lw > inner then bandRows, cx = bandRows + 1, 0 end
+        cx = cx + lw + 22
+    end
+    local goals = #Campaign.goals(game.level, game.workers)
+    local rest = 64 + 10 + 18 + goals * 22 + 6 + costsH + 10 + 18 + bandRows * 18 + 12 + footerH + 10 + 60
+    local introFont, introH
+    for _, f in ipairs({ self.fonts.hud, small, self.fonts.tiny }) do
+        local _, lines = f:getWrap(def.intro, inner)
+        introFont, introH = f, #lines * f:getHeight()
+        if #lines <= 3 and rest + introH <= self.vh - 16 then break end
+    end
+    local x, y, ph
+    x, y, pw, ph = self:panel(pw, rest + introH)
+    self:centeredFit('ARCADE ' .. game.level.index .. ': ' .. def.name:upper(), y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
+    local ly = y + 64
+    ly = ly + self:printWrap(def.intro, x + 24, ly, inner, C.text, { introFont }) + 10
+    love.graphics.setFont(small)
+    setColor(C.dim)
+    love.graphics.print('THE BAND INSISTS ON', x + 24, ly)
+    ly = ly + 18
+    ly = ly + self:drawGoalList(game, x + 24, ly, inner, 22) + 6
+    ly = ly + self:printWrap(costs, x + 24, ly, inner, C.dim, { small, self.fonts.tiny }, 2) + 10
+    love.graphics.setFont(small)
     setColor(C.dim)
     love.graphics.print('THE BAND', x + 24, ly)
     ly = ly + 18
-    local cx = x + 24
-    for _, w in ipairs(game.workers) do
-        if w.alive then
-            local label = w.species .. ' the ' .. w.roleInfo.label:lower()
-            local lw = self.fonts.small:getWidth(label)
-            if cx + lw > x + pw - 24 then cx = x + 24; ly = ly + 18 end
-            love.graphics.setFont(self.fonts.small)
-            setColor(C.text)
-            love.graphics.print(label, cx, ly)
-            cx = cx + lw + 22
-        end
+    cx = 0
+    for _, label in ipairs(band) do
+        local lw = small:getWidth(label)
+        if cx > 0 and cx + lw > inner then cx = 0; ly = ly + 18 end
+        love.graphics.setFont(small)
+        setColor(C.text)
+        love.graphics.print(label, x + 24 + cx, ly)
+        cx = cx + lw + 22
     end
-    self.arcadeGoalH = ly + 18 - y + 104
-    self:centeredFit('GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.', y + ph - 84, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    ly = ly + 18 + 12
+    self:centeredFit(footer, ly, inner, C.dim, { small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'close', game.started and 'BACK TO IT' or 'BEGIN', true } })
 end
 

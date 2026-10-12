@@ -11,6 +11,7 @@ love_files = [
     "-*/tst*",
     "-*/legacy*",
     "-*/docs*",
+    "-*/tools*",
 ]
 
 [lovejs]

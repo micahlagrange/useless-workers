@@ -985,3 +985,22 @@ function love.textinput(text)
         title.seed = title.seed .. text
     end
 end
+
+-- tst/ui_overflow_test.lua drives every screen through these; the game never sets TEST_HOOKS
+if TEST_HOOKS then
+    TEST_HOOKS.main = {
+        ui = function() return ui end,
+        game = function() return game end,
+        state = function() return state end,
+        setState = function(s) state = s end,
+        title = title,
+        newLevel = newLevel,
+        newGame = newGame,
+        levelClear = levelClear,
+        finishGame = finishGame,
+        closeQuarter = closeQuarter,
+        closeGoal = closeGoal,
+        goToTitle = goToTitle,
+        buildTitleOptions = buildTitleOptions,
+    }
+end
