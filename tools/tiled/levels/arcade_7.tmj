@@ -20,12 +20,12 @@
   {
    "name": "blurb",
    "type": "string",
-   "value": "Ribbit joins, a second builder. The bins have to be inside the walls too."
+   "value": "Ribbit is back to build with Twins. The bins go inside the walls too."
   },
   {
    "name": "intro",
    "type": "string",
-   "value": "Ribbit the frog joins and builds alongside Twins. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it."
+   "value": "Ribbit the frog comes back to build alongside Twins, and the whole band is here. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it."
   },
   {
    "name": "morphis",

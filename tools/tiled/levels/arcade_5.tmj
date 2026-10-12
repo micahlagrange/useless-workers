@@ -20,12 +20,12 @@
   {
    "name": "blurb",
    "type": "string",
-   "value": "Cwab joins and mines. Now they want a FLOOR tile each to live on."
+   "value": "Cwab is back to dig. Now they want a FLOOR tile each to live on."
   },
   {
    "name": "intro",
    "type": "string",
-   "value": "A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab can MINE stone for nothing. The food is behind stone and across water; one of those is free to open."
+   "value": "A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab still MINES stone for nothing. The food is behind stone and across water; one of those is free to open."
   },
   {
    "name": "morphis",

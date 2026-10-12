@@ -107,8 +107,8 @@ Levels[4] = {
 
 Levels[5] = {
     name = 'Home',
-    blurb = 'Cwab joins and mines. Now they want a FLOOR tile each to live on.',
-    intro = 'A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab can MINE stone for nothing. The food is behind stone and across water; one of those is free to open.',
+    blurb = 'Cwab is back to dig. Now they want a FLOOR tile each to live on.',
+    intro = 'A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab still MINES stone for nothing. The food is behind stone and across water; one of those is free to open.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab' },
     points = { easy = 16, normal = 9, hard = 5 }, targets = { easy = 4, clever = 1 },
     needs = { bins = true, floors = true },
@@ -162,8 +162,8 @@ Levels[6] = {
 
 Levels[7] = {
     name = 'Inside',
-    blurb = 'Ribbit joins, a second builder. The bins have to be inside the walls too.',
-    intro = 'Ribbit the frog joins and builds alongside Twins. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it.',
+    blurb = 'Ribbit is back to build with Twins. The bins go inside the walls too.',
+    intro = 'Ribbit the frog comes back to build alongside Twins, and the whole band is here. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit' },
     points = { easy = 38, normal = 26, hard = 19 }, targets = { easy = 17, clever = 3 },
     needs = { bins = true, floors = true, enclosed = true, binsInside = true },
