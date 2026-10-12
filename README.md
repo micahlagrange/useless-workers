@@ -1,0 +1,97 @@
+# Morphis
+
+A small band settling the harsh wilds. They will look after themselves. Badly.
+
+A LÖVE2D jam game. You never control a morphi. You mark stone to mine, lay
+bridges over the rivers and set out floor spots, bins and beds around the camp,
+and the morphis do the rest: forage, fell trees, dig gold, and carry it home.
+
+Five hand built levels add one morphi at a time, each with the one food it
+eats: Pupper (steak), Woofoof (fish), Twins (cheese), Cwab (chili), Blob (candy).
+Every level can be won by bridging straight across, but each map hides a
+cheaper way: a narrow crossing, a thin wall a miner opens for free, a grove of
+trees worth logs. Keep everyone fed to the end of the clock and spend as few
+points as you can; three stars at par. Free play keeps the random maps,
+seasons and migrants.
+
+## The morphis
+
+| Morphi | Role | Works on | Delivers |
+|---|---|---|---|
+| Pupper, Woofoof | Forager | Food bushes, ripen every 20 s | Any food, stored in floor spots and bins. Pupper eats steak, Woofoof fish |
+| Twins | Lumberjack | Trees, cut to a stump that regrows | Logs. Eats cheese |
+| Cwab, Blob | Miner | Gold ore inside stone, worked from the tile next to it | Gold, the mined tile turns to dirt. Cwab eats chili, Blob candy |
+
+Delivered food is a real item on the ground: the closest free tile to the break
+room, one per tile. Morphis walk over stored items but try not to idle on them.
+Every morphi has two inventory slots: slot 1 holds the work item it is carrying,
+slot 2 a personal snack picked up from storage. Nothing interrupts a job: when
+a morphi is idle and hungry it eats the snack in its pocket, or fetches one from
+storage, or eats straight off a bush. After 45 seconds of work a morphi grabs a
+snack from storage if it has none and rests at camp, or in a bed if one is
+free. Gold is worth 3, logs 2, food 1 in the final score. Migrants arrive as
+forager, lumberjack, miner in turn.
+
+Design doc (written under the working title Human Resources): [docs/human-resources-design-doc.md](docs/human-resources-design-doc.md)
+
+## Run
+
+```
+love .
+```
+
+Web build served locally (needs makelove):
+
+```
+./serve.sh
+```
+
+## Tests
+
+```
+./test.sh
+```
+
+Uses luajit when installed, otherwise `pip install lupa` and the Python runner in `tst/run.py`.
+
+## How it plays
+
+You never control a morphi. You mark work and pay for building; idle morphis
+do the rest.
+
+- **Mine**: drag a rectangle over stone or snow. A miner digs each marked tile
+  once a neighbouring tile is reachable, so tunnels grow inward. Ore under a
+  mark yields gold. Drag from a marked tile to clear marks.
+- **Floor**: click open ground to mark a free floor storage spot. Any idle
+  morphi walks over and builds it. It holds one item. Food can only be
+  stored on built storage, so this is the first thing to place.
+- **Bin**: 1 log, holds four items, shown inside it in the order they came.
+- **Bed**: 2 logs. A bed nap is shorter, lasts longer before the next break,
+  and restores more morale. Every resting morphi claims its own spot.
+- **Bridge**: drag a line over water (1 log per tile). Built tile by tile.
+  Two rivers cut every map and a good share of the resources sit on the far
+  banks, so bridges are how you grow.
+- **Morale**: complaints and hunger wear a morphi down; food and breaks
+  restore it. At zero they quit. Press U to see everyone at a glance.
+- **Memo**: 1 gold to push nearby work to the front of the queue.
+- Logs and gold delivered to the break room go into the stockpile shown in the
+  top bar. You start with 4 logs, enough for two storage tiles.
+
+## Controls
+
+- WASD or right-drag to pan, mouse wheel to zoom
+- The window can be any size; the HUD scales to fit. F11 toggles fullscreen.
+- On a phone or tablet: drag to pan with the SELECT tool, pinch to zoom, and
+  use the UNITS, FOLLOW, zoom, MUTE and MENU buttons at the top right.
+- Title: LEFT / RIGHT pick a level or free play, UP / DOWN the free play difficulty
+- 1 to 6 pick a tool: select, mine, floor, bin, bed, bridge
+- Select then click a morphi to see who is complaining, F to follow them
+- U opens the units list with a follow button per morphi
+- M mutes, ESC asks before returning to the title
+
+## History
+
+This repo started as Morphi (Feb 2024), a job-queue worker sim that never
+shipped, and the game has taken its name back. That code is kept under `legacy/morphi/`. Human Resources reuses its
+job queue idea, the noise world from top-down-minecraft, and the tools, UI and
+scoring from control-the-environment.

@@ -1,155 +1,898 @@
-local inspect = require('libs.inspect')
-local spritesheet = require('src.drawing.spritesheet')
-local object = require('libs.classic')
-local pubsub = require('src.system.pub-sub')
-
+-- A morphi. Has a role (forager, lumberjack, miner), gets hungry, takes jobs
+-- of its own type off the shared queue, complains when it cannot reach them,
+-- carries a work item in slot 1 and a personal snack in slot 2, and takes a
+-- break in the break room after enough work. Nothing interrupts a job:
+-- eating, fetching a snack and taking a break are all chosen while idle.
+--
+-- Arcade (world.arcade): no hunger, morale or breaks. Every morphi wants to
+-- eat once, any food, but only once the level's needs are met; picky levels
+-- eat only out of a bin. Building is the builder's job alone.
 require('src.constants')
-local JobQueue = require('src.behavior.task')
+local Util = require('src.util')
+local Pathfinder = require('src.pathfinder')
 
-LastNewMorphiFrame = 1
+local Worker = {}
+Worker.__index = Worker
+local nextId = 1
 
-Worker = object:extend()
-function Worker:new(entity)
-    self.height = TILE_SIZE * MORPHI_SCALE
-    self.width = TILE_SIZE * MORPHI_SCALE
-    self.facing = LEFT
-    self.entity = entity
-    self.id = entity.iid
-    self.name = entity.props['Name'] or entity.id
-    self.morphoType = entity.props['MorphoType'] or MORPHOTYPE_DEFAULT
-    self.x = entity.x
-    self.y = entity.y
-    self.visible = entity.visible
-    self.scaleX, self.scaleY = MORPHI_SCALE, MORPHI_SCALE
-    self.jobIcon = love.graphics.newImage('icons/job-indicator-icon.png')
-    self.spritesheet = love.graphics.newImage('spritesheets/' .. self.morphoType .. '-worker-walk.png')
-    self.grid = spritesheet.NewAnim8Grid(self.spritesheet, MORPHI_WIDTH, MORPHI_HEIGHT)
-    self.animations = {}
-    self.animations.walk = Anim8.newAnimation(self.grid('1-3', 1), 0.15)
-    self.animations.idle = Anim8.newAnimation(self.grid('2-3', 1), 1)
-    self.currentAnimation = self.animations.idle
-    self.animations.walk:gotoFrame(self:varyFrame(#self.animations.walk.frames))
-    self.collider = World:newBSGRectangleCollider(
-        self.x,
-        self.y,
-        self.width,
-        self.height,
-        2)
-    self.collider:setCollisionClass(Colliders.MORPHI)
-    self.collider:setFixedRotation(true)
-    self.collider:setObject(self)
-    self.task = { finished = true }
-    pubsub:subscribe(EVENTS.Jobs.ADDED_JOB, function() self:takeJob() end)
+function Worker.new(world, jobs, scoring, rng, opts)
+    opts = opts or {}
+    local self = setmetatable({}, Worker)
+    self.id = nextId
+    nextId = nextId + 1
+    self.world, self.jobs, self.scoring, self.rng = world, jobs, scoring, rng
+    self.role = opts.role or ROLE_FORAGER
+    self.roleInfo = ROLES[self.role]
+    self.sheet = opts.sheet or self.roleInfo.sheets[1]
+    self.species = MORPHI_SHEET_NAMES[self.sheet] or self.sheet
+    self.diet = opts.diet or MORPHI_DIET[self.sheet] or FOOD_KINDS[1]
+    self.name = opts.name or ('Morphi ' .. self.id)
+    local c = Util.tileCenter(opts.x or 1, opts.y or 1)
+    self.x, self.y = c.x, c.y
+    self.arcade = world.arcade == true
+    self.ate = false
+    self.hunger = self.arcade and HUNGER_MAX or (opts.hunger or HUNGER_MAX)
+    self.drain = opts.drain or 0.7
+    self.speed = opts.speed or WORKER_SPEED
+    self.state = 'idle'
+    self.stateTimer = 0
+    self.decideTimer = rng and rng:random() * DECIDE_INTERVAL or 0
+    self.path, self.pathIndex = nil, 1
+    self.goal = nil
+    self.job = nil
+    self.targetNode = nil
+    self.targetSite = nil
+    self.targetArea = nil
+    self.areaTilesDone = 0
+    self.mineLimit = opts.mineLimit or MINE_TILES_PER_TRIP
+    self.targetItem = nil
+    self.targetTile = nil
+    self.slots = {}           -- [SLOT_WORK] = {kind, food}, [SLOT_PERSONAL] = {kind, food}
+    self.eatingSlot = nil
+    self.workTime = 0         -- accumulated work since the last break
+    self.breakAfter = self.arcade and math.huge or BREAK_AFTER_SECONDS
+    self.wantsBreak = false
+    self.restSpot = nil
+    self.breaksTaken = 0
+    self.walkTime = 0
+    self.icks = {}
+    self.facing = 'right'
+    self.moving = false
+    self.bubble = nil
+    self.clock = 0
+    self.animTime = 0
+    self.alive = true
+    self.delivered = 0
+    self.complaintCount = 0
+    self.morale = MORALE_MAX
+    self.warnedLowMorale = false
+    self.onComplain = opts.onComplain
+    self.onEvent = opts.onEvent
+    return self
 end
 
-function Worker:varyFrame(upTo)
-    LastNewMorphiFrame = (LastNewMorphiFrame + 1) % upTo + 1
-    local frame = LastNewMorphiFrame
-    return frame
+-- Inventory -------------------------------------------------------------
+
+function Worker:carrying()
+    return self.slots[SLOT_WORK]
 end
 
-function Worker:takeJob()
-    if self.task == nil or self.task.finished then
-        local success, task = pcall(JobQueue.popleft, JobQueue)
-        if not success then
-            print(task); return
-        end
-        -- fake shit:
-        self.task           = task
-        local takeWanderJob = require('src.behavior.jobs')
-        takeWanderJob(self)
-        print(self.morphoType, ' took a task! ', self.task.name)
+-- Something I would actually eat: food of my own kind (anything in arcade).
+function Worker:edible(item)
+    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and (self.arcade or item.food == self.diet)
+end
+
+-- Does this bush grow something I eat?
+function Worker:eatsFrom(node)
+    return node.kind == NODE_BUSH and (self.arcade or node.food == self.diet)
+end
+
+function Worker:snackInPocket()
+    return self:edible(self.slots[SLOT_PERSONAL])
+end
+
+function Worker:hasFoodInSlot(i)
+    local s = self.slots[i]
+    return s ~= nil and s.kind == ITEM_FOOD and (self.arcade or s.food == self.diet)
+end
+
+-- Arcade: still waiting for my one meal?
+function Worker:wantsMeal()
+    return self.arcade and not self.ate
+end
+
+function Worker:tile()
+    return Util.worldToTile(self.x, self.y)
+end
+
+function Worker:isWorking()
+    return self.alive and self.state ~= 'quitting'
+end
+
+function Worker:title()
+    return self.name .. ' the ' .. self.species .. ' (' .. self.roleInfo.label:lower() .. ')'
+end
+
+function Worker:emit(name, data)
+    if self.onEvent then self.onEvent(self, name, data) end
+end
+
+function Worker:say(text, ttl)
+    self.bubble = { text = text, ttl = ttl or 2.5 }
+end
+
+function Worker:isIcked(x, y)
+    local expires = self.icks[Util.key(x, y)]
+    return expires ~= nil and expires > self.clock
+end
+
+function Worker:ick(x, y)
+    self.icks[Util.key(x, y)] = self.clock + ICK_SECONDS
+end
+
+function Worker:recentlyReported(node)
+    return node.complainedAt ~= nil and (self.clock - node.complainedAt) < COMPLAINT_COOLDOWN
+end
+
+function Worker:face(dx, dy)
+    if dx < 0 then
+        self.facing = 'left'
+    elseif dx > 0 then
+        self.facing = 'right'
     end
 end
 
-function Worker:flipFacing()
-    if self.facing == RIGHT then
-        self.facing = LEFT
-    elseif self.facing == LEFT then
-        self.facing = RIGHT
+function Worker:releaseNode()
+    if self.targetNode and self.targetNode.claimedBy == self then
+        self.targetNode.claimedBy = nil
+    end
+    self.targetNode = nil
+end
+
+function Worker:releaseSite()
+    if self.targetSite and self.targetSite.claimedBy == self then
+        self.targetSite.claimedBy = nil
+    end
+    self.targetSite = nil
+end
+
+-- Let go of a mine area; whatever is left goes back on the queue.
+function Worker:releaseArea()
+    local area = self.targetArea
+    if not area then return end
+    if area.claimedBy == self then area.claimedBy = nil end
+    self.targetArea = nil
+    if #area.sites > 0 then self.jobs:postArea(area) end
+end
+
+function Worker:releaseItem()
+    if self.targetItem and self.targetItem.claimedBy == self then
+        self.targetItem.claimedBy = nil
+    end
+    self.targetItem = nil
+end
+
+function Worker:releaseTile()
+    if self.targetTile then
+        self.world:releaseReservations(self)
+        self.targetTile = nil
     end
 end
 
-function Worker:update(dt)
-    local px = self.collider:getLinearVelocity()
-
-    self:chooseConstantAnimation(px)
-    self.currentAnimation:update(dt)
-
-    if self.collider:enter(Colliders.CONSUMABLE) then
-        local collided = self.collider:getEnterCollisionData(Colliders.CONSUMABLE)
-        local food = collided.collider:getObject().consuminstance
-        self.hunger:remediate(food:eat())
+-- Put the current job back on the queue and forget the path.
+function Worker:dropJob()
+    if self.job then
+        local job = self.job
+        self.job = nil
+        if (job.node and job.node.ready) or (job.site and not job.site.done) then self.jobs:post(job) end
     end
-
-    if self.task.name == 'wander' then
-        if px == 0 and self.task.canFlip then
-            self.task.canFlip = false
-            self:flipFacing()
-        elseif math.abs(px) > 5 then
-            self.task.canFlip = true
-        end
-
-        if self.facing == RIGHT and px < MAX_WORKER_SPEED then
-            self.collider:applyForce(MORPHI_SPEED, 0)
-        elseif self.facing == LEFT and px > -MAX_WORKER_SPEED then
-            self.collider:applyForce(-MORPHI_SPEED, 0)
-        end
+    self:releaseNode()
+    self:releaseSite()
+    self:releaseArea()
+    self:releaseItem()
+    if self.restSpot then
+        self.world:releaseRestSpot(self)
+        self.restSpot = nil
     end
-
-    -- Update worker position based on collider
-    self.x, self.y = self.collider:getX(), self.collider:getY()
+    self:releaseTile()
+    self.path = nil
+    self.goal = nil
 end
 
-function Worker:drawJobIndicator()
-    local scale = .7
-    if self.task ~= nil and not self.task.finished then
-        love.graphics.draw(self.jobIcon,
-            self.x - self.jobIcon:getWidth() / 2 * scale,
-            self.y - self.height,
-            0, scale, scale)
-    end
-end
-
-function Worker:draw()
-    if not self.visible then return end
-    local scaleX
-    local adjustedX
-
-    if self.facing == RIGHT then
-        scaleX = self.scaleX
-        adjustedX = self.x
-    else
-        -- workers origin is their left side, so when the image
-        -- flips we need to push them right
-        adjustedX = self.x + self.width
-        scaleX = -self.scaleX
-    end
-
-    self.currentAnimation:draw(
-        self.spritesheet,
-        adjustedX - self.width / 2,
-        self.y - self.height / 2,
-        0,
-        scaleX,
-        self.scaleY)
-    self:drawJobIndicator()
-end
-
-function Worker:resetAnim()
-    self.currentAnim8 = self.animations.idle
-end
-
-function Worker:chooseConstantAnimation(velocity)
-    if self.currentAnim8 ~= self.animations.walk
-        and self.currentAnim8 ~= self.animations.idle then
+function Worker:complain(reason, node)
+    if node then node.complainedAt = self.clock end
+    self.scoring:addComplaint()
+    self.complaintCount = self.complaintCount + 1
+    if not self.arcade then self.morale = self.morale - MORALE_COMPLAINT_HIT end
+    self:say('!!')
+    if node then self:ick(node.x, node.y) end
+    if self.onComplain then self.onComplain(self, reason, node) end
+    self:emit('complain', reason)
+    self:dropJob()
+    if self.morale <= 0 then
+        self.morale = 0
+        self:quit('morale')
         return
     end
-    if velocity == 0 then
-        self.currentAnim8 = self.animations.idle
-    else
-        self.currentAnim8 = self.animations.walk
+    self.state = 'sulking'
+    self.stateTimer = WORKER_SULK_SECONDS
+end
+
+function Worker:quit(reason)
+    self:dropJob()
+    self.slots = {}
+    self.scoring:addQuit()
+    self:say('I AM DONE', 6)
+    self:emit('quit', reason or 'starved')
+    self.state = 'quitting'
+    local t = self:tile()
+    local choices = {
+        { dx = -1, dy = 0, d = t.x },
+        { dx = 1, dy = 0, d = self.world.w - t.x },
+        { dx = 0, dy = -1, d = t.y },
+        { dx = 0, dy = 1, d = self.world.h - t.y },
+    }
+    table.sort(choices, function(a, b) return a.d < b.d end)
+    self.exitDir = choices[1]
+end
+
+-- Movement --------------------------------------------------------------
+
+function Worker:setPath(path, goal)
+    self.path = path
+    self.pathIndex = 1
+    self.goal = goal
+    self.walkTime = 0
+    self.state = 'walking'
+    local t = self:tile()
+    if path[1] and path[1].x == t.x and path[1].y == t.y then
+        self.pathIndex = 2
     end
+    if self.pathIndex > #path then self:arrive() end
+end
+
+function Worker:pathTo(x, y)
+    local t = self:tile()
+    return Pathfinder.find(self.world, t.x, t.y, x, y)
+end
+
+function Worker:pathToBreakroom()
+    local t = self:tile()
+    local br = self.world:nearestBreakroomTile(t.x, t.y)
+    return br and self:pathTo(br.x, br.y)
+end
+
+-- After idling on top of a stored item or the furniture, move one tile over.
+function Worker:stepOff()
+    local t = self:tile()
+    local tile = self.world:get(t.x, t.y)
+    if not tile or (#tile.items == 0 and tile.storage == 0 and not tile.bed and tile.type ~= TILE_BREAKROOM) then return false end
+    local spot = self.world:freeNeighbour(t.x, t.y)
+    if not spot then return false end
+    local path = self:pathTo(spot.x, spot.y)
+    if not path then return false end
+    self:setPath(path, 'wander')
+    return true
+end
+
+-- Eating ----------------------------------------------------------------
+
+-- Eat from a slot. Only ever chosen while idle, like any other job.
+function Worker:snack(slot)
+    if not self:hasFoodInSlot(slot) then return false end
+    self.eatingSlot = slot
+    self.state = 'eating'
+    self.stateTimer = EAT_SECONDS
+    self.moving = false
+    return true
+end
+
+function Worker:finishEating()
+    if self.eatingSlot then
+        if self:hasFoodInSlot(self.eatingSlot) then
+            self.slots[self.eatingSlot] = nil
+            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+            self.ate = true
+            self:emit('eat')
+        end
+        self.eatingSlot = nil
+    elseif self.targetNode and self.targetNode.ready then
+        -- eating straight off a bush
+        self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+        self.world:harvestNode(self.targetNode)
+        self.ate = true
+        self:emit('eat')
+        self:releaseNode()
+    end
+    self.goal = nil
+    self.state = 'idle'
+    self.decideTimer = 0
+end
+
+-- Nearest ripe, unclaimed, not icked bush the morphi can reach. Second return
+-- value is the nearest such bush that is walled off, if any.
+function Worker:nearestRipeBush()
+    local best, bestD = nil, math.huge
+    local blocked, blockedD = nil, math.huge
+    for _, node in ipairs(self.world.nodes) do
+        if self:eatsFrom(node) and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
+            local c = Util.tileCenter(node.x, node.y)
+            local d = Util.dist(self.x, self.y, c.x, c.y)
+            if self.world:isReachable(node.x, node.y) then
+                if d < bestD then best, bestD = node, d end
+            elseif d < blockedD and not self:recentlyReported(node) then
+                blocked, blockedD = node, d
+            end
+        end
+    end
+    return best, blocked
+end
+
+-- Walk to a stored food item and put it in the personal slot.
+function Worker:fetchFood()
+    if self.slots[SLOT_PERSONAL] then return false end
+    local t = self:tile()
+    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil)
+    if not item then return false end
+    local path = self:pathTo(item.x, item.y)
+    if not path then return false end
+    item.claimedBy = self
+    self.targetItem = item
+    self:setPath(path, 'fetch')
+    return true
+end
+
+-- Is there a meal this morphi could walk to right now? Stored food it can
+-- reach counts. On a picky (bins) level with nothing stored yet, a
+-- reachable bin plus a reachable ripe bush counts too, since a forager can
+-- fill it. Otherwise a reachable ripe bush. Used by the stuck check.
+function Worker:canReachFood()
+    local t = self:tile()
+    if self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil) then return true end
+    local bush = self:nearestRipeBush()
+    if self.arcade and self.world.arcadeNeeds and self.world.arcadeNeeds.bins then
+        if not bush then return false end
+        for _, s in ipairs(self.world:storageTiles()) do
+            if s.capacity > STORAGE_FLOOR_CAPACITY and self.world:isReachable(s.x, s.y) then return true end
+        end
+        return false
+    end
+    return bush ~= nil
+end
+
+function Worker:eatSomething()
+    if self:snackInPocket() then return self:snack(SLOT_PERSONAL) end
+    if self:fetchFood() then return true end
+    -- picky arcade morphis eat out of a bin or not at all; the rest of
+    -- arcade waits quietly, no grumbling, when the bush is out of reach
+    if self.arcade and self.world.arcadeNeeds.bins then return false end
+    local bush, blocked = self:nearestRipeBush()
+    if self.arcade then blocked = nil end
+    if bush then
+        local path = self:pathTo(bush.x, bush.y)
+        if path then
+            bush.claimedBy = self
+            self.targetNode = bush
+            self:setPath(path, 'eat')
+            return true
+        end
+    elseif blocked then
+        -- one grumble per cooldown, however many bushes are out of reach:
+        -- waiting on a bridge should not cost a morphi its whole morale
+        if self.lastHungryComplaint == nil or self.clock - self.lastHungryComplaint >= COMPLAINT_COOLDOWN then
+            self.lastHungryComplaint = self.clock
+            self:complain('hungry', blocked)
+            return true
+        end
+    end
+    return false
+end
+
+-- Head for the break room, grabbing a snack from storage on the way if the
+-- pocket is empty.
+function Worker:startBreak()
+    self.wantsBreak = true
+    if not self.slots[SLOT_PERSONAL] and self:fetchFood() then return true end
+    return self:goRest()
+end
+
+-- Claim a rest spot of my own and walk there.
+function Worker:goRest()
+    local t = self:tile()
+    local spot = self.world:claimRestSpot(self, t.x, t.y)
+    local path = spot and self:pathTo(spot.x, spot.y)
+    if path then
+        self.restSpot = spot
+        self:setPath(path, 'break')
+        return true
+    end
+    self.world:releaseRestSpot(self)
+    self.restSpot = nil
+    self.wantsBreak = false
+    self.workTime = 0
+    return false
+end
+
+-- Decisions ---------------------------------------------------------------
+
+function Worker:decide()
+    -- 1. Survival beats output. In arcade: the one meal, once the level's
+    --    needs are met.
+    if self.hunger < HUNGER_EAT_THRESHOLD or (self:wantsMeal() and self.world:arcadeReady()) then
+        if self:eatSomething() then return end
+    end
+    -- 2. Earned a break
+    if self.workTime >= self.breakAfter or self.wantsBreak then
+        if self:startBreak() then return end
+    end
+    -- 3. Still holding something? Get it home first.
+    if self:carrying() then
+        if self:goDeliver() then return end
+        if self:edible(self:carrying()) and self.hunger < HUNGER_EAT_THRESHOLD then
+            self.slots[SLOT_WORK].kind = ITEM_FOOD
+            self:snack(SLOT_WORK)
+            return
+        end
+        self.decideTimer = DECIDE_INTERVAL * 4
+        return
+    end
+    -- 4. The nearest job I can do and can actually walk to. Jobs nobody can
+    --    reach stay on the queue untouched. Foragers only pick when there is
+    --    somewhere to put the food. The claim happens inside takeNearest, in
+    --    the same step the job leaves the queue, so it cannot be shared.
+    local types = {}
+    if self.role ~= ROLE_FORAGER or self.world:nearestFreeStorageTile(self) ~= nil then
+        types[#types + 1] = self.roleInfo.jobType
+    end
+    for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do types[#types + 1] = extra end
+    -- survival: anyone builds; arcade: one job each, building is the builder's
+    if not self.arcade then types[#types + 1] = 'build' end
+    local function usable(j)
+        if j.node then
+            return j.node.ready and j.node.claimedBy == nil and not self:isIcked(j.x, j.y) and self.world:nodeReachable(j.node)
+        end
+        if j.area then
+            return j.area.claimedBy == nil and #j.area.sites > 0 and self.world:areaReachable(j.area)
+        end
+        return not j.site.done and j.site.claimedBy == nil and self.world:siteReachable(j.site)
+    end
+    local here = self:tile()
+    local claimedPath = nil
+    local function claim(j)
+        if j.area then
+            j.area.claimedBy = self
+            return true
+        end
+        local spot = j.node and self.world:approachTile(j.node) or self.world:siteApproachTile(j.site)
+        if not spot then return false end
+        local path = self:pathTo(spot.x, spot.y)
+        if not path then return false end
+        claimedPath = path
+        local target = j.node or j.site
+        target.claimedBy = self
+        return true
+    end
+    local job = self.jobs:takeNearest(types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
+    if job and job.area then
+        self.job = nil -- the area is the job; it is reposted if anything is left
+        self.targetArea = job.area
+        self.areaTilesDone = 0
+        if not self:continueArea() then self:releaseArea(); self.state = 'idle' end
+        return
+    end
+    if job then
+        self.job = job
+        self.targetNode = job.node
+        self.targetSite = job.site
+        self:setPath(claimedPath, 'work')
+        return
+    end
+    -- 4. Do not loiter on the pantry
+    if self:stepOff() then return end
+    -- 5. Wander
+    local t = self:tile()
+    local target = self.rng and self.world:randomNearbyPassable(self.rng, t.x, t.y, WANDER_RADIUS)
+    if target then
+        local path = self:pathTo(target.x, target.y)
+        if path then
+            self:setPath(path, 'wander')
+            return
+        end
+    end
+    self.decideTimer = DECIDE_INTERVAL * 2
+end
+
+-- Next tile of the claimed mine area. Returns false when nothing reachable
+-- is left or when the morphi should stop for food or a break.
+function Worker:continueArea()
+    local area = self.targetArea
+    if not area then return false end
+    if #area.sites == 0 then
+        self:releaseArea()
+        return false
+    end
+    if self.hunger < HUNGER_EAT_THRESHOLD or self.workTime >= self.breakAfter then
+        self:releaseArea()
+        return false
+    end
+    if self.areaTilesDone >= self.mineLimit then
+        -- enough for one trip; the rest goes back on the queue for whoever is free
+        self:releaseArea()
+        return false
+    end
+    local t = self:tile()
+    local site, spot = self.world:nextSiteInArea(area, t.x, t.y)
+    if not site then
+        self:releaseArea()
+        return false
+    end
+    local path = self:pathTo(spot.x, spot.y)
+    if not path then
+        self:releaseArea()
+        return false
+    end
+    site.claimedBy = self
+    self.targetSite = site
+    self:setPath(path, 'work')
+    return true
+end
+
+function Worker:followPath(dt)
+    if (self.goal == 'work' or self.goal == 'eat') and self.targetNode and not self.targetNode.ready then
+        self:releaseNode()
+        self.job = nil
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        return
+    end
+    if self.goal == 'work' and self.targetSite and (self.targetSite.done or self.targetSite.claimedBy ~= self) then
+        self:releaseSite()
+        self.job = nil
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        return
+    end
+    if self.goal == 'fetch' and self.targetItem and not self.world:tileHasItem(self.targetItem.x, self.targetItem.y, self.targetItem) then
+        self:releaseItem()
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
+        return
+    end
+    self.walkTime = self.walkTime + dt
+    if self.walkTime > WORKER_PATIENCE and (self.goal == 'work' or self.goal == 'eat') then
+        if self.targetNode then
+            self:complain('slow', self.targetNode)
+        else
+            self:dropJob()
+            self.state = 'idle'
+        end
+        return
+    end
+    local node = self.path and self.path[self.pathIndex]
+    if not node then
+        self:arrive()
+        return
+    end
+    local c = Util.tileCenter(node.x, node.y)
+    local dx, dy = c.x - self.x, c.y - self.y
+    local d = math.sqrt(dx * dx + dy * dy)
+    local step = self.speed * dt
+    self.moving = true
+    if d <= step then
+        self.x, self.y = c.x, c.y
+        self.pathIndex = self.pathIndex + 1
+        if self.pathIndex > #self.path then self:arrive() end
+    else
+        self.x = self.x + dx / d * step
+        self.y = self.y + dy / d * step
+        self:face(dx, dy)
+    end
+end
+
+-- Carry the work item home: food goes onto a storage tile, logs and gold
+-- are handed in at the break room.
+function Worker:goDeliver()
+    local cargo = self:carrying()
+    if not cargo then return false end
+    local path
+    if cargo.kind == CARGO_FOOD then
+        local spot = self.world:nearestFreeStorageTile(self)
+        if not spot then
+            self:say('no storage', 1.5)
+            return false
+        end
+        self.world:reserveTile(spot.x, spot.y, self)
+        self.targetTile = spot
+        path = self:pathTo(spot.x, spot.y)
+    else
+        path = self:pathToBreakroom()
+    end
+    if path then
+        self:setPath(path, 'deliver')
+        return true
+    end
+    self:releaseTile()
+    return false
+end
+
+function Worker:deliverHere()
+    local cargo = self:carrying()
+    if not cargo then return end
+    local t = self:tile()
+    if cargo.kind == CARGO_FOOD then
+        if not self.world:hasRoom(t.x, t.y) then
+            -- somebody filled it first, find another tile
+            self:releaseTile()
+            if self:goDeliver() then return end
+            return
+        end
+        self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.food)
+        self:releaseTile()
+    end
+    if cargo.kind ~= CARGO_FOOD then
+        self.world:addStock(cargo.kind, 1)
+    end
+    self.slots[SLOT_WORK] = nil
+    self.scoring:addDelivery(cargo.kind)
+    self.delivered = self.delivered + 1
+    self:emit('deliver', cargo.kind)
+    self.goal = nil
+    self.state = 'idle'
+    self.decideTimer = 0
+    if self.targetArea and self:continueArea() then return end
+    if cargo.kind == CARGO_FOOD then self:stepOff() end
+end
+
+function Worker:arrive()
+    self.path = nil
+    self.moving = false
+    if self.goal == 'eat' then
+        self.state = 'eating'
+        self.stateTimer = EAT_SECONDS
+    elseif self.goal == 'fetch' then
+        local t = self:tile()
+        local tile = self.world:get(t.x, t.y)
+        if self.world:tileHasItem(t.x, t.y, self.targetItem) then
+            local item = self.world:takeItem(t.x, t.y, self.targetItem)
+            self.slots[SLOT_PERSONAL] = { kind = item.kind, food = item.food }
+            self:emit('pickup', item.kind)
+        end
+        self:releaseItem()
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
+        if (self.hunger < HUNGER_EAT_THRESHOLD or self:wantsMeal()) and self:snackInPocket() then
+            self:snack(SLOT_PERSONAL)
+        elseif self.wantsBreak then
+            self:goRest()
+        end
+    elseif self.goal == 'break' then
+        local t = self:tile()
+        local tile = self.world:get(t.x, t.y)
+        if tile.restingBy ~= nil and tile.restingBy ~= self then
+            -- somebody took my spot, find another
+            if self:goRest() then return end
+        end
+        tile.restingBy = self
+        self.state = 'breaking'
+        local inBed = self.restSpot ~= nil and self.restSpot.bed
+        self.stateTimer = inBed and BREAK_SECONDS_BED or BREAK_SECONDS
+        self:say(inBed and 'zzz' or 'break', 2)
+    elseif self.goal == 'work' then
+        self.state = 'working'
+        if self.targetSite then self.targetSite.working = true end
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then
+            self.stateTimer = BUILD_SECONDS
+        else
+            self.stateTimer = self.roleInfo.actionSeconds
+        end
+    elseif self.goal == 'deliver' then
+        self:deliverHere()
+    else
+        self.goal = nil
+        self.state = 'idle'
+    end
+end
+
+function Worker:finishAction()
+    if self.state == 'eating' then
+        self:finishEating()
+    elseif self.state == 'breaking' then
+        local inBed = self.restSpot ~= nil and self.restSpot.bed
+        self.workTime = 0
+        self.breakAfter = BREAK_AFTER_SECONDS * (inBed and BED_REST_BONUS or 1)
+        self.wantsBreak = false
+        self.breaksTaken = self.breaksTaken + 1
+        self.morale = math.min(MORALE_MAX, self.morale + (inBed and MORALE_BED_BONUS or MORALE_BREAK_BONUS))
+        self.world:releaseRestSpot(self)
+        self.restSpot = nil
+        self:emit('break', inBed and 'bed' or 'floor')
+        self.state = 'idle'
+        self.decideTimer = 0
+        self:stepOff()
+    elseif self.state == 'working' then
+        local cargo = nil
+        if self.targetSite and not self.targetSite.done then
+            local site = self.targetSite
+            local kind = self.world:completeSite(site)
+            if kind then cargo = { kind = kind } end
+            if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
+            self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
+        elseif self.targetNode and self.targetNode.ready then
+            local node = self.targetNode
+            local kind = self.world:harvestNode(node)
+            cargo = { kind = kind, food = node.food }
+            self:emit('work', node.kind)
+        end
+        self:releaseNode()
+        self:releaseSite()
+        self.job = nil
+        if cargo then
+            self.slots[SLOT_WORK] = cargo
+            if self:goDeliver() then return end
+            self.slots[SLOT_WORK] = nil
+        end
+        if self.targetArea and self:continueArea() then return end
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
+    end
+end
+
+function Worker:accumulateWork(dt)
+    if self.state == 'working' or (self.state == 'walking' and (self.goal == 'work' or self.goal == 'deliver')) then
+        self.workTime = self.workTime + dt
+    end
+end
+
+-- Hunger grinds morale down, a full belly slowly restores it. Returns true
+-- if the morphi has had enough and quit.
+function Worker:updateMorale(dt)
+    if self.hunger < HUNGER_EAT_THRESHOLD then
+        self.morale = self.morale - MORALE_HUNGRY_DRAIN * dt
+    elseif self.morale > 0 then
+        self.morale = math.min(MORALE_MAX, self.morale + MORALE_RECOVER * dt)
+    end
+    if self.morale <= 0 then
+        self.morale = 0
+        self:quit('morale')
+        return true
+    end
+    if self.morale < MORALE_LOW then
+        if not self.warnedLowMorale then
+            self.warnedLowMorale = true
+            self:say('ugh', 3)
+            self:emit('lowmorale')
+        end
+    elseif self.morale > MORALE_LOW + 15 then
+        self.warnedLowMorale = false
+    end
+    return false
+end
+
+-- What is in the morphi's hand while it heads to or does tool work:
+-- 'axe' for trees, 'pickaxe' for ore and mine marks, 'saw' for a bed,
+-- 'log' for floor spots, bins and bridges. Nil for foraging and the rest.
+function Worker:toolInHand()
+    if not (self.state == 'working' or (self.state == 'walking' and self.goal == 'work')) then return nil end
+    if self.targetNode then
+        if self.targetNode.kind == NODE_TREE then return 'axe' end
+        if self.targetNode.kind == NODE_ORE then return 'pickaxe' end
+        return nil
+    end
+    local site = self.targetSite
+    if not site then return nil end
+    if site.kind == SITE_MINE then return 'pickaxe' end
+    if site.kind == SITE_BED then return 'saw' end
+    return 'log'
+end
+
+function Worker:mood()
+    if self.morale < MORALE_LOW then return 'fed up' end
+    if self.morale < 65 then return 'grumpy' end
+    return 'fine'
+end
+
+-- A wall went up under my feet: step onto the nearest open tile, towards
+-- camp if there is a choice, and think again. Nothing can path from inside
+-- a wall, so without this the morphi would stand there for ever.
+function Worker:unstick(x, y)
+    local best = nil
+    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
+        if self.world:isPassable(c[1], c[2]) then
+            best = best or c
+            if self.world:isReachable(c[1], c[2]) then best = c; break end
+        end
+    end
+    if not best then return false end
+    local c = Util.tileCenter(best[1], best[2])
+    self.x, self.y = c.x, c.y
+    self:dropJob()
+    self.eatingSlot = nil
+    self.state = 'idle'
+    self.decideTimer = 0
+    return true
+end
+
+function Worker:update(dt, clock)
+    self.clock = clock or (self.clock + dt)
+    self.animTime = self.animTime + dt
+    if self.bubble then
+        self.bubble.ttl = self.bubble.ttl - dt
+        if self.bubble.ttl <= 0 then self.bubble = nil end
+    end
+    if not self.alive then return end
+    if self.state ~= 'quitting' then
+        local here = self:tile()
+        if not self.world:isPassable(here.x, here.y) then self:unstick(here.x, here.y) end
+    end
+    if self.state == 'quitting' then
+        local d = self.exitDir
+        self.x = self.x + d.dx * self.speed * dt
+        self.y = self.y + d.dy * self.speed * dt
+        self:face(d.dx, d.dy)
+        self.moving = true
+        local t = self:tile()
+        if not self.world:inBounds(t.x, t.y) then self.alive = false end
+        return
+    end
+    if not self.arcade then
+        self.hunger = self.hunger - self.drain * dt
+        if self.hunger <= 0 then
+            self.hunger = 0
+            self:quit('starved')
+            return
+        end
+        if self:updateMorale(dt) then return end
+    end
+    self:accumulateWork(dt)
+    self.moving = false
+    if self.state == 'idle' then
+        self.decideTimer = self.decideTimer - dt
+        if self.decideTimer <= 0 then
+            self.decideTimer = DECIDE_INTERVAL
+            self:decide()
+        end
+    elseif self.state == 'sulking' then
+        self.stateTimer = self.stateTimer - dt
+        if self.stateTimer <= 0 then self.state = 'idle' end
+    elseif self.state == 'walking' then
+        self:followPath(dt)
+    elseif self.state == 'eating' or self.state == 'working' or self.state == 'breaking' then
+        self.stateTimer = self.stateTimer - dt
+        if self.stateTimer <= 0 then self:finishAction() end
+    end
+end
+
+function Worker:describeState()
+    if self.state == 'quitting' then return 'Leaving the band' end
+    if self.arcade and self.state == 'idle' and self:wantsMeal() and not self.world:arcadeReady() then return 'Waiting to eat' end
+    if self.state == 'sulking' then return 'Grumbling' end
+    if self.state == 'eating' then return 'Eating' end
+    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end
+    if self.state == 'working' then
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
+        return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
+    end
+    if self.state == 'walking' then
+        if self.goal == 'deliver' then
+            local c = self:carrying()
+            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to camp')
+        end
+        if self.goal == 'eat' then return 'Going to eat' end
+        if self.goal == 'fetch' then return 'Fetching a snack from storage' end
+        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to camp' end
+        if self.goal == 'work' then
+            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind end
+            return 'Going ' .. self.roleInfo.verb
+        end
+        return 'Wandering'
+    end
+    return 'Idle'
 end
 
 return Worker
