@@ -326,14 +326,22 @@ function draw() {
 function drawSolution(l, sol) {
   const s = l[sol] || {};
   const a = .8;
+  // A mark on ground it cannot work on (a bridge off the water, a mine off
+  // the stone) still shows, in red, so it can be found and taken off.
+  const bad = (x, y) => {
+    g.fillStyle = 'rgba(240,80,60,.35)'; g.fillRect(x * cell, y * cell, cell, cell);
+    g.strokeStyle = '#ff4a3a'; g.lineWidth = 2; g.strokeRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2); g.lineWidth = 1;
+  };
   for (const b of s.bridge || []) for (const [x, y] of lineTiles(b[0] - 1, b[1] - 1, b[2] - 1, b[3] - 1)) {
-    if (tileChar(l, x, y) !== '~') continue;
-    g.fillStyle = `rgba(138,111,63,${a})`; g.fillRect(x * cell, y * cell, cell, cell);
+    const water = tileChar(l, x, y) === '~';
+    g.fillStyle = water ? `rgba(138,111,63,${a})` : 'rgba(138,111,63,.45)'; g.fillRect(x * cell, y * cell, cell, cell);
     g.fillStyle = 'rgba(80,56,28,.9)'; for (let i = 1; i < 4; i++) g.fillRect(x * cell, y * cell + i * cell / 4, cell, 1);
+    if (!water) bad(x, y);
   }
   for (const m of s.mine || []) for (const [x, y] of rectTiles(m[0] - 1, m[1] - 1, m[2] - 1, m[3] - 1)) {
-    if (!'#G'.includes(tileChar(l, x, y))) continue;
-    g.strokeStyle = '#ff9933'; g.lineWidth = 2;
+    const stone = '#G'.includes(tileChar(l, x, y));
+    if (!stone) bad(x, y);
+    g.strokeStyle = stone ? '#ff9933' : '#ff4a3a'; g.lineWidth = 2;
     g.strokeRect(x * cell + 3, y * cell + 3, cell - 6, cell - 6);
     g.beginPath(); g.moveTo(x * cell + 6, y * cell + 6); g.lineTo(x * cell + cell - 6, y * cell + cell - 6); g.moveTo(x * cell + cell - 6, y * cell + 6); g.lineTo(x * cell + 6, y * cell + cell - 6); g.stroke();
     g.lineWidth = 1;
@@ -344,6 +352,9 @@ function drawSolution(l, sol) {
   for (const [x, y] of s.door || []) drawTile(g, 'D', (x - 1) * cell, (y - 1) * cell, cell, l, 0, 0);
   g.globalAlpha = 1;
   for (const [x, y] of s.bin || []) drawBin(g, (x - 1) * cell, (y - 1) * cell, cell, a);
+  // furniture goes on grass; a bin needs grass under both halves
+  for (const k of ['floor', 'wall', 'door']) for (const [x, y] of s[k] || []) if (tileChar(l, x - 1, y - 1) !== '.') bad(x - 1, y - 1);
+  for (const [x, y] of s.bin || []) for (const dx of [0, 1]) if (tileChar(l, x - 1 + dx, y - 1) !== '.') bad(x - 1 + dx, y - 1);
 }
 
 function findCamp(l) {
