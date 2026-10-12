@@ -195,6 +195,7 @@ local function newGame(seedString, difficultyIndex)
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
+    game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
     game.camera.scale = 2
     game.camera:centerOn(game.world.breakroom.cx, game.world.breakroom.cy)
     game.selectedWorker = nil
@@ -246,7 +247,8 @@ local function newLevel(index, set, difficulty)
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
     game.view = View.new(game.world)
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
-    game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale)
+    game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
+    game.camera:fitWorld()
     game.selectedWorker = nil
     game.follow = false
     game.lineStart = nil
@@ -397,7 +399,8 @@ function love.resize(w, h)
     ui:layout(w, h)
     if game and game.camera then
         game.camera:setView(w, h)
-        if isLevelMode() and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+        game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
+        if isLevelMode() and not game.started then game.camera:fitWorld() end
     end
 end
 
@@ -474,9 +477,26 @@ local function updatePlaying(dt, substep)
     if not substep then updateCamera(dt) end
 end
 
+-- Fingers are counted from what LOVE says is on the screen right now, not by
+-- adding presses and subtracting releases: a release that never arrives (iOS
+-- cancels touches mid gesture) would otherwise leave a phantom finger down,
+-- every later tap read as a pinch and ignored.
+local function syncTouches()
+    if not love.touch then return end
+    local live = {}
+    for _, id in ipairs(love.touch.getTouches()) do live[id] = true end
+    local n = 0
+    for id in pairs(touches) do
+        if live[id] then n = n + 1 else touches[id] = nil end
+    end
+    touchCount = n
+    if touchCount < 2 then pinch = nil end
+end
+
 function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
+    syncTouches()
     if state == 'playing' or state == 'units' then
         game.speed = simSpeed
         if game.paused then
@@ -690,7 +710,8 @@ local function noteTouch()
     ui:layout(love.graphics.getDimensions())
     if game and game.camera then
         game.camera:setView(love.graphics.getDimensions())
-        if isLevelMode() and not game.started then game.camera:fitWorld((TOP_BAR_H + BOTTOM_BAR_H) * ui.scale) end
+        game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
+        if isLevelMode() and not game.started then game.camera:fitWorld() end
     end
 end
 
@@ -882,7 +903,8 @@ end
 function love.touchpressed(id, x, y)
     noteTouch()
     touches[id] = { x = x, y = y }
-    touchCount = touchCount + 1
+    touchCount = 0
+    for _ in pairs(touches) do touchCount = touchCount + 1 end
     if touchCount >= 2 and state == 'playing' then
         pinch = pinchState()
         game.panStart = nil
@@ -907,10 +929,9 @@ function love.touchmoved(id, x, y)
 end
 
 function love.touchreleased(id)
-    if touches[id] then
-        touches[id] = nil
-        touchCount = math.max(0, touchCount - 1)
-    end
+    touches[id] = nil
+    touchCount = 0
+    for _ in pairs(touches) do touchCount = touchCount + 1 end
     if touchCount < 2 then pinch = nil end
 end
 

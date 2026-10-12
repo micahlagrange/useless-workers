@@ -13,15 +13,26 @@ function Camera.new(worldW, worldH, viewW, viewH)
     self.viewW, self.viewH = viewW, viewH
     self.minScale = 0.5
     self.maxScale = 4
+    self.insetTop, self.insetBottom = 0, 0
     self:setView(viewW, viewH)
     return self
 end
 
--- Zoom so the whole world fits in the view with the HUD bars clear of
--- it, then centre. For the hand built levels, which are small.
-function Camera:fitWorld(barsPx)
-    local availH = math.max(100, self.viewH - (barsPx or 0))
-    local s = math.min(self.viewW / self.worldPxW, availH / self.worldPxH)
+-- The HUD bars cover the top and bottom of the screen (in screen pixels);
+-- the map scrolls and centres in the strip between them.
+function Camera:setInsets(top, bottom)
+    self.insetTop, self.insetBottom = top or 0, bottom or 0
+    self:clamp()
+end
+
+function Camera:availH()
+    return math.max(50, self.viewH - self.insetTop - self.insetBottom)
+end
+
+-- Zoom so the whole world fits between the bars, then centre. For the hand
+-- built levels, which are small.
+function Camera:fitWorld()
+    local s = math.min(self.viewW / self.worldPxW, self:availH() / self.worldPxH)
     self.scale = Util.clamp(math.floor(s * 4) / 4, self.minScale, self.maxScale)
     self:centerOn(self.worldPxW / 2, self.worldPxH / 2)
 end
@@ -37,22 +48,25 @@ end
 
 function Camera:clamp()
     local visibleW = self.viewW / self.scale
-    local visibleH = self.viewH / self.scale
+    local visibleH = self:availH() / self.scale
+    local top = self.insetTop / self.scale -- world units hidden under the top bar
     if visibleW >= self.worldPxW then
         self.x = (self.worldPxW - visibleW) / 2
     else
         self.x = Util.clamp(self.x, 0, self.worldPxW - visibleW)
     end
+    -- the world's top edge can come down to the top bar, its bottom edge up
+    -- to the bottom bar
     if visibleH >= self.worldPxH then
-        self.y = (self.worldPxH - visibleH) / 2
+        self.y = (self.worldPxH - visibleH) / 2 - top
     else
-        self.y = Util.clamp(self.y, 0, self.worldPxH - visibleH)
+        self.y = Util.clamp(self.y, -top, self.worldPxH - visibleH - top)
     end
 end
 
 function Camera:centerOn(wx, wy)
     self.x = wx - self.viewW / 2 / self.scale
-    self.y = wy - self.viewH / 2 / self.scale
+    self.y = wy - (self.insetTop + self:availH() / 2) / self.scale
     self:clamp()
 end
 

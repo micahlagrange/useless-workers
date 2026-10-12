@@ -5,7 +5,7 @@
 local METRICS = dofile('tst/c64_metrics.lua')
 
 -- ctx: whatever the test wants stamped on each text (layer, panel, button)
-local Stub = { width = 1280, height = 720, texts = {}, ctx = {} }
+local Stub = { width = 1280, height = 720, texts = {}, ctx = {}, fingers = {} }
 
 -- Anything not stubbed on purpose answers 0 and does nothing.
 local function blank(fields)
@@ -159,7 +159,7 @@ function Stub.install()
         graphics = g,
         mouse = blank({ getPosition = function() return 0, 0 end, isDown = function() return false end }),
         keyboard = blank({ isDown = function() return false end }),
-        touch = blank({ getTouches = function() return {} end }),
+        touch = blank({ getTouches = function() return Stub.fingers end }),
         system = blank({ getOS = function() return 'Windows' end }),
         timer = blank({ getTime = function() return 0 end }),
         math = blank({ random = math.random }),
