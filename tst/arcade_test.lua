@@ -93,6 +93,45 @@ end
 
 -- The obvious build fits the hard budget, with a log or two left over, and
 -- easy pays for it twice: a heap of mistakes still wins.
+-- The stuck check: a river with no bridge means nobody can reach food;
+-- once the bridge is built somebody can. On a picky level a reachable bin
+-- and a reachable bush count as food on its way, before anything is stored.
+function TestArcadeLevels:testCanReachFoodFollowsTheBridge()
+    local run = Campaign.load(2, Rng.new(2), 'arcade', 2)
+    local jobs = Jobs.new()
+    for _, node in ipairs(run.world.nodes) do if node.ready then jobs:postNode(node) end end
+    local scoring = Scoring.new(2)
+    local workers = spawn(run, jobs, scoring)
+    for _, w in ipairs(workers) do
+        lu.assertFalse(w:canReachFood(), w.name .. ' should not reach food across the river')
+    end
+    local abilities = Abilities.new(run.world, jobs, function() end)
+    lu.assertTrue((Campaign.apply(run.def.clever, abilities)))
+    local clock = 0
+    while clock < 60 and #run.world.sites > 0 do
+        clock = clock + DT
+        jobs:update(DT)
+        run.world:update(DT, function(n) jobs:postNode(n) end)
+        for _, w in ipairs(workers) do w:update(DT, clock) end
+    end
+    lu.assertEquals(#run.world.sites, 0, 'bridge should be built')
+    local reach = 0
+    for _, w in ipairs(workers) do if w:canReachFood() then reach = reach + 1 end end
+    lu.assertTrue(reach > 0, 'after the bridge somebody can reach food')
+end
+
+function TestArcadeLevels:testPickyLevelCountsAnEmptyBinAsFoodOnItsWay()
+    local run = Campaign.load(3, Rng.new(3), 'arcade', 2)
+    local jobs = Jobs.new()
+    local scoring = Scoring.new(2)
+    local workers = spawn(run, jobs, scoring)
+    lu.assertTrue(run.world.arcadeNeeds.bins)
+    lu.assertFalse(workers[1]:canReachFood(), 'no bin yet, nothing on its way')
+    local spot = run.world:spawnTiles(2)[1]
+    run.world:markStorage(spot.x, spot.y, STORAGE_BIN_CAPACITY)
+    lu.assertTrue(workers[1]:canReachFood(), 'a reachable bin and a ripe bush mean a meal is coming')
+end
+
 function TestArcadeLevels:testObviousSolutionsFeedEveryoneOnHard()
     for i = 1, 6 do
         local allAte, spent, clock = play(i, 'obvious', nil, 3)

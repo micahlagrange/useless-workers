@@ -342,6 +342,24 @@ function Worker:fetchFood()
     return true
 end
 
+-- Is there a meal this morphi could walk to right now? Stored food it can
+-- reach counts. On a picky (bins) level with nothing stored yet, a
+-- reachable bin plus a reachable ripe bush counts too, since a forager can
+-- fill it. Otherwise a reachable ripe bush. Used by the stuck check.
+function Worker:canReachFood()
+    local t = self:tile()
+    if self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil) then return true end
+    local bush = self:nearestRipeBush()
+    if self.arcade and self.world.arcadeNeeds and self.world.arcadeNeeds.bins then
+        if not bush then return false end
+        for _, s in ipairs(self.world:storageTiles()) do
+            if s.capacity > STORAGE_FLOOR_CAPACITY and self.world:isReachable(s.x, s.y) then return true end
+        end
+        return false
+    end
+    return bush ~= nil
+end
+
 function Worker:eatSomething()
     if self:snackInPocket() then return self:snack(SLOT_PERSONAL) end
     if self:fetchFood() then return true end

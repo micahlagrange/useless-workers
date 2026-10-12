@@ -526,6 +526,30 @@ function UI:drawTopBar(game)
         local active = (b.id == 'follow' and game.follow) or (b.id == 'mute' and game.muted)
         self:button(b, b.label, active)
     end
+    self:drawRestartCall(game)
+end
+
+-- When a level is stuck, a loud button under the top bar's right end.
+function UI:drawRestartCall(game)
+    self.restartButton = nil
+    if not game.suggestRestart then return end
+    local label = self.touch and 'RESTART LEVEL' or 'RESTART LEVEL (R)'
+    local bw = self.fonts.hud:getWidth(label) + 28
+    local r = { x = self.vw - 8 - bw, y = TOP_BAR_H + 8, w = bw, h = 40 }
+    local pulse = 0.75 + 0.25 * math.sin(love.timer.getTime() * 5)
+    love.graphics.setColor(C.warn[1] * pulse, C.warn[2] * pulse, C.warn[3] * pulse, 1)
+    love.graphics.rectangle('fill', r.x, r.y, r.w, r.h)
+    love.graphics.setColor(1, 1, 1, 0.9)
+    love.graphics.rectangle('line', r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1)
+    love.graphics.setFont(self.fonts.hud)
+    love.graphics.setColor(0.08, 0.05, 0.04, 1)
+    love.graphics.print(label, r.x + 14, r.y + 12)
+    self:printFit('Out of logs and nobody can reach food.', r.x - 4, r.y + r.h + 6, r.w + 8, 'right', C.warn, { self.fonts.small, self.fonts.tiny })
+    self.restartButton = r
+end
+
+function UI:restartButtonAt(mx, my)
+    return hit(self.restartButton, mx, my)
 end
 
 function UI:drawAlerts()
@@ -1105,8 +1129,8 @@ end
 function UI:drawConfirmQuit()
     local x, y, pw, ph = self:panel(720, 230)
     self:centeredFit('Quit to the title screen?', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('This game will be lost.', y + 76, pw - 40, C.dim)
-    self:panelButtonRow(x, y, pw, ph, { { 'yes', 'QUIT', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
+    self:centeredFit('Or start this one over.', y + 76, pw - 40, C.dim)
+    self:panelButtonRow(x, y, pw, ph, { { 'restart', self.touch and 'RESTART' or 'RESTART (R)', false }, { 'yes', self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
 end
 
 function UI:drawGameOver(scoring, highScore, isNew)

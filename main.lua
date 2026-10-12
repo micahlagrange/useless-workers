@@ -421,6 +421,23 @@ local function updatePlaying(dt)
         levelClear()
         return
     end
+    -- Stuck: the logs are gone, nothing is being built, and nobody who still
+    -- wants a meal can walk to one. After five seconds of that, suggest a restart.
+    if game.mode == 'arcade' then
+        local stuck = game.world.stock.logs == 0
+        if stuck then
+            for _, site in ipairs(game.world.sites) do
+                if site.claimedBy ~= nil then stuck = false break end
+            end
+        end
+        if stuck then
+            for _, w in ipairs(game.workers) do
+                if w.alive and not w.ate and w:canReachFood() then stuck = false break end
+            end
+        end
+        game.stuckTimer = stuck and (game.stuckTimer or 0) + dt or 0
+        game.suggestRestart = game.stuckTimer >= 5
+    end
     if game.scoring:update(dt, avg) then
         if game.mode == 'level' then levelClear() else closeQuarter() end
         return
@@ -595,6 +612,16 @@ local function openMenu()
     love.mouse.setVisible(true)
 end
 
+-- The same level, or the same free play seed, from the top.
+local function restartGame()
+    Audio.playSFX('click')
+    if isLevelMode() then
+        newLevel(game.level.index, game.level.set, game.level.difficulty)
+    else
+        newGame(game.seedString, game.scoring.difficultyIndex)
+    end
+end
+
 local function zoomBy(factor)
     local w, h = love.graphics.getDimensions()
     game.camera:zoomAt(factor, w / 2, h / 2)
@@ -680,6 +707,8 @@ function love.mousepressed(x, y, button, istouch)
     elseif state == 'confirmquit' then
         if pb == 'yes' then
             goToTitle()
+        elseif pb == 'restart' then
+            restartGame()
         else
             state = 'playing'
             hideCursor()
@@ -708,6 +737,10 @@ function love.mousepressed(x, y, button, istouch)
     if vy < TOP_BAR_H then
         local id = ui:topButtonAt(vx, vy)
         if id then pressTopButton(id) end
+        return
+    end
+    if ui:restartButtonAt(vx, vy) then
+        restartGame()
         return
     end
     if vy > ui.vh - BOTTOM_BAR_H then
@@ -872,6 +905,8 @@ function love.keypressed(key)
             openUnits()
         elseif key == 'g' then
             openGoal()
+        elseif key == 'r' then
+            if game.suggestRestart then restartGame() else openMenu() end
         elseif key == '=' or key == '+' or key == 'kp+' then
             zoomBy(1.25)
         elseif key == '-' or key == 'kp-' then
@@ -884,6 +919,8 @@ function love.keypressed(key)
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
+        elseif key == 'r' then
+            restartGame()
         else
             state = 'playing'
             hideCursor()
