@@ -703,8 +703,9 @@ function World:refund(cost)
 end
 
 -- Storage --------------------------------------------------------------
--- Food is stored as an item on a storage tile, closest to the break room
--- first. A floor spot holds one item, a bin holds four. Without storage
+-- Food is stored as an item on a storage tile: bins first, then floor spots,
+-- each closest to the break room first. A floor spot holds one item, a bin
+-- holds four. Without storage
 -- food has nowhere to go. Morphis walk over items freely; they just try
 -- not to idle on them.
 
@@ -718,7 +719,9 @@ function World:markStorage(x, y, capacity)
         d = (x - (self.breakroom.x + 0.5)) ^ 2 + (y - (self.breakroom.y + 0.5)) ^ 2
     end
     self.storageList[#self.storageList + 1] = { x = x, y = y, d = d, capacity = t.storage }
+    -- bins first, nearest the camp first; floor spots only once the bins are full
     table.sort(self.storageList, function(a, b)
+        if a.capacity ~= b.capacity then return a.capacity > b.capacity end
         if a.d ~= b.d then return a.d < b.d end
         if a.y ~= b.y then return a.y < b.y end
         return a.x < b.x

@@ -291,4 +291,23 @@ function TestWorldTools:testSpawnTilesNearBreakroom()
     for _, s in ipairs(spots) do lu.assertTrue(self.world:isReachable(s.x, s.y)) end
 end
 
+TestStorageOrder = {}
+-- Food goes to a bin before a floor spot, even a floor spot nearer camp:
+-- the floor is for when every bin is full.
+function TestStorageOrder:testBinsFillBeforeFloorSpots()
+    local w = World.fromGrid({
+        'BB..........',
+        'BB..........',
+        '............',
+    }, Rng.new(1))
+    w:markStorage(3, 1, STORAGE_FLOOR_CAPACITY)
+    w:markBin(9, 3)
+    lu.assertEquals(w:nearestFreeStorageTile(), { x = 9, y = 3 })
+    for _ = 1, STORAGE_BIN_CAPACITY do lu.assertNotNil(w:storeItem(ITEM_FOOD, 9, 3, 'steak')) end
+    lu.assertEquals(w:nearestFreeStorageTile(), { x = 3, y = 1 })
+    -- eat one out of the bin and it is first again
+    w:takeItem(9, 3)
+    lu.assertEquals(w:nearestFreeStorageTile(), { x = 9, y = 3 })
+end
+
 os.exit(lu.LuaUnit.run())
