@@ -3,6 +3,7 @@ require('src.constants')
 local Util = require('src.util')
 local Scoring = require('src.scoring')
 local Campaign = require('src.campaign')
+local Version = require('src.version')
 
 local UI = {}
 UI.__index = UI
@@ -1488,6 +1489,10 @@ function UI:drawTitle(title, highScore)
         y = y + self:centeredFit(note, y, self.vw - 40, C.dim, fonts) + 6
     end
     self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+    -- which build this is, for telling a stale page from a new one
+    love.graphics.setFont(self.fonts.tiny)
+    setColor(C.dim)
+    love.graphics.print('build ' .. Version.build, 8, 10)
 end
 
 -- Letters and digits for the seed, DEL and OK. Keys are title buttons
