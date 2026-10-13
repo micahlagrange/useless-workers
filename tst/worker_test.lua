@@ -222,16 +222,32 @@ function TestWorker:testLogsAndGoldGoToTheStockpile()
     lu.assertEquals(self.scoring.delivered.gold, 1)
 end
 
+-- Free play: a morphi with nothing of its own to do picks food (a miner
+-- with no ore in reach would otherwise just stand about). Arcade keeps one
+-- job each.
+function TestWorker:testIdleMinerHelpsPickFood()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
+    self.jobs:postNode(self.bush)
+    run({ w }, self.world, self.jobs, 12)
+    lu.assertEquals(self.events[1], 'work:bush')
+    lu.assertEquals(self.scoring.delivered.food, 1)
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_MINER))
+    a.arcade = true
+    self.bush.ready = true
+    self.jobs:postNode(self.bush)
+    run({ a }, self.world, self.jobs, 6)
+    lu.assertTrue(self.jobs:hasJobFor(self.bush), 'an arcade miner leaves the bush to a forager')
+end
+
 function TestWorker:testLumberjackChopsTreeIntoStump()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
-    self.jobs:postNode(self.bush)   -- not my job
+    self.jobs:postNode(self.bush)   -- not its job: only once the tree is done
     self.jobs:postNode(self.tree)
     run({ w }, self.world, self.jobs, 14)
     lu.assertEquals(self.scoring.delivered.logs, 1)
-    lu.assertEquals(self.scoring.delivered.food, 0)
     lu.assertFalse(self.tree.ready)
     lu.assertEquals(self.tree.timer > 0, true)
-    lu.assertTrue(self.jobs:hasJobFor(self.bush)) -- still queued for a forager
+    lu.assertEquals(self.events[1], 'work:tree')    -- its own job came first
     lu.assertEquals(self.events[2], 'deliver:logs')
 end
 

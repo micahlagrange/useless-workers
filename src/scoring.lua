@@ -89,6 +89,9 @@ end
 function Scoring:hiresFor(output, quits, workerCount)
     local hires = math.floor(output / HIRE_OUTPUT_DIVISOR)
     if hires == 0 and quits == 0 then hires = 1 end
+    local year = math.floor((self.quarter - 1) / QUARTERS_PER_GAME) + 1
+    local cap = MIGRANTS_PER_SEASON[math.min(year, #MIGRANTS_PER_SEASON)]
+    if hires > cap then hires = cap end
     local room = MAX_WORKERS - workerCount
     if hires > room then hires = room end
     if hires < 0 then hires = 0 end

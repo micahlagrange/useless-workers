@@ -183,13 +183,24 @@ FED_SAMPLE_SECONDS  = 1
 ENDLESS_DRAIN_STEP  = 0.1
 GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
 
+-- startHunger: how fed a morphi arrives (a little less for each one after
+-- the first, so the band does not all get hungry at the same moment).
+-- Free play offers only the first for now (FREE_PLAY_DIFFICULTIES) while it
+-- is being tuned; the rest are kept for when there are more hardships.
 DIFFICULTIES = {
-    { name = 'Mild wilds',   drain = 0.5, workers = 5, multiplier = 0.5 },
-    { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0 },
-    { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5 },
-    { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0 },
+    { name = 'Mild wilds',   drain = 0.5, workers = 5, multiplier = 0.5, startHunger = 85 },
+    { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
+    { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
+    { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
 }
-DEFAULT_DIFFICULTY = 2
+FREE_PLAY_DIFFICULTIES = 1
+DEFAULT_DIFFICULTY = 1
+-- Migrants are capped per season, by year: a rush of new mouths, each with
+-- its own food, starved year one.
+MIGRANTS_PER_SEASON = { 2, 3, 4 }
+-- Every morphi that joins the band in free play brings a bush of its own
+-- food, planted this far (in tiles) from camp where it can be walked to.
+OWN_BUSH_RANGE = { 3, 9 }
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow

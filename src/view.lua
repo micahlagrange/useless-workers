@@ -391,6 +391,25 @@ function View:drawItems(clock)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- The spot being looked at: brackets at the corners that breathe, and a
+-- soft fill, so it stands out from the alert outlines.
+function View:drawFocus(tx, ty, clock)
+    local px, py = (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
+    local g = 2 + math.sin((clock or 0) * 5) * 1.5
+    love.graphics.setColor(1, 0.9, 0.3, 0.22)
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
+    love.graphics.setColor(1, 0.9, 0.3, 1)
+    love.graphics.setLineWidth(1.5)
+    local s, L = TILE_SIZE, 5
+    local x0, y0, x1, y1 = px - g, py - g, px + s + g, py + s + g
+    love.graphics.line(x0, y0 + L, x0, y0, x0 + L, y0)
+    love.graphics.line(x1 - L, y0, x1, y0, x1, y0 + L)
+    love.graphics.line(x0, y1 - L, x0, y1, x0 + L, y1)
+    love.graphics.line(x1 - L, y1, x1, y1, x1, y1 - L)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function View:drawTileOutline(tx, ty, color, size)
     size = size or 1
     local px, py = (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE

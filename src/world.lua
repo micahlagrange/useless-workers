@@ -470,9 +470,11 @@ end
 
 function World:addNode(kind, x, y, food)
     if kind == NODE_BUSH and not food then
-        -- spread the diets around so every morphi finds something
-        self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
-        food = FOOD_KINDS[self.foodCycle]
+        -- spread the diets around so every morphi finds something: the foods
+        -- the band eats (dietPool, kept by the game) or, without one, all of them
+        local pool = (self.dietPool and #self.dietPool > 0) and self.dietPool or FOOD_KINDS
+        self.foodCycle = (self.foodCycle or 0) % #pool + 1
+        food = pool[self.foodCycle]
     end
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
@@ -483,6 +485,34 @@ function World:addNode(kind, x, y, food)
     self.nextNodeId = self.nextNodeId + 1
     self.nodes[#self.nodes + 1] = node
     self.tiles[x][y].node = node
+    return node
+end
+
+-- A bush of one food, ripe soon, on open grass that can be walked to from
+-- camp, between range[1] and range[2] tiles from (x, y). Nil when there is
+-- no room.
+function World:plantBushNear(food, x, y, range)
+    local reach = self:reachableFromBreakroom()
+    local best, spots = range[2] + 1, {}
+    for tx = math.max(1, x - range[2]), math.min(self.w, x + range[2]) do
+        for ty = math.max(1, y - range[2]), math.min(self.h, y + range[2]) do
+            local t = self.tiles[tx][ty]
+            local d = math.max(math.abs(tx - x), math.abs(ty - y))
+            if d >= range[1] and t.type == TILE_GRASS and reach[tx][ty] and not t.node and not t.site
+                and t.storage == 0 and not t.binPart and not t.floor and not t.bed then
+                spots[#spots + 1] = { x = tx, y = ty, d = d }
+            end
+        end
+    end
+    if #spots == 0 then return nil end
+    -- nearest rings first, a random tile within the ring
+    table.sort(spots, function(a, b) return a.d < b.d end)
+    local ring = {}
+    for _, p in ipairs(spots) do if p.d == spots[1].d or #ring < 6 then ring[#ring + 1] = p end end
+    local p = ring[self.rng and self.rng:int(1, #ring) or 1]
+    local node = self:addNode(NODE_BUSH, p.x, p.y, food)
+    node.timer = self.rng and self.rng:int(BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX) or BUSH_FIRST_RIPEN_MIN
+    self.version = self.version + 1
     return node
 end
 

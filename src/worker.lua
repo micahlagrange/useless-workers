@@ -473,6 +473,11 @@ function Worker:decide()
         return true
     end
     local job = self.jobs:takeNearest(types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
+    -- nothing of its own to do: out in the wilds anyone lends a hand picking
+    -- food (miners run out of reachable ore early and would only stand about)
+    if not job and not self.arcade and self.role ~= ROLE_FORAGER and self.world:nearestFreeStorageTile(self) ~= nil then
+        job = self.jobs:takeNearest({ 'forage' }, here.x, here.y, usable, claim, JOB_PATH_TRIES)
+    end
     if job and job.area then
         self.job = nil -- the area is the job; it is reposted if anything is left
         self.targetArea = job.area
@@ -876,6 +881,7 @@ function Worker:describeState()
     if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end
     if self.state == 'working' then
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
+        if self.targetNode and self.targetNode.kind == NODE_BUSH and self.role ~= ROLE_FORAGER then return 'Picking food, helping out' end
         return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
     end
     if self.state == 'walking' then

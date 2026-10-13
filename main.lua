@@ -89,6 +89,18 @@ end
 
 local NODE_WORDS = { bush = 'bush', tree = 'tree', ore = 'gold' }
 
+-- Everything announced also goes into the log (LOG up top), with when,
+-- what kind and where, so it can be read later and looked at on the map.
+local function announce(text, tile, kind)
+    ui:alert(text, tile)
+    if not game.log then return end
+    game.log[#game.log + 1] = {
+        text = text, tile = tile, kind = kind or 'news',
+        season = game.scoring and game.scoring:seasonLabel() or '', clock = game.clock or 0,
+    }
+    if #game.log > 300 then table.remove(game.log, 1) end
+end
+
 local function onComplain(worker, reason, node)
     local where = node and (NODE_WORDS[node.kind] .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
     local text
@@ -99,7 +111,7 @@ local function onComplain(worker, reason, node)
     else
         text = worker.name .. " can't reach the " .. where
     end
-    ui:alert(text, node and { x = node.x, y = node.y } or nil)
+    announce(text, node and { x = node.x, y = node.y } or nil, 'hardship')
     Audio.playSFX('complain')
 end
 
@@ -112,13 +124,15 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
     elseif name == 'lowmorale' then
-        ui:alert(worker.name .. ' is fed up and close to leaving the band.')
+        local t = worker:tile()
+        announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')
     elseif name == 'quit' then
         Audio.playSFX('quit')
+        local t = worker:tile()
         if data == 'morale' then
-            ui:alert(worker.name .. ' left the band. Too many hardships, too little care.')
+            announce(worker.name .. ' left the band. Too many hardships, too little care.', { x = t.x, y = t.y }, 'left')
         else
-            ui:alert(worker.name .. ' starved and wandered off into the wilds.')
+            announce(worker.name .. ' starved and wandered off into the wilds.', { x = t.x, y = t.y }, 'left')
         end
         if game.mode == 'level' and (state == 'playing' or state == 'units') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
@@ -137,17 +151,31 @@ local function hire(n)
         local role = HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
         local sheets = ROLES[role].sheets
         game.roleHires[role] = (game.roleHires[role] or 0) + 1
+        -- arrivals come in a little less fed one after another, so the band
+        -- does not all get hungry at once
+        local start = (game.scoring.difficulty.startHunger or STARTING_HUNGER) - ((game.hired - 1) % 5) * 6
         local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
             x = spot.x, y = spot.y,
             role = role,
             sheet = sheets[(game.roleHires[role] - 1) % #sheets + 1],
             name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
-            hunger = STARTING_HUNGER,
+            hunger = start,
             onComplain = onComplain,
             onEvent = onWorkerEvent,
         })
         table.insert(game.workers, worker)
+        -- free play: the newcomer brings a bush of its own food, and new
+        -- bushes from now on grow the foods the band eats
+        if game.mode == 'free' then
+            local br = game.world.breakroom
+            game.world:plantBushNear(worker.diet, br.x, br.y, OWN_BUSH_RANGE)
+            local pool, seen = {}, {}
+            for _, w in ipairs(game.workers) do
+                if w.alive and not seen[w.diet] then seen[w.diet] = true; pool[#pool + 1] = w.diet end
+            end
+            game.world.dietPool = pool
+        end
     end
 end
 
@@ -210,7 +238,8 @@ local function newGame(seedString, difficultyIndex)
     Effects.clear()
     ui:clear()
     hire(DIFFICULTIES[difficultyIndex].workers)
-    ui:alert('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
+    game.log = {}
+    announce('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)
@@ -223,6 +252,7 @@ local function newLevel(index, set, difficulty)
     set = set or 'arcade'
     local run = Campaign.load(index, Rng.new(index), set, difficulty or title.arcadeDifficulty)
     game = {}
+    game.log = {}
     game.mode = set == 'arcade' and 'arcade' or 'level'
     if set == 'arcade' then simSpeed = 1 end
     setTools(set == 'arcade' and TOOLS_ARCADE or TOOLS_SURVIVAL)
@@ -340,7 +370,7 @@ local function continueFromReport()
     else
         state = 'playing'
         hideCursor()
-        ui:alert(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
+        announce(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
     end
 end
 
@@ -370,6 +400,8 @@ end
 
 -- UP / DOWN and the < > under the name: free play's wilds, or the arcade budget.
 local function difficultyMove(step)
+    local opt0 = title.options[title.option]
+    if opt0 and opt0.kind == 'free' and FREE_PLAY_DIFFICULTIES <= 1 then return end
     local opt = title.options[title.option]
     if opt.kind == 'free' then
         title.difficultyIndex = (title.difficultyIndex - 1 + step) % #DIFFICULTIES + 1
@@ -498,7 +530,7 @@ function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
     syncTouches()
-    if state == 'playing' or state == 'units' then
+    if state == 'playing' or state == 'units' or state == 'log' then
         game.speed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
@@ -507,7 +539,7 @@ function love.update(dt)
         else
             for step = 1, simSpeed do
                 updatePlaying(dt, step > 1)
-                if state ~= 'playing' and state ~= 'units' then break end
+                if state ~= 'playing' and state ~= 'units' and state ~= 'log' then break end
             end
         end
         ui:update(dt)
@@ -540,6 +572,7 @@ local function drawWorld()
     for _, t in ipairs(ui:alertTiles()) do
         game.view:drawTileOutline(t.x, t.y, { 1, 0.3, 0.2, pulse })
     end
+    if game.focus then game.view:drawFocus(game.focus.x, game.focus.y, game.clock) end
     -- cursor preview
     if state == 'playing' then
         local mx, my = love.mouse.getPosition()
@@ -620,6 +653,8 @@ function love.draw()
         ui:drawLevelFailed(game)
     elseif state == 'units' then
         ui:drawUnits(game, game.view)
+    elseif state == 'log' then
+        ui:drawLog(game)
     end
     ui:endScaled()
     if state == 'playing' then
@@ -695,6 +730,22 @@ local function cycleSpeed()
     game.speed = simSpeed
 end
 
+-- Look at a tile: centre and zoom in on it, and mark it until the next tap
+-- on the map.
+local function lookAt(tile)
+    if not tile then return end
+    game.focus = { x = tile.x, y = tile.y }
+    game.follow = false
+    local cam = game.camera
+    cam.scale = math.max(cam.scale, math.min(cam.maxScale, 3))
+    cam:centerOn((tile.x - 0.5) * TILE_SIZE, (tile.y - 0.5) * TILE_SIZE)
+end
+
+local function openLog()
+    state = 'log'
+    love.mouse.setVisible(true)
+end
+
 -- The world stops; building, tools, panning and zooming carry on.
 local function togglePause()
     game.paused = not game.paused
@@ -706,6 +757,7 @@ local function pressTopButton(id)
         ui.dropdown = ui.dropdown ~= id and id or nil
     elseif id == 'units' then openUnits()
     elseif id == 'pause' then togglePause()
+    elseif id == 'log' then openLog()
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
@@ -805,6 +857,17 @@ function love.mousepressed(x, y, button, istouch)
             hideCursor()
         end
         return
+    elseif state == 'log' then
+        if pb and pb:sub(1, 5) == 'look:' then
+            local e = game.log[tonumber(pb:sub(6))]
+            state = 'playing'
+            hideCursor()
+            if e then lookAt(e.tile) end
+        elseif pb == 'close' or not ui:insideLogPanel(vx, vy) then
+            state = 'playing'
+            hideCursor()
+        end
+        return
     elseif state == 'units' then
         local w = ui:unitButtonAt(vx, vy)
         if w then
@@ -844,6 +907,12 @@ function love.mousepressed(x, y, button, istouch)
         restartGame()
         return
     end
+    -- an announcement with a place: look at it
+    local alert = ui:alertAt(vx, vy)
+    if alert then
+        if alert.tile then lookAt(alert.tile) else openLog() end
+        return
+    end
     if vy > ui.vh - BOTTOM_BAR_H then
         local tool = ui:buttonAt(vx, vy)
         if tool then
@@ -854,6 +923,7 @@ function love.mousepressed(x, y, button, istouch)
     end
     local tile = game.camera:toTile(x, y)
     local tool = game.abilities.selected
+    game.focus = nil -- a tap on the map lets go of the spot being looked at
     if DEBUG or CLICK_DEBUG then
         local t = game.world:get(tile.x, tile.y)
         print(string.format('click screen %d,%d -> tile %d,%d type=%s cam=%.1f,%.1f scale=%.2f win=%dx%d',
@@ -1007,6 +1077,8 @@ function love.keypressed(key)
             openUnits()
         elseif key == 'g' then
             openGoal()
+        elseif key == 'l' then
+            openLog()
         elseif key == 'r' then
             if game.suggestRestart then restartGame() else openMenu() end
         elseif key == '=' or key == '+' or key == 'kp+' then
@@ -1016,6 +1088,8 @@ function love.keypressed(key)
         elseif key == 'escape' then
             openMenu()
         end
+    elseif state == 'log' then
+        if key == 'l' or key == 'escape' then state = 'playing'; hideCursor() end
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
     elseif state == 'confirmquit' then
@@ -1086,5 +1160,7 @@ if TEST_HOOKS then
         closeGoal = closeGoal,
         goToTitle = goToTitle,
         buildTitleOptions = buildTitleOptions,
+        announce = announce,
+        lookAt = lookAt,
     }
 end

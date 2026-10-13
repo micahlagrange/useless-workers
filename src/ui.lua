@@ -10,7 +10,7 @@ UI.__index = UI
 TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
 FONT_PATH = 'assets/fonts/commodore64.ttf'
-local ALERT_TTL = 7
+local ALERT_TTL = 10
 local MAX_ALERTS = 4
 
 local C = {
@@ -124,7 +124,7 @@ function UI:layout(w, h)
         { id = 'menu', label = 'MENU' }, { id = 'mute', label = 'MUTE' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
-        { id = 'speed', label = 'SPEED 4x' },
+        { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' },
     }
     if self.touch then
         -- fingers pinch to zoom; the + and - buttons only cost room
@@ -296,6 +296,13 @@ function UI:update(dt)
         self.toastTtl = self.toastTtl - dt
         if self.toastTtl <= 0 then self.toastText = nil end
     end
+end
+
+function UI:alertAt(mx, my)
+    for _, r in ipairs(self.alertRects or {}) do
+        if hit(r, mx, my) then return r.alert end
+    end
+    return nil
 end
 
 function UI:alertTiles()
@@ -814,17 +821,25 @@ function UI:drawAlerts(game)
     local box = game and self:goalBoxRect(game)
     local maxW = (box and box.x - 16 or self.vw) - 40
     local bottom = self.vh - BOTTOM_BAR_H - 70 -- the toast lives below this
+    self.alertRects = {}
     for _, a in ipairs(self.alerts) do
         local alpha = math.min(1, a.ttl / 1.5)
-        local _, lines = self.fonts.small:getWrap(a.text, maxW)
-        local h = #lines * self.fonts.small:getHeight() + 6
+        -- a tap looks at the place; the hint says so
+        local text = a.text .. (a.tile and '  > look' or '')
+        local _, lines = self.fonts.small:getWrap(text, maxW)
+        local h = #lines * self.fonts.small:getHeight() + 8
         if y + h > bottom then break end
-        local w = math.min(self.fonts.small:getWidth(a.text), maxW) + 12
-        love.graphics.setColor(0, 0, 0, 0.6 * alpha)
+        local w = math.min(self.fonts.small:getWidth(text), maxW) + 12
+        love.graphics.setColor(0, 0, 0, 0.65 * alpha)
         love.graphics.rectangle('fill', 12, y, w, h)
+        if a.tile then
+            love.graphics.setColor(C.warn[1], C.warn[2], C.warn[3], 0.6 * alpha)
+            love.graphics.rectangle('line', 12.5, y + 0.5, w - 1, h - 1)
+        end
         love.graphics.setColor(C.warn[1], C.warn[2], C.warn[3], alpha)
         love.graphics.setFont(self.fonts.small)
-        love.graphics.printf(a.text, 18, y + 3, maxW, 'left')
+        love.graphics.printf(text, 18, y + 4, maxW, 'left')
+        self.alertRects[#self.alertRects + 1] = { x = 12, y = y, w = w, h = h, alert = a }
         y = y + h + 4
     end
 end
@@ -1187,6 +1202,76 @@ function UI:drawUnits(game, view)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- The log: what happened, newest first, with what kind of thing it was and
+-- a LOOK button for anything that happened somewhere. At the top, this
+-- season's hardships by kind.
+local LOG_KIND = {
+    hardship = { 'HARDSHIP', 'warn' }, warning = { 'FED UP', 'warn' }, left = { 'LEFT', 'warn' }, news = { 'NEWS', 'dim' },
+}
+function UI:drawLog(game)
+    local log = game.log or {}
+    local pw = math.min(900, self.vw - 24)
+    local ph = self.vh - TOP_BAR_H - 24
+    local x, y
+    x, y, pw, ph = self:panel(pw, ph)
+    y = math.max(y, TOP_BAR_H + 8)
+    self.logPanel = { x = x, y = y, w = pw, h = ph }
+    local btnW = self.touch and 100 or 110
+    self:printLine('LOG', x + 18, y + 14, pw - btnW - 52, 'left', C.text, { self.fonts.big, self.fonts.hud })
+    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    -- this season, by kind
+    local season = game.scoring and game.scoring:seasonLabel() or ''
+    local counts, order = {}, {}
+    for _, e in ipairs(log) do
+        if e.season == season and e.kind ~= 'news' then
+            local key = e.kind == 'hardship' and (e.text:find('gave up walking') and 'gave up a long walk' or e.text:find('walled off') and 'hungry, food walled off' or 'could not reach')
+                or (e.kind == 'left' and 'left the band' or 'fed up')
+            if not counts[key] then order[#order + 1] = key end
+            counts[key] = (counts[key] or 0) + 1
+        end
+    end
+    if game.mode == 'arcade' then season = '' end -- arcade has no seasons
+    local summary = (season ~= '' and season or 'So far') .. ': '
+    if #order == 0 then summary = summary .. 'no hardships yet'
+    else
+        local parts = {}
+        for _, k in ipairs(order) do parts[#parts + 1] = counts[k] .. ' ' .. k end
+        summary = summary .. table.concat(parts, ', ')
+    end
+    local ly = y + 54
+    ly = ly + self:printWrap(summary, x + 18, ly, pw - 36, C.text, { self.fonts.small, self.fonts.tiny }, 2) + 10
+    love.graphics.setColor(C.accent[1], C.accent[2], C.accent[3], 0.5)
+    love.graphics.rectangle('fill', x + 18, ly, pw - 36, 1)
+    ly = ly + 8
+    if #log == 0 then
+        self:printLine('Nothing has happened yet.', x + 18, ly, pw - 36, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        return
+    end
+    local small, tiny = self.fonts.small, self.fonts.tiny
+    local lookW = self.touch and 78 or 70
+    local kindW = tiny:getWidth('HARDSHIP') + 10
+    for i = #log, 1, -1 do
+        local e = log[i]
+        local textX = x + 18 + kindW
+        local textW = pw - 36 - kindW - (e.tile and lookW + 10 or 0)
+        local _, lines = tiny:getWrap(e.text, textW)
+        local rowH = math.max(self.touch and 34 or 28, #lines * tiny:getHeight() + tiny:getHeight() + 10)
+        if ly + rowH > y + ph - 10 then break end
+        local k = LOG_KIND[e.kind] or LOG_KIND.news
+        self:printLine(k[1], x + 18, ly + 3, kindW - 6, 'left', C[k[2]], { tiny })
+        self:printLine(e.season, x + 18, ly + 3 + tiny:getHeight(), kindW - 6, 'left', C.dim, { tiny })
+        self:printWrap(e.text, textX, ly + 3, textW, C.text, { tiny }, 99)
+        if e.tile then
+            self:panelButton('look:' .. i, { x = x + pw - 18 - lookW, y = ly + 2, w = lookW, h = math.min(rowH - 6, 28) }, 'LOOK', false)
+        end
+        ly = ly + rowH
+    end
+end
+
+function UI:insideLogPanel(mx, my)
+    return hit(self.logPanel, mx, my)
+end
+
 function UI:unitButtonAt(mx, my)
     for _, b in ipairs(self.unitButtons) do
         if hit(b, mx, my) then return b.worker end
@@ -1316,7 +1401,11 @@ function UI:drawTitle(title, highScore)
             y = y + gap(20)
         end
     else
-        diffRow(diff.name:upper())
+        if FREE_PLAY_DIFFICULTIES > 1 then diffRow(diff.name:upper())
+        else
+            local _, dh = self:centered(diff.name:upper(), y, self.fonts.hud, C.text)
+            y = y + dh + 8
+        end
         y = y + self:centeredFit(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
         local seedText = 'SEED: ' .. title.seed
         if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
