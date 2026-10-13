@@ -519,31 +519,21 @@ end
 -- adding presses and subtracting releases: a release that never arrives (iOS
 -- cancels touches mid gesture) would otherwise leave a phantom finger down,
 -- every later tap read as a pinch and ignored.
---
--- love.js on iOS can also go on listing a finger that has lifted, so a
--- touch that has not moved for TOUCH_STALE_SECONDS is dropped too (in a
--- real pinch both fingers keep moving), and a pinch that has had no update
--- for PINCH_STALE_SECONDS ends. touchClock is the game's own clock for it.
-local TOUCH_STALE_SECONDS, PINCH_STALE_SECONDS = 1.2, 0.6
-local touchClock = 0
 local function syncTouches()
-    local live = nil
-    if love.touch then
-        live = {}
-        for _, id in ipairs(love.touch.getTouches()) do live[id] = true end
-    end
+    if not love.touch then return end
+    local live = {}
+    for _, id in ipairs(love.touch.getTouches()) do live[id] = true end
     local n = 0
-    for id, t in pairs(touches) do
-        if (live and not live[id]) or touchClock - (t.t or 0) > TOUCH_STALE_SECONDS then touches[id] = nil else n = n + 1 end
+    for id in pairs(touches) do
+        if live[id] then n = n + 1 else touches[id] = nil end
     end
     touchCount = n
-    if touchCount < 2 or (pinch and touchClock - (pinch.t or 0) > PINCH_STALE_SECONDS) then pinch = nil end
+    if touchCount < 2 then pinch = nil end
 end
 
 function love.update(dt)
     dt = math.min(dt, 0.1)
     Audio.update(dt)
-    touchClock = touchClock + dt
     syncTouches()
     if state == 'playing' or state == 'units' or state == 'log' then
         game.speed = simSpeed
@@ -799,7 +789,6 @@ end
 
 function love.mousepressed(x, y, button, istouch)
     if istouch then noteTouch() end
-    syncTouches()
     if pinch then return end
     local vx, vy = ui:toVirtual(x, y)
     if state == 'title' then
@@ -998,13 +987,14 @@ local function pinchState()
     if #ids < 2 then return nil end
     local a, b = touches[ids[1]], touches[ids[2]]
     local dist = math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
-    return { dist = math.max(dist, 1), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, t = touchClock }
+    return { dist = math.max(dist, 1), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 }
 end
 
 function love.touchpressed(id, x, y)
     noteTouch()
-    touches[id] = { x = x, y = y, t = touchClock }
-    syncTouches() -- clear out fingers that lifted without saying so first
+    touches[id] = { x = x, y = y }
+    touchCount = 0
+    for _ in pairs(touches) do touchCount = touchCount + 1 end
     if touchCount >= 2 and state == 'playing' then
         pinch = pinchState()
         game.panStart = nil
@@ -1016,7 +1006,7 @@ end
 
 function love.touchmoved(id, x, y)
     if not touches[id] then return end
-    touches[id].x, touches[id].y, touches[id].t = x, y, touchClock
+    touches[id].x, touches[id].y = x, y
     if pinch and state == 'playing' then
         local now = pinchState()
         if now then
