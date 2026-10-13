@@ -17,6 +17,7 @@ function TestInput:setUp()
     H.newLevel(2, 'arcade', 1)
     H.closeGoal()
     Stub.fingers = {}
+    love.update(0) -- forget fingers an earlier test left down, as a frame would
 end
 
 -- iOS can cancel a touch without a release. A pinch whose second finger
@@ -54,6 +55,45 @@ function TestInput:testAPinchCallsOffTheDrag()
     local before = #game.world.sites
     love.mousereleased(300, 200, 1, true)
     lu.assertEquals(#game.world.sites, before)
+end
+
+-- iOS can stop sending the mouse events made up from a finger. Taps and
+-- drags come from the touches alone, so nothing freezes when they stop.
+function TestInput:testTouchesWorkWithoutAnyMouseEvents()
+    local game = H.game()
+    love.keypressed('3') -- FLOOR
+    Stub.fingers = { 'a' }
+    love.touchpressed('a', 300, 200)
+    lu.assertNotNil(game.lineStart, 'the tap was ignored')
+    love.touchreleased('a', 300, 200)
+    Stub.fingers = {}
+    lu.assertNil(game.lineStart)
+    -- a drag with SELECT is a pan, not a tap
+    love.keypressed('1')
+    Stub.fingers = { 'b' }
+    love.touchpressed('b', 300, 200)
+    love.touchmoved('b', 360, 230)
+    love.touchmoved('b', 420, 260)
+    lu.assertTrue(game.panStart and game.panStart.moved, 'the drag was not seen')
+    love.touchreleased('b', 420, 260)
+    Stub.fingers = {}
+    lu.assertNil(game.panStart)
+end
+
+-- A finger LOVE stops listing without a release lets go of what it began.
+function TestInput:testAVanishedFingerLetsGo()
+    local game = H.game()
+    love.keypressed('3')
+    Stub.fingers = { 'a' }
+    love.touchpressed('a', 300, 200)
+    lu.assertNotNil(game.lineStart)
+    Stub.fingers = {}
+    love.update(1 / 30)
+    lu.assertNil(game.lineStart)
+    Stub.fingers = { 'b' }
+    love.touchpressed('b', 300, 200)
+    lu.assertNotNil(game.lineStart, 'the next tap was ignored')
+    love.touchreleased('b', 300, 200)
 end
 
 os.exit(lu.LuaUnit.run())

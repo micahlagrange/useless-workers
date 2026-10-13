@@ -60,6 +60,17 @@ end
 local touches = {}
 local touchCount = 0
 local pinch = nil
+-- On a touch screen the first finger is the pointer: taps and drags come
+-- from the touch events themselves. The mouse events SDL makes up from a
+-- finger are ignored, because on iOS they can stop coming after a touch is
+-- cancelled, and every tap then went nowhere.
+local primary = nil          -- the finger acting as the pointer, if any
+local pointerX, pointerY = 0, 0
+local lastTouchAt = -10      -- a real mouse is listened to again a moment after the last touch
+local function pointerPosition()
+    if ui.touch then return pointerX, pointerY end
+    return love.mouse.getPosition()
+end
 -- FINGERS (gear menu, or F3): draws every finger the game is tracking and
 -- every one LOVE says is down, to catch fingers that get stuck.
 local fingerDebug = false
@@ -531,6 +542,11 @@ local function syncTouches()
     for id in pairs(touches) do
         if live[id] then n = n + 1 else touches[id] = nil end
     end
+    -- the pointer finger vanished without a release: call off what it began
+    if primary and not live[primary] then
+        primary = nil
+        if game then game.panStart, game.lineStart, game.lineCost = nil, nil, nil end
+    end
     touchCount = n
     if touchCount < 2 then pinch = nil end
 end
@@ -585,7 +601,7 @@ local function drawWorld()
     if game.focus then game.view:drawFocus(game.focus.x, game.focus.y, game.clock) end
     -- cursor preview
     if state == 'playing' then
-        local mx, my = love.mouse.getPosition()
+        local mx, my = pointerPosition()
         if not ui:isOverBars(mx, my) then
             local tile = cam:toTile(mx, my)
             local tool = game.abilities.selected
@@ -668,7 +684,7 @@ local function drawScene()
     end
     ui:endScaled()
     if state == 'playing' then
-        local mx, my = love.mouse.getPosition()
+        local mx, my = pointerPosition()
         if game.lineStart and game.lineCost and game.abilities.selected == ABILITY_BRIDGE then
             love.graphics.setFont(ui.fonts.small)
             love.graphics.setColor(1, 1, 1, 1)
@@ -871,8 +887,7 @@ local function noteTouch()
     end
 end
 
-function love.mousepressed(x, y, button, istouch)
-    if istouch then noteTouch() end
+local function pointerPressed(x, y, button, istouch)
     if pinch then return end
     local vx, vy = ui:toVirtual(x, y)
     if state == 'title' then
@@ -1036,7 +1051,7 @@ function love.mousepressed(x, y, button, istouch)
     end
 end
 
-function love.mousereleased(x, y, button)
+local function pointerReleased(x, y, button)
     if state ~= 'playing' then return end
     if button == 2 then
         game.dragging = false
@@ -1054,7 +1069,7 @@ function love.mousereleased(x, y, button)
     end
 end
 
-function love.mousemoved(x, y, dx, dy)
+local function pointerMoved(x, y, dx, dy)
     if state ~= 'playing' or pinch then return end
     if game.dragging then
         game.follow = false
@@ -1067,6 +1082,24 @@ function love.mousemoved(x, y, dx, dy)
             game.camera:pan(-dx, -dy)
         end
     end
+end
+
+-- A mouse made up from a finger is ignored: the touch events do that work.
+local function realMouse(istouch)
+    return not istouch and love.timer.getTime() - lastTouchAt > 1
+end
+
+function love.mousepressed(x, y, button, istouch)
+    if istouch then noteTouch() end
+    if realMouse(istouch) then pointerPressed(x, y, button, false) end
+end
+
+function love.mousereleased(x, y, button, istouch)
+    if realMouse(istouch) then pointerReleased(x, y, button) end
+end
+
+function love.mousemoved(x, y, dx, dy, istouch)
+    if realMouse(istouch) then pointerMoved(x, y, dx, dy) end
 end
 
 -- Two fingers: pinch to zoom around the midpoint and drag to pan. One finger
@@ -1091,21 +1124,36 @@ end
 
 function love.touchpressed(id, x, y)
     noteTouch()
+    lastTouchAt = love.timer.getTime()
     touches[id] = { x = x, y = y, n = freeFingerNumber(), seen = debugClock }
     touchCount = 0
     for _ in pairs(touches) do touchCount = touchCount + 1 end
-    if touchCount >= 2 and state == 'playing' then
+    if touchCount == 1 then
+        primary = id
+        pointerX, pointerY = x, y
+        pointerPressed(x, y, 1, true)
+    elseif state == 'playing' then
+        -- a second finger: a pinch, and whatever the first began is off
+        primary = nil
         pinch = pinchState()
         game.panStart = nil
         game.lineStart = nil
         game.lineCost = nil
         game.dragging = false
+    else
+        primary = nil
     end
 end
 
 function love.touchmoved(id, x, y)
     if not touches[id] then return end
+    lastTouchAt = love.timer.getTime()
     touches[id].x, touches[id].y, touches[id].seen = x, y, debugClock
+    if id == primary then
+        local dx, dy = x - pointerX, y - pointerY
+        pointerX, pointerY = x, y
+        pointerMoved(x, y, dx, dy)
+    end
     if pinch and state == 'playing' then
         local now = pinchState()
         if now then
@@ -1117,8 +1165,14 @@ function love.touchmoved(id, x, y)
     end
 end
 
-function love.touchreleased(id)
+function love.touchreleased(id, x, y)
+    lastTouchAt = love.timer.getTime()
     touches[id] = nil
+    if id == primary then
+        primary = nil
+        pointerX, pointerY = x or pointerX, y or pointerY
+        pointerReleased(pointerX, pointerY, 1)
+    end
     touchCount = 0
     for _ in pairs(touches) do touchCount = touchCount + 1 end
     if touchCount < 2 then pinch = nil end
@@ -1126,7 +1180,7 @@ end
 
 function love.wheelmoved(_, y)
     if state ~= 'playing' or y == 0 then return end
-    local mx, my = love.mouse.getPosition()
+    local mx, my = pointerPosition()
     game.camera:zoomAt(y > 0 and 1.15 or 1 / 1.15, mx, my)
 end
 
