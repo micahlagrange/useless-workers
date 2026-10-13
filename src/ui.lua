@@ -831,7 +831,8 @@ function UI:restartButtonAt(mx, my)
     return hit(self.restartButton, mx, my)
 end
 
--- While following a morphi: previous and next, just above the bottom bar.
+-- While following a morphi: previous and next, at the corners just above
+-- the bottom bar.
 function UI:drawFollowNav(game)
     self.followNav = {}
     if not (game.follow and game.selectedWorker and game.selectedWorker.alive) then return end
@@ -840,9 +841,9 @@ function UI:drawFollowNav(game)
     local bw = math.max(self.touch and 64 or 0, self.fonts.hud:getWidth(prev) + 28)
     local bh = self.quickH + 8
     local y = self.vh - BOTTOM_BAR_H - bh - 8
-    local cx = math.floor(self.vw / 2)
-    local r1 = { id = -1, x = cx - bw - 6, y = y, w = bw, h = bh }
-    local r2 = { id = 1, x = cx + 6, y = y, w = bw, h = bh }
+    -- at the edges, clear of the toast in the middle
+    local r1 = { id = -1, x = 8, y = y, w = bw, h = bh }
+    local r2 = { id = 1, x = self.vw - 8 - bw, y = y, w = bw, h = bh }
     self:button(r1, prev)
     self:button(r2, nxt)
     self.followNav = { r1, r2 }
