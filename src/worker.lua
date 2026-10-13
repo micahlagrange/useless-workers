@@ -934,9 +934,15 @@ function Worker:finishAction()
         self:releaseSite()
         self.job = nil
         if cargo then
+            -- nowhere to take it yet: keep hold of it (decide tries again,
+            -- or eats it when hungry) rather than drop it into thin air
             self.slots[SLOT_WORK] = cargo
             if self:goDeliver() then return end
-            self.slots[SLOT_WORK] = nil
+            self:releaseArea()
+            self.goal = nil
+            self.state = 'idle'
+            self.decideTimer = DECIDE_INTERVAL * 4
+            return
         end
         if self.targetArea and self:continueArea() then return end
         self.goal = nil
@@ -1110,6 +1116,10 @@ function Worker:describeState()
             return 'Going ' .. self.roleInfo.verb
         end
         return 'Wandering'
+    end
+    local c = self:carrying()
+    if c then
+        return 'Holding ' .. c.kind .. (c.kind == CARGO_FOOD and ', no storage free' or ', no way to camp')
     end
     return 'Idle'
 end

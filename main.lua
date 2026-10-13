@@ -760,6 +760,23 @@ function closeUnits()
     hideCursor()
 end
 
+-- Follow the previous (-1) or next (1) morphi still in the band.
+local function followNext(step)
+    local band = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.state ~= 'quitting' then band[#band + 1] = w end
+    end
+    if #band == 0 then return end
+    local at = 0
+    for i, w in ipairs(band) do if w == game.selectedWorker then at = i end end
+    if at == 0 then at = step > 0 and 0 or 1 end
+    local w = band[(at - 1 + step) % #band + 1]
+    game.selectedWorker = w
+    game.follow = true
+    game.abilities:select(ABILITY_SELECT)
+    ui:toast('Following ' .. w.name)
+end
+
 local function toggleFollow()
     if game.selectedWorker and game.selectedWorker.alive then
         game.follow = not game.follow
@@ -979,6 +996,12 @@ function love.mousepressed(x, y, button, istouch)
         restartGame()
         return
     end
+    local nav = ui:followNavAt(vx, vy)
+    if nav then
+        followNext(nav)
+        Audio.playSFX('click')
+        return
+    end
     -- an announcement with a place: look at it
     local alert = ui:alertAt(vx, vy)
     if alert then
@@ -1152,6 +1175,9 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'f' then
             toggleFollow()
+        elseif key == ']' or key == '[' then
+            followNext(key == ']' and 1 or -1)
+            Audio.playSFX('click')
         elseif key == 'space' or key == 'p' then
             togglePause()
             Audio.playSFX('click')

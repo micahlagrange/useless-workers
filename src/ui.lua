@@ -831,6 +831,31 @@ function UI:restartButtonAt(mx, my)
     return hit(self.restartButton, mx, my)
 end
 
+-- While following a morphi: previous and next, just above the bottom bar.
+function UI:drawFollowNav(game)
+    self.followNav = {}
+    if not (game.follow and game.selectedWorker and game.selectedWorker.alive) then return end
+    local prev = self.touch and '<' or '< ['
+    local nxt = self.touch and '>' or '] >'
+    local bw = math.max(self.touch and 64 or 0, self.fonts.hud:getWidth(prev) + 28)
+    local bh = self.quickH + 8
+    local y = self.vh - BOTTOM_BAR_H - bh - 8
+    local cx = math.floor(self.vw / 2)
+    local r1 = { id = -1, x = cx - bw - 6, y = y, w = bw, h = bh }
+    local r2 = { id = 1, x = cx + 6, y = y, w = bw, h = bh }
+    self:button(r1, prev)
+    self:button(r2, nxt)
+    self.followNav = { r1, r2 }
+end
+
+-- -1 or 1 for the previous or next button, else nil.
+function UI:followNavAt(mx, my)
+    for _, r in ipairs(self.followNav or {}) do
+        if hit(r, mx, my) then return r.id end
+    end
+    return nil
+end
+
 function UI:drawAlerts(game)
     love.graphics.setFont(self.fonts.small)
     local y = (self.bannerBottom or TOP_BAR_H) + 8
@@ -1111,6 +1136,7 @@ function UI:drawHUD(game)
     self:drawTopBar(game)
     self:drawPauseBanner(game)
     self:drawRestartCall(game)
+    self:drawFollowNav(game)
     self:drawGoalBox(game)
     self:drawAlerts(game)
     self:drawBottomBar(game)

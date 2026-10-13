@@ -128,6 +128,38 @@ function TestWorker:testForagerWaitsWhenThereIsNoStorage()
     lu.assertEquals(#world:get(3, 4).items, 1)
 end
 
+-- Storage filled up while it was picking: the food stays in its hands
+-- until there is somewhere to put it, it never vanishes.
+function TestWorker:testPickedFoodWithNowhereToGoIsKept()
+    local world = World.fromGrid({
+        '..........',
+        '.b........',
+        '..........',
+        '....BB....',
+        '....BB....',
+        '..........',
+    }, Rng.new(1))
+    local w = Worker.new(world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER, 2, 3))
+    local bush = world:get(2, 2).node
+    bush.claimedBy = w
+    w.targetNode = bush
+    w.state = 'working'
+    w:finishAction()
+    lu.assertNotNil(w:carrying(), 'the food went nowhere')
+    lu.assertEquals(w:carrying().kind, CARGO_FOOD)
+    lu.assertEquals(w.state, 'idle')
+    run({ w }, world, self.jobs, 5)
+    lu.assertNotNil(w:carrying())
+    lu.assertStrContains(w:describeState(), 'no storage')
+    -- a bin goes up: the food goes into it
+    world.stock.logs = 2
+    local site = world:addSite(SITE_STORAGE, 3, 4)
+    world:completeSite(site)
+    run({ w }, world, self.jobs, 10)
+    lu.assertNil(w:carrying())
+    lu.assertEquals(#world:get(3, 4).items, 1)
+end
+
 function TestWorker:testMinerWorksAWholeAreaWithoutIdling()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
     -- the whole bottom wall of the pocket, one drag: only the ends touch open ground at first
