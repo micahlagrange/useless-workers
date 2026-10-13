@@ -132,6 +132,11 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
+    elseif name == 'trade' and game.mode == 'free' then
+        local t = worker:tile()
+        Audio.playSFX('hire')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
+            .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
         announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')

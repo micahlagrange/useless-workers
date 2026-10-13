@@ -214,10 +214,23 @@ MORALE_BORED_HIT  = 18
 -- Free play: a bush gives this many pickings, then withers. New ones grow
 -- mostly where nobody can get at them yet.
 BUSH_PICKINGS     = 8
--- Gold buys happy thoughts: a morphi finishing a rest at camp trades a gold
--- piece for this much morale, if it is low enough to want it.
-MORALE_TRADE      = 30
-TRADE_BELOW       = 70
+-- Gold buys happy thoughts, through a trade. A morphi finishing a rest at
+-- camp with morale under TRADE_BELOW offers one and waits there up to
+-- TRADE_WAIT_SECONDS; the next to rest or stand about at camp takes it up.
+-- It only starts with a gold piece in the stockpile and a stored meal for
+-- each: the other's loved food if there is any (a gift), else anything
+-- they will eat. They chat at camp for TRADE_SECONDS, hunger on hold, and
+-- eat together halfway. A deal is happy thoughts for both, more per gift.
+TRADE_BELOW         = 70
+TRADE_WAIT_SECONDS  = 20
+TRADE_SECONDS       = 40
+MORALE_TRADE_BASE   = 20
+MORALE_GIFT         = 15
+-- What two morphis say over a trade, a line every few seconds, turn about.
+TRADE_CHAT = {
+    'nice day', 'lovely pebble', 'hmm...', 'how much?', 'too much!', 'meet me halfway',
+    'deal?', 'not yet', 'shiny...', 'go on then', 'and a hug', 'fine, fine',
+}
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow

@@ -637,19 +637,52 @@ function TestWilds:testBushesWearOutInTheWilds()
     lu.assertNil(self.world:get(2, 2).node, 'withered after its last picking')
 end
 
-function TestWilds:testGoldTradedForHappyThoughts()
-    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_MINER, 'cwab'))
-    self.world.stock.gold = 2
-    w.morale = 20
-    w.state = 'breaking'
-    w:finishAction()
-    lu.assertEquals(self.world.stock.gold, 1)
-    lu.assertEquals(w.morale, 20 + MORALE_BREAK_BONUS + MORALE_TRADE)
-    -- a content morphi keeps its gold in the pile
-    w.morale = 90
-    w.state = 'breaking'
-    w:finishAction()
-    lu.assertEquals(self.world.stock.gold, 1)
+function TestWilds:testTradeAtCamp()
+    -- a steak and a chili in storage: each partner's loved food, so two gifts
+    self.world:storeItem(ITEM_FOOD, 4, 4, 'steak')
+    self.world:storeItem(ITEM_FOOD, 7, 4, 'chili')
+    self.world.stock.gold = 1
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
+    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER, 'cwab'))
+    a.hunger, b.hunger, a.morale, b.morale = 60, 60, 30, 40
+    -- a finishes a rest feeling low and offers a trade
+    a.state = 'breaking'
+    a:finishAction()
+    lu.assertEquals(a.state, 'trading')
+    lu.assertNotNil(self.world.openTrade)
+    -- b, standing about at camp, takes it up: the gold is staked
+    run({ a, b }, self.world, self.jobs, 1)
+    lu.assertEquals(b.state, 'trading')
+    lu.assertEquals(self.world.stock.gold, 0)
+    lu.assertEquals(a.trade.gifts, 2)
+    -- hunger is on hold while they talk; they eat together halfway
+    run({ a, b }, self.world, self.jobs, TRADE_SECONDS / 2 - 3)
+    lu.assertEquals(a.hunger, 60)
+    lu.assertEquals(#self.world.items, 2)
+    run({ a, b }, self.world, self.jobs, 6)
+    lu.assertEquals(#self.world.items, 0)
+    lu.assertEquals(a.hunger, math.min(HUNGER_MAX, 60 + FOOD_VALUE.loved))
+    -- and close the deal: happy thoughts, more for the gifts
+    run({ a, b }, self.world, self.jobs, TRADE_SECONDS / 2)
+    lu.assertEquals(a.state ~= 'trading', true)
+    -- (a fed morphi also cheers up a little in the seconds around the trade)
+    lu.assertTrue(a.morale >= math.min(MORALE_MAX, 30 + MORALE_BREAK_BONUS + MORALE_LOVED_MEAL + MORALE_TRADE_BASE + 2 * MORALE_GIFT))
+    lu.assertTrue(b.morale >= math.min(MORALE_MAX, 40 + MORALE_LOVED_MEAL + MORALE_TRADE_BASE + 2 * MORALE_GIFT))
+end
+
+function TestWilds:testNoTradeWithoutFood()
+    self.world.stock.gold = 1
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
+    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER, 'cwab'))
+    a.morale, b.morale = 30, 40
+    a.state = 'breaking'
+    a:finishAction()
+    run({ a, b }, self.world, self.jobs, 2)
+    lu.assertNotEquals(b.state, 'trading')
+    lu.assertEquals(self.world.stock.gold, 1, 'nothing staked without a meal for both')
+    run({ a, b }, self.world, self.jobs, TRADE_WAIT_SECONDS)
+    lu.assertNil(self.world.openTrade, 'the offer lapses')
+    lu.assertNotEquals(a.state, 'trading')
 end
 
 os.exit(lu.LuaUnit.run())
