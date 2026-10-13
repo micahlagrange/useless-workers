@@ -51,6 +51,7 @@ end
 -- has roughly the same mix of water, grass, stone and snow.
 function World.generate(seedNumber, rng, w, h)
     local self = World.new(w, h, rng)
+    self.wilds = true -- free play: bushes wear out, see harvestNode
     local noise = Noise.new(seedNumber, NOISE_BASE_FREQUENCY, NOISE_OCTAVES)
     local values = {}
     for x = 1, self.w do
@@ -470,11 +471,9 @@ end
 
 function World:addNode(kind, x, y, food)
     if kind == NODE_BUSH and not food then
-        -- spread the diets around so every morphi finds something: the foods
-        -- the band eats (dietPool, kept by the game) or, without one, all of them
-        local pool = (self.dietPool and #self.dietPool > 0) and self.dietPool or FOOD_KINDS
-        self.foodCycle = (self.foodCycle or 0) % #pool + 1
-        food = pool[self.foodCycle]
+        -- spread the foods around so every morphi finds something
+        self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
+        food = FOOD_KINDS[self.foodCycle]
     end
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
@@ -485,34 +484,6 @@ function World:addNode(kind, x, y, food)
     self.nextNodeId = self.nextNodeId + 1
     self.nodes[#self.nodes + 1] = node
     self.tiles[x][y].node = node
-    return node
-end
-
--- A bush of one food, ripe soon, on open grass that can be walked to from
--- camp, between range[1] and range[2] tiles from (x, y). Nil when there is
--- no room.
-function World:plantBushNear(food, x, y, range)
-    local reach = self:reachableFromBreakroom()
-    local best, spots = range[2] + 1, {}
-    for tx = math.max(1, x - range[2]), math.min(self.w, x + range[2]) do
-        for ty = math.max(1, y - range[2]), math.min(self.h, y + range[2]) do
-            local t = self.tiles[tx][ty]
-            local d = math.max(math.abs(tx - x), math.abs(ty - y))
-            if d >= range[1] and t.type == TILE_GRASS and reach[tx][ty] and not t.node and not t.site
-                and t.storage == 0 and not t.binPart and not t.floor and not t.bed then
-                spots[#spots + 1] = { x = tx, y = ty, d = d }
-            end
-        end
-    end
-    if #spots == 0 then return nil end
-    -- nearest rings first, a random tile within the ring
-    table.sort(spots, function(a, b) return a.d < b.d end)
-    local ring = {}
-    for _, p in ipairs(spots) do if p.d == spots[1].d or #ring < 6 then ring[#ring + 1] = p end end
-    local p = ring[self.rng and self.rng:int(1, #ring) or 1]
-    local node = self:addNode(NODE_BUSH, p.x, p.y, food)
-    node.timer = self.rng and self.rng:int(BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX) or BUSH_FIRST_RIPEN_MIN
-    self.version = self.version + 1
     return node
 end
 
@@ -653,10 +624,10 @@ function World:spawnNodes(kind, count, enclosedFraction)
     return planted
 end
 
-function World:spawnAllNodes(counts)
+function World:spawnAllNodes(counts, enclosedFraction)
     local planted = {}
     for _, kind in ipairs(NODE_KINDS) do
-        for _, n in ipairs(self:spawnNodes(kind, counts[kind] or 0)) do planted[#planted + 1] = n end
+        for _, n in ipairs(self:spawnNodes(kind, counts[kind] or 0, enclosedFraction)) do planted[#planted + 1] = n end
     end
     return planted
 end
@@ -680,6 +651,13 @@ function World:harvestNode(node)
     if node.kind == NODE_BUSH then
         node.ready = false
         node.timer = BUSH_RIPEN_SECONDS
+        -- out in the wilds a bush wears out
+        node.pickings = (node.pickings or 0) + 1
+        if self.wilds and node.pickings >= BUSH_PICKINGS then
+            node.timer = math.huge
+            self:removeNode(node)
+            self.version = self.version + 1
+        end
         return CARGO_FOOD
     elseif node.kind == NODE_TREE then
         node.ready = false
@@ -1036,7 +1014,8 @@ end
 function World:nearestStoredItem(kind, fromX, fromY, food)
     local best, bestD = nil, math.huge
     for _, item in ipairs(self.items) do
-        if item.kind == kind and (food == nil or item.food == food) and item.claimedBy == nil and self:isReachable(item.x, item.y) then
+        local wanted = food == nil or (type(food) == 'function' and food(item.food)) or item.food == food
+        if item.kind == kind and wanted and item.claimedBy == nil and self:isReachable(item.x, item.y) then
             local d = Util.manhattan(fromX, fromY, item.x, item.y)
             if d < bestD then best, bestD = item, d end
         end

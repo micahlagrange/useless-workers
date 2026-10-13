@@ -1224,7 +1224,8 @@ function UI:drawLog(game)
     local counts, order = {}, {}
     for _, e in ipairs(log) do
         if e.season == season and e.kind ~= 'news' then
-            local key = e.kind == 'hardship' and (e.text:find('gave up walking') and 'gave up a long walk' or e.text:find('walled off') and 'hungry, food walled off' or 'could not reach')
+            local key = e.kind == 'hardship' and (e.text:find('gave up walking') and 'gave up a long walk' or e.text:find('walled off') and 'hungry, food walled off'
+                or e.text:find('nothing to do') and 'nothing to do' or 'could not reach')
                 or (e.kind == 'left' and 'left the band' or 'fed up')
             if not counts[key] then order[#order + 1] = key end
             counts[key] = (counts[key] or 0) + 1
@@ -1535,16 +1536,17 @@ function UI:drawGoal(game)
     else
         title = 'FREE PLAY'
         lines = {
-            { 'A random map, four seasons, migrants when the haul is good.', C.text },
-            { 'Keep the band fed. Hardships and hunger wear morale down; at zero a morphi leaves.', C.text },
-            { 'Mark FLOOR spots or BINS so foragers can store food, MINE stone, BRIDGE the rivers.', C.dim },
+            { 'A random map, four seasons, migrants when the haul is good. Hardships and hunger wear morale down; at zero a morphi leaves.', C.text },
+            { 'Bushes wear out and new growth comes up out of reach. A morphi with nothing it can get at grows bored: MINE and BRIDGE to open the way, and mark FLOOR spots or BINS for the food.', C.text },
+            { 'Each morphi loves one food (a big meal and a better mood) and hates one. Gold from the miners buys happy thoughts at camp.', C.dim },
         }
     end
     local eaters, seen = {}, {}
     for _, w in ipairs(game.workers) do
         if w.alive and not seen[w.sheet] then
             seen[w.sheet] = true
-            eaters[#eaters + 1] = { label = w.species .. ' eats ' .. w.diet, diet = w.diet }
+            local label = w.hates and (w.species .. ' loves ' .. w.diet .. ', hates ' .. w.hates) or (w.species .. ' eats ' .. w.diet)
+            eaters[#eaters + 1] = { label = label, diet = w.diet }
         end
     end
     local pw = math.min(760, self.vw - 16)
@@ -1572,6 +1574,10 @@ function UI:drawGoal(game)
     for _, f in ipairs({ self.fonts.hud, small, self.fonts.tiny }) do
         if height(f) <= self.vh - 16 then body = f break end
     end
+    -- a short screen loses the last lines of text, then the list of tastes
+    -- (the units list has them too)
+    while height(body) > self.vh - 16 and #lines > 1 do table.remove(lines) end
+    if height(body) > self.vh - 16 then eaters = {} end
     local x, y, ph
     x, y, pw, ph = self:panel(pw, height(body))
     self:centeredFit(title, y + 22, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
@@ -1581,7 +1587,9 @@ function UI:drawGoal(game)
     end
     -- who eats what
     ly = ly + 6
-    self:printLine('WHO EATS WHAT', x + 24, ly, inner, 'left', C.dim, { small, self.fonts.tiny })
+    if #eaters > 0 then
+        self:printLine(game.mode == 'free' and 'TASTES' or 'WHO EATS WHAT', x + 24, ly, inner, 'left', C.dim, { small, self.fonts.tiny })
+    end
     ly = ly + 18
     local cx = 0
     for _, e in ipairs(eaters) do

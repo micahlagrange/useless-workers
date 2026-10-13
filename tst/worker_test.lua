@@ -222,32 +222,16 @@ function TestWorker:testLogsAndGoldGoToTheStockpile()
     lu.assertEquals(self.scoring.delivered.gold, 1)
 end
 
--- Free play: a morphi with nothing of its own to do picks food (a miner
--- with no ore in reach would otherwise just stand about). Arcade keeps one
--- job each.
-function TestWorker:testIdleMinerHelpsPickFood()
-    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
-    self.jobs:postNode(self.bush)
-    run({ w }, self.world, self.jobs, 12)
-    lu.assertEquals(self.events[1], 'work:bush')
-    lu.assertEquals(self.scoring.delivered.food, 1)
-    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_MINER))
-    a.arcade = true
-    self.bush.ready = true
-    self.jobs:postNode(self.bush)
-    run({ a }, self.world, self.jobs, 6)
-    lu.assertTrue(self.jobs:hasJobFor(self.bush), 'an arcade miner leaves the bush to a forager')
-end
-
 function TestWorker:testLumberjackChopsTreeIntoStump()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
-    self.jobs:postNode(self.bush)   -- not its job: only once the tree is done
+    self.jobs:postNode(self.bush)   -- not my job
     self.jobs:postNode(self.tree)
     run({ w }, self.world, self.jobs, 14)
     lu.assertEquals(self.scoring.delivered.logs, 1)
+    lu.assertEquals(self.scoring.delivered.food, 0)
     lu.assertFalse(self.tree.ready)
     lu.assertEquals(self.tree.timer > 0, true)
-    lu.assertEquals(self.events[1], 'work:tree')    -- its own job came first
+    lu.assertTrue(self.jobs:hasJobFor(self.bush)) -- still queued for a forager
     lu.assertEquals(self.events[2], 'deliver:logs')
 end
 
@@ -587,6 +571,85 @@ function TestSimulation:testFullQuarterOnGeneratedWorld()
             lu.assertTrue(report.attrition == 0, 'quits with nobody helping: ' .. report.attrition)
         end
     end
+end
+
+-- Free play tastes: loves one food, hates one, eats the rest.
+TestWilds = {}
+function TestWilds:setUp()
+    self.world = World.fromGrid(GRID, Rng.new(1))
+    self.jobs = Jobs.new()
+    self.scoring = Scoring.new(1)
+    self.complaints = {}
+    self.opts = function(role, sheet)
+        return {
+            x = 5, y = 4, role = role, sheet = sheet, name = 'Dave', drain = 0.5, wilds = true,
+            onComplain = function(w, reason, node) self.complaints[#self.complaints + 1] = { reason = reason, node = node, why = w.boredReason } end,
+        }
+    end
+end
+
+function TestWilds:testTastes()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
+    lu.assertEquals(w.diet, 'steak')
+    lu.assertEquals(w.hates, 'grapes')
+    lu.assertTrue(w:willEat('steak'))
+    lu.assertTrue(w:willEat('fish'))
+    lu.assertFalse(w:willEat('grapes'))
+    w.hunger = HUNGER_STARVING - 1
+    lu.assertTrue(w:willEat('grapes'), 'starving, it eats even what it hates')
+    -- a loved meal fills more and cheers; a hated one fills little and does not
+    w.hunger, w.morale = 10, 50
+    w:mealOf('steak')
+    lu.assertEquals(w.hunger, 10 + FOOD_VALUE.loved)
+    lu.assertEquals(w.morale, 50 + MORALE_LOVED_MEAL)
+    w.hunger = 10
+    w:mealOf('fish')
+    lu.assertEquals(w.hunger, 10 + FOOD_VALUE.fine)
+    w.hunger, w.morale = 5, 50
+    w:mealOf('grapes')
+    lu.assertEquals(w.hunger, 5 + FOOD_VALUE.hated)
+    lu.assertEquals(w.morale, 50 - MORALE_HATED_MEAL)
+    -- survival levels keep one food
+    local s = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), { x = 5, y = 4, sheet = 'pupper' })
+    lu.assertFalse(s:willEat('fish'))
+end
+
+function TestWilds:testNothingToDoIsAHardship()
+    -- a forager with nothing posted to pick stands about, gets bored and says why
+    -- (this map has storage, so it is the bushes that are out of reach)
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
+    w.hunger = HUNGER_MAX
+    local before = w.morale
+    run({ w }, self.world, self.jobs, BORED_SECONDS + 4)
+    lu.assertTrue(#self.complaints >= 1)
+    lu.assertEquals(self.complaints[1].reason, 'bored')
+    lu.assertEquals(self.complaints[1].why, 'reach')
+    lu.assertTrue(w.morale < before, 'boredom costs morale, and standing about does not win it back')
+end
+
+function TestWilds:testBushesWearOutInTheWilds()
+    local bush = self.world:get(2, 2).node
+    self.world.wilds = true
+    for _ = 1, BUSH_PICKINGS - 1 do bush.ready = true; self.world:harvestNode(bush) end
+    lu.assertNotNil(self.world:get(2, 2).node)
+    bush.ready = true
+    self.world:harvestNode(bush)
+    lu.assertNil(self.world:get(2, 2).node, 'withered after its last picking')
+end
+
+function TestWilds:testGoldTradedForHappyThoughts()
+    local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_MINER, 'cwab'))
+    self.world.stock.gold = 2
+    w.morale = 20
+    w.state = 'breaking'
+    w:finishAction()
+    lu.assertEquals(self.world.stock.gold, 1)
+    lu.assertEquals(w.morale, 20 + MORALE_BREAK_BONUS + MORALE_TRADE)
+    -- a content morphi keeps its gold in the pile
+    w.morale = 90
+    w.state = 'breaking'
+    w:finishAction()
+    lu.assertEquals(self.world.stock.gold, 1)
 end
 
 os.exit(lu.LuaUnit.run())

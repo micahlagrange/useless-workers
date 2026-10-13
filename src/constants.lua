@@ -34,9 +34,10 @@ NODE_TREE = 'tree'
 NODE_ORE  = 'ore'
 NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
 NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
-NODES_PER_QUARTER  = { bush = 2, tree = 2, ore = 3 }
+NODES_PER_QUARTER  = { bush = 4, tree = 2, ore = 3 }
 MAX_NODES_PER_KIND = 16
 NODE_ENCLOSED_FRACTION = 0.4    -- share of nodes placed where morphis cannot reach yet
+NODE_ENCLOSED_LATER    = 0.75   -- the share for nodes that grow after the start (free play)
 NODE_ISLAND_FRACTION   = 0.7    -- of those, the share put across water so bridges matter
 NODE_MIN_SPACING   = 3
 BUSH_RIPEN_SECONDS = 20
@@ -198,9 +199,25 @@ DEFAULT_DIFFICULTY = 1
 -- Migrants are capped per season, by year: a rush of new mouths, each with
 -- its own food, starved year one.
 MIGRANTS_PER_SEASON = { 2, 3, 4 }
--- Every morphi that joins the band in free play brings a bush of its own
--- food, planted this far (in tiles) from camp where it can be walked to.
-OWN_BUSH_RANGE = { 3, 9 }
+-- Free play tastes. Every species loves one food (MORPHI_DIET), hates one,
+-- and will eat the rest. A meal is worth more hunger the better it is
+-- liked; a loved meal cheers a morphi up and a hated one, eaten only when
+-- starving, gets it down.
+MORPHI_HATES = { pupper = 'grapes', woofoof = 'chili', twins = 'candy', cwab = 'fish', blue = 'steak', ribbit = 'cheese' }
+FOOD_VALUE   = { loved = 70, fine = 35, hated = 20 }
+MORALE_LOVED_MEAL = 5
+MORALE_HATED_MEAL = 10
+-- Free play: a specialist with nothing it can get at to work on gets bored,
+-- and that is a hardship. The game is opening the way for them.
+BORED_SECONDS     = 20
+MORALE_BORED_HIT  = 18
+-- Free play: a bush gives this many pickings, then withers. New ones grow
+-- mostly where nobody can get at them yet.
+BUSH_PICKINGS     = 8
+-- Gold buys happy thoughts: a morphi finishing a rest at camp trades a gold
+-- piece for this much morale, if it is low enough to want it.
+MORALE_TRADE      = 30
+TRADE_BELOW       = 70
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow

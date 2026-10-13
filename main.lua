@@ -108,6 +108,15 @@ local function onComplain(worker, reason, node)
         text = worker.name .. ' is hungry and the ' .. where .. ' is walled off'
     elseif reason == 'slow' then
         text = worker.name .. ' gave up walking to the ' .. where
+    elseif reason == 'bored' then
+        local trade = ({ forager = 'bush', lumberjack = 'tree', miner = 'ore' })[worker.role] or 'work'
+        if worker.boredReason == 'storage' then
+            text = worker.name .. ' has nothing to do: nowhere to put food. Mark a FLOOR spot or a BIN'
+        elseif node then
+            text = worker.name .. ' has nothing to do: the nearest ' .. trade .. ' is out of reach at ' .. node.x .. ',' .. node.y
+        else
+            text = worker.name .. ' has nothing to do'
+        end
     else
         text = worker.name .. " can't reach the " .. where
     end
@@ -161,21 +170,11 @@ local function hire(n)
             name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
             hunger = start,
+            wilds = game.mode == 'free',
             onComplain = onComplain,
             onEvent = onWorkerEvent,
         })
         table.insert(game.workers, worker)
-        -- free play: the newcomer brings a bush of its own food, and new
-        -- bushes from now on grow the foods the band eats
-        if game.mode == 'free' then
-            local br = game.world.breakroom
-            game.world:plantBushNear(worker.diet, br.x, br.y, OWN_BUSH_RANGE)
-            local pool, seen = {}, {}
-            for _, w in ipairs(game.workers) do
-                if w.alive and not seen[w.diet] then seen[w.diet] = true; pool[#pool + 1] = w.diet end
-            end
-            game.world.dietPool = pool
-        end
     end
 end
 
@@ -350,7 +349,8 @@ end
 local function closeQuarter()
     local count = staffStats()
     game.report = game.scoring:closeQuarter(count)
-    for _, node in ipairs(game.world:spawnAllNodes(NODES_PER_QUARTER)) do
+    -- new growth comes up mostly where nobody can get at it yet
+    for _, node in ipairs(game.world:spawnAllNodes(NODES_PER_QUARTER, game.mode == 'free' and NODE_ENCLOSED_LATER or nil)) do
         if node.ready then game.jobs:postNode(node) end
     end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end

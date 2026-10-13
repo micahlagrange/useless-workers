@@ -26,6 +26,10 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.sheet = opts.sheet or self.roleInfo.sheets[1]
     self.species = MORPHI_SHEET_NAMES[self.sheet] or self.sheet
     self.diet = opts.diet or MORPHI_DIET[self.sheet] or FOOD_KINDS[1]
+    -- free play: tastes instead of one food (loves the diet, hates one, eats
+    -- the rest), boredom, and gold to trade for happy thoughts
+    self.wilds = opts.wilds == true
+    self.hates = self.wilds and MORPHI_HATES[self.sheet] or nil
     self.name = opts.name or ('Morphi ' .. self.id)
     local c = Util.tileCenter(opts.x or 1, opts.y or 1)
     self.x, self.y = c.x, c.y
@@ -77,14 +81,39 @@ function Worker:carrying()
     return self.slots[SLOT_WORK]
 end
 
--- Something I would actually eat: food of my own kind (anything in arcade).
+-- Would I eat this food? Arcade: anything. Free play: anything but the
+-- food I hate, and even that when starving. Survival levels: my own only.
+function Worker:willEat(food)
+    if self.arcade then return true end
+    if self.wilds then return food ~= self.hates or self.hunger < HUNGER_STARVING end
+    return food == self.diet
+end
+
+-- How much I like it: 'loved', 'fine' or 'hated'.
+function Worker:taste(food)
+    if not self.wilds or food == self.diet then return 'loved' end
+    if food == self.hates then return 'hated' end
+    return 'fine'
+end
+
+-- Something I would actually eat.
 function Worker:edible(item)
-    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and (self.arcade or item.food == self.diet)
+    return item ~= nil and (item.kind == ITEM_FOOD or item.kind == CARGO_FOOD) and self:willEat(item.food)
 end
 
 -- Does this bush grow something I eat?
 function Worker:eatsFrom(node)
-    return node.kind == NODE_BUSH and (self.arcade or node.food == self.diet)
+    return node.kind == NODE_BUSH and self:willEat(node.food)
+end
+
+-- A meal: hunger by taste, and a better or worse mood for it.
+function Worker:mealOf(food)
+    local taste = self:taste(food)
+    self.hunger = math.min(HUNGER_MAX, self.hunger + (self.wilds and FOOD_VALUE[taste] or FRUIT_HUNGER_VALUE))
+    if self.wilds and self.morale then
+        if taste == 'loved' then self.morale = math.min(MORALE_MAX, self.morale + MORALE_LOVED_MEAL)
+        elseif taste == 'hated' then self.morale = math.max(0, self.morale - MORALE_HATED_MEAL); self:say('yuck', 1.2) end
+    end
 end
 
 function Worker:snackInPocket()
@@ -93,7 +122,7 @@ end
 
 function Worker:hasFoodInSlot(i)
     local s = self.slots[i]
-    return s ~= nil and s.kind == ITEM_FOOD and (self.arcade or s.food == self.diet)
+    return s ~= nil and s.kind == ITEM_FOOD and self:willEat(s.food)
 end
 
 -- Arcade: still waiting for my one meal?
@@ -199,11 +228,28 @@ function Worker:dropJob()
     self.goal = nil
 end
 
+-- Nothing to do: a hardship, pointing at the nearest thing of my trade
+-- that nobody can get at (or nowhere to put food, for a forager).
+function Worker:bored()
+    local kind = self.roleInfo.nodeKind
+    local best, bestD = nil, math.huge
+    if kind then
+        for _, node in ipairs(self.world.nodes) do
+            if node.kind == kind and not self.world:nodeReachable(node) then
+                local d = Util.manhattan(node.x, node.y, self:tile().x, self:tile().y)
+                if d < bestD then best, bestD = node, d end
+            end
+        end
+    end
+    self.boredReason = (self.role == ROLE_FORAGER and self.world:nearestFreeStorageTile(self) == nil) and 'storage' or 'reach'
+    self:complain('bored', best)
+end
+
 function Worker:complain(reason, node)
     if node then node.complainedAt = self.clock end
     self.scoring:addComplaint()
     self.complaintCount = self.complaintCount + 1
-    if not self.arcade then self.morale = self.morale - MORALE_COMPLAINT_HIT end
+    if not self.arcade then self.morale = self.morale - (reason == 'bored' and MORALE_BORED_HIT or MORALE_COMPLAINT_HIT) end
     self:say('!!')
     if node then self:ick(node.x, node.y) end
     if self.onComplain then self.onComplain(self, reason, node) end
@@ -290,15 +336,16 @@ end
 function Worker:finishEating()
     if self.eatingSlot then
         if self:hasFoodInSlot(self.eatingSlot) then
+            local food = self.slots[self.eatingSlot].food
             self.slots[self.eatingSlot] = nil
-            self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+            self:mealOf(food)
             self.ate = true
             self:emit('eat')
         end
         self.eatingSlot = nil
     elseif self.targetNode and self.targetNode.ready then
         -- eating straight off a bush
-        self.hunger = math.min(HUNGER_MAX, self.hunger + FRUIT_HUNGER_VALUE)
+        self:mealOf(self.targetNode.food)
         self.world:harvestNode(self.targetNode)
         self.ate = true
         self:emit('eat')
@@ -318,6 +365,7 @@ function Worker:nearestRipeBush()
         if self:eatsFrom(node) and node.ready and node.claimedBy == nil and not self:isIcked(node.x, node.y) then
             local c = Util.tileCenter(node.x, node.y)
             local d = Util.dist(self.x, self.y, c.x, c.y)
+            if self.wilds and node.food == self.diet then d = d * 0.5 end -- worth the walk
             if self.world:isReachable(node.x, node.y) then
                 if d < bestD then best, bestD = node, d end
             elseif d < blockedD and not self:recentlyReported(node) then
@@ -332,7 +380,7 @@ end
 function Worker:fetchFood()
     if self.slots[SLOT_PERSONAL] then return false end
     local t = self:tile()
-    local item = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil)
+    local item = self:storedMeal(t)
     if not item then return false end
     local path = self:pathTo(item.x, item.y)
     if not path then return false end
@@ -346,9 +394,18 @@ end
 -- reach counts. On a picky (bins) level with nothing stored yet, a
 -- reachable bin plus a reachable ripe bush counts too, since a forager can
 -- fill it. Otherwise a reachable ripe bush. Used by the stuck check.
+-- The stored food I would go for: the loved kind if there is any, else
+-- anything I will eat.
+function Worker:storedMeal(t)
+    if self.arcade then return self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y) end
+    local loved = self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, self.diet)
+    if loved or not self.wilds then return loved end
+    return self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, function(food) return self:willEat(food) end)
+end
+
 function Worker:canReachFood()
     local t = self:tile()
-    if self.world:nearestStoredItem(ITEM_FOOD, t.x, t.y, (not self.arcade) and self.diet or nil) then return true end
+    if self:storedMeal(t) then return true end
     local bush = self:nearestRipeBush()
     if self.arcade and self.world.arcadeNeeds and self.world.arcadeNeeds.bins then
         if not bush then return false end
@@ -473,11 +530,7 @@ function Worker:decide()
         return true
     end
     local job = self.jobs:takeNearest(types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
-    -- nothing of its own to do: out in the wilds anyone lends a hand picking
-    -- food (miners run out of reachable ore early and would only stand about)
-    if not job and not self.arcade and self.role ~= ROLE_FORAGER and self.world:nearestFreeStorageTile(self) ~= nil then
-        job = self.jobs:takeNearest({ 'forage' }, here.x, here.y, usable, claim, JOB_PATH_TRIES)
-    end
+    if job then self.idleSince = nil end
     if job and job.area then
         self.job = nil -- the area is the job; it is reposted if anything is left
         self.targetArea = job.area
@@ -491,6 +544,15 @@ function Worker:decide()
         self.targetSite = job.site
         self:setPath(claimedPath, 'work')
         return
+    end
+    -- 4. Nothing to do. In the wilds that wears on a specialist.
+    if self.wilds then
+        self.idleSince = self.idleSince or self.clock
+        if self.clock - self.idleSince >= BORED_SECONDS then
+            self.idleSince = self.clock
+            self:bored()
+            return
+        end
     end
     -- 4. Do not loiter on the pantry
     if self:stepOff() then return end
@@ -713,6 +775,13 @@ function Worker:finishAction()
         self.wantsBreak = false
         self.breaksTaken = self.breaksTaken + 1
         self.morale = math.min(MORALE_MAX, self.morale + (inBed and MORALE_BED_BONUS or MORALE_BREAK_BONUS))
+        -- a gold piece from the stockpile, traded at camp for something nice
+        if self.wilds and self.morale < TRADE_BELOW and self.world.stock.gold >= 1 then
+            self.world.stock.gold = self.world.stock.gold - 1
+            self.morale = math.min(MORALE_MAX, self.morale + MORALE_TRADE)
+            self:say('traded!', 1.5)
+            self:emit('trade')
+        end
         self.world:releaseRestSpot(self)
         self.restSpot = nil
         self:emit('break', inBed and 'bed' or 'floor')
@@ -760,7 +829,9 @@ function Worker:updateMorale(dt)
     if self.hunger < HUNGER_EAT_THRESHOLD then
         self.morale = self.morale - MORALE_HUNGRY_DRAIN * dt
     elseif self.morale > 0 then
-        self.morale = math.min(MORALE_MAX, self.morale + MORALE_RECOVER * dt)
+        -- a fed morphi cheers up, unless it has been standing about with nothing to do
+        local idle = self.wilds and self.idleSince ~= nil and self.clock - self.idleSince > WORKER_SULK_SECONDS * 2
+        if not idle then self.morale = math.min(MORALE_MAX, self.morale + MORALE_RECOVER * dt) end
     end
     if self.morale <= 0 then
         self.morale = 0
