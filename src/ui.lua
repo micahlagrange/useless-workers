@@ -22,7 +22,19 @@ local C = {
     warn = { 0.92, 0.45, 0.35 },
     good = { 0.55, 0.82, 0.55 },
     gold = { 1.0, 0.9, 0.45 },  -- the perfect clear, a cut above the stars' yellow
+    amber = { 0.95, 0.72, 0.25 },
+    blue = { 0.5, 0.75, 1.0 },
 }
+
+-- Hunger as a word and a colour.
+local HUNGER_LOOK = {
+    satiated = { 'SATIATED', 'blue' }, fed = { 'FED', 'good' }, hungry = { 'HUNGRY', 'amber' }, starving = { 'STARVING', 'warn' },
+}
+local function hungerLook(w)
+    local h = HUNGER_LOOK[w:hungerStatus()]
+    return h[1], C[h[2]]
+end
+UI.hungerLook = hungerLook
 
 local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
 
@@ -600,8 +612,11 @@ function UI:topValues(game)
     icon(UI.iconFood, stored .. '/' .. cap, (cap == 0 and not arcade) and C.warn or C.text)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
     if not arcade then
-        local fed = game.averageHunger and math.floor(game.averageHunger + 0.5) or 100
-        pair('FED', fed .. '%', fed < 35 and C.warn or C.text)
+        local hungry = 0
+        for _, w in ipairs(game.workers) do
+            if w.alive and (w:hungerStatus() == 'hungry' or w:hungerStatus() == 'starving') then hungry = hungry + 1 end
+        end
+        pair('HUNGRY', tostring(hungry), hungry > 0 and C.amber or C.good)
         if game.mode == 'free' then key = #out end
     end
     icon(UI.iconGold, tostring(game.world.stock.gold), C.good)
@@ -936,9 +951,12 @@ function UI:drawBottomBar(game)
             local lh = self.fonts.small:getHeight() + 8
             self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-            local status = w.arcade and (w.ate and 'has eaten' or 'not eaten yet')
-                or ('hunger ' .. math.floor(w.hunger + 0.5) .. '%, ' .. w:mood())
-            self:printLine(status, ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            if w.arcade then
+                self:printLine(w.ate and 'has eaten' or 'not eaten yet', ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            else
+                local word, color = hungerLook(w)
+                self:printLine(word .. ', ' .. w:mood(), ix, iy + 2 * lh + 4, iw, 'left', color, { self.fonts.small, self.fonts.tiny })
+            end
         elseif game.mode == 'arcade' then
             self:drawGoalList(game, ix, iy, iw, 20, self.infoH - 12)
         else
@@ -979,10 +997,8 @@ function UI:drawBottomBar(game)
                 self:printLine('JOB ' .. w.roleInfo.label:lower(), bx, py + 52, 140, 'left', C.dim, { self.fonts.tiny })
             else
                 love.graphics.print('HUNGER', bx, py + 22)
-                love.graphics.setColor(0, 0, 0, 0.6)
-                love.graphics.rectangle('fill', bx, py + 36, 140, 10)
-                if w.hunger < HUNGER_EAT_THRESHOLD then setColor(C.warn) else setColor(C.good) end
-                love.graphics.rectangle('fill', bx, py + 36, 140 * (w.hunger / HUNGER_MAX), 10)
+                local word, color = hungerLook(w)
+                self:printLine(word, bx, py + 34, 140, 'left', color, { self.fonts.small, self.fonts.tiny })
                 setColor(C.dim)
                 love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
                 love.graphics.setColor(0, 0, 0, 0.6)
@@ -1014,7 +1030,7 @@ function UI:drawBottomBar(game)
         end
     elseif w and w.alive then
         -- narrow: one line above the bar
-        local line = w.name .. ': ' .. w:describeState() .. (w.arcade and (w.ate and '  (eaten)' or '') or ('  hunger ' .. math.floor(w.hunger + 0.5) .. '%  ' .. w:mood()))
+        local line = w.name .. ': ' .. w:describeState() .. (w.arcade and (w.ate and '  (eaten)' or '') or ('  ' .. hungerLook(w):lower() .. ', ' .. w:mood()))
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
@@ -1169,16 +1185,8 @@ function UI:drawUnits(game, view)
             if arcade then
                 self:printLine(w.ate and 'eaten' or 'not yet', cHunger, ry + 8, barW, 'left', w.ate and C.good or C.warn, { self.fonts.small, self.fonts.tiny })
             else
-                love.graphics.setColor(0, 0, 0, 0.6)
-                love.graphics.rectangle('fill', cHunger, ry + 10, barW, 10)
-                local frac = w.hunger / HUNGER_MAX
-                if frac > 0.6 then setColor(C.good)
-                elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then love.graphics.setColor(0.95, 0.75, 0.3)
-                else setColor(C.warn) end
-                love.graphics.rectangle('fill', cHunger, ry + 10, barW * frac, 10)
-                if rowH >= 40 then
-                    self:printLine(math.floor(w.hunger + 0.5) .. '%', cHunger, ry + 24, barW, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-                end
+                local word, color = hungerLook(w)
+                self:printLine(word, cHunger, ry + 8, barW, 'left', color, { self.fonts.small, self.fonts.tiny })
             end
             if wide and not arcade then
                 local mw = right - cMorale - 12

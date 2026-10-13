@@ -477,7 +477,13 @@ function TestWorker:testStarvesAndQuits()
     self.bush.ready = false; self.bush.timer = 999
     w.hunger = 3
     w.drain = 2
+    -- at zero it is starving, and holds out as long as a full belly lasts (100 / 2 seconds)
     run({ w }, self.world, self.jobs, 2)
+    lu.assertEquals(w:hungerStatus(), 'starving')
+    lu.assertTrue(w:isWorking())
+    run({ w }, self.world, self.jobs, HUNGER_MAX / 2 - 3)
+    lu.assertNotEquals(w.state, 'quitting')
+    run({ w }, self.world, self.jobs, 3)
     lu.assertEquals(w.state, 'quitting')
     lu.assertEquals(self.scoring.quits, 1)
     lu.assertFalse(w:isWorking())

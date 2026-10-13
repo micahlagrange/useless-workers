@@ -537,20 +537,17 @@ function View:drawWorker(w, clock, selected)
             love.graphics.setLineWidth(1)
             love.graphics.line(w.x - 5, feetY + 4, w.x - 2, feetY + 6.5, w.x + 4, feetY + 1.5)
         end
-    -- hunger bar, always shown so it never pops in: green, then amber, then red
+    -- hunger as a dot in its status colour: blue satiated, green fed, amber
+    -- hungry, red (blinking) starving
     elseif w:isWorking() then
-        local frac = w.hunger / HUNGER_MAX
-        local width = 12 * frac
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle('fill', w.x - 6, feetY + 3, 12, 2)
-        if frac > 0.6 then
-            love.graphics.setColor(0.45, 0.8, 0.4)
-        elseif frac > HUNGER_EAT_THRESHOLD / HUNGER_MAX then
-            love.graphics.setColor(0.95, 0.75, 0.3)
-        else
-            love.graphics.setColor(0.9, 0.25, 0.2)
+        local status = w:hungerStatus()
+        local col = ({ satiated = { 0.5, 0.75, 1.0 }, fed = { 0.45, 0.8, 0.4 }, hungry = { 0.95, 0.72, 0.25 }, starving = { 0.95, 0.25, 0.2 } })[status]
+        if status ~= 'starving' or math.floor(clock * 3) % 2 == 0 then
+            love.graphics.setColor(0, 0, 0, 0.5)
+            love.graphics.circle('fill', w.x, feetY + 4, 2.2)
+            love.graphics.setColor(col[1], col[2], col[3], 1)
+            love.graphics.circle('fill', w.x, feetY + 4, 1.6)
         end
-        love.graphics.rectangle('fill', w.x - 6, feetY + 3, width, 2)
     end
     if w.bubble then
         self:drawBubble(w.x, w.y - 26, w.bubble.text)

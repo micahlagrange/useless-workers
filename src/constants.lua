@@ -95,8 +95,14 @@ MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', 
 -- Workers (section 5)
 HUNGER_MAX             = 100
 STARTING_HUNGER        = 45     -- morphis arrive peckish, so the first thing they do is look for food
-HUNGER_EAT_THRESHOLD   = 30
-HUNGER_STARVING        = 12     -- a starving morphi eats even its work item if it is food, or drops its cargo
+-- Hunger is shown as a status, not a bar: SATIATED above HUNGER_SATIATED,
+-- FED down to HUNGER_EAT_THRESHOLD, HUNGRY below it (and looking for food,
+-- and losing morale), STARVING at zero. A starving morphi eats anything,
+-- even its hated food or its work item, and lasts as long again as a full
+-- belly takes to empty before it starves.
+HUNGER_SATIATED        = 80
+HUNGER_EAT_THRESHOLD   = 20
+HUNGER_STARVING        = 1
 FRUIT_HUNGER_VALUE     = 55
 WORKER_SPEED           = 72     -- pixels per second, 4.5 tiles per second
 WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving up

@@ -130,6 +130,14 @@ function Worker:wantsMeal()
     return self.arcade and not self.ate
 end
 
+-- 'satiated', 'fed', 'hungry' or 'starving', for the HUD.
+function Worker:hungerStatus()
+    if self.hunger <= 0 then return 'starving' end
+    if self.hunger < HUNGER_EAT_THRESHOLD then return 'hungry' end
+    if self.hunger > HUNGER_SATIATED then return 'satiated' end
+    return 'fed'
+end
+
 function Worker:tile()
     return Util.worldToTile(self.x, self.y)
 end
@@ -1039,9 +1047,15 @@ function Worker:update(dt, clock)
     if not self.arcade and self.state ~= 'trading' then
         self.hunger = self.hunger - self.drain * dt
         if self.hunger <= 0 then
+            -- starving: it holds out as long again as a full belly lasts
             self.hunger = 0
-            self:quit('starved')
-            return
+            self.starveTimer = (self.starveTimer or HUNGER_MAX / math.max(self.drain, 0.01)) - dt
+            if self.starveTimer <= 0 then
+                self:quit('starved')
+                return
+            end
+        else
+            self.starveTimer = nil
         end
         if self:updateMorale(dt) then return end
     end
