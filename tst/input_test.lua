@@ -40,6 +40,26 @@ function TestInput:testALostReleaseDoesNotFreezeTaps()
     lu.assertNil(game.lineStart)
 end
 
+-- Worse: love.js goes on listing a finger that lifted. A touch that has
+-- not moved for a second is dropped all the same, so taps work again.
+function TestInput:testAFingerListedForeverDoesNotFreezeTaps()
+    Stub.fingers = { 'a', 'b' }
+    love.touchpressed('a', 300, 200)
+    love.touchpressed('b', 400, 200)
+    love.touchreleased('a')
+    -- 'b' lifted but LOVE keeps listing it, and no release ever comes
+    Stub.fingers = { 'b' }
+    for _ = 1, 45 do love.update(1 / 30) end
+    local game = H.game()
+    love.keypressed('3') -- FLOOR
+    Stub.fingers = { 'b', 'c' }
+    love.touchpressed('c', 300, 200)
+    love.mousepressed(300, 200, 1, true)
+    lu.assertNotNil(game.lineStart, 'the tap was ignored')
+    love.mousereleased(300, 200, 1, true)
+    love.touchreleased('c')
+end
+
 -- A second finger turns a drag into a pinch: nothing gets built.
 function TestInput:testAPinchCallsOffTheDrag()
     local game = H.game()
