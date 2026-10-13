@@ -60,6 +60,10 @@ end
 local touches = {}
 local touchCount = 0
 local pinch = nil
+-- FINGERS (gear menu, or F3): draws every finger the game is tracking and
+-- every one LOVE says is down, to catch fingers that get stuck.
+local fingerDebug = false
+local debugClock = 0
 local reportTimer = 0
 local musicStarted = false
 local PAN_SPEED = 700
@@ -533,6 +537,7 @@ end
 
 function love.update(dt)
     dt = math.min(dt, 0.1)
+    debugClock = debugClock + dt
     Audio.update(dt)
     syncTouches()
     if state == 'playing' or state == 'units' or state == 'log' then
@@ -630,7 +635,7 @@ local function drawWorld()
     cam:reset()
 end
 
-function love.draw()
+local function drawScene()
     if state == 'title' then
         title.muted = Audio.isMuted()
         ui:beginScaled()
@@ -671,6 +676,67 @@ function love.draw()
         end
         ui:drawCursor(game.abilities.selected, mx, my)
     end
+end
+
+-- The FINGERS view, in window pixels over everything: filled, numbered
+-- circles for the fingers the game is tracking (where each was last seen),
+-- hollow rings for the ones LOVE lists as down ('?' if the game is not
+-- tracking that one), and a readout of both counts and the pinch.
+local function drawFingerDebug()
+    local font = ui.fonts.hud
+    love.graphics.setFont(font)
+    local r = 28 * math.max(1, ui.scale)
+    local lines = {}
+    local tracked = {}
+    for id, t in pairs(touches) do
+        tracked[id] = t
+        love.graphics.setColor(1, 0.85, 0.2, 0.35)
+        love.graphics.circle('fill', t.x, t.y, r)
+        love.graphics.setColor(1, 0.85, 0.2, 1)
+        love.graphics.setLineWidth(3)
+        love.graphics.circle('line', t.x, t.y, r)
+        local label = tostring(t.n or '?')
+        love.graphics.setColor(0, 0, 0, 1)
+        love.graphics.print(label, t.x - font:getWidth(label) / 2, t.y - font:getHeight() / 2)
+        lines[#lines + 1] = { n = t.n or 99, text = string.format('finger %s  at %d,%d  still for %.1fs', label, t.x, t.y, debugClock - (t.seen or debugClock)) }
+    end
+    local loveCount = 0
+    if love.touch then
+        for _, id in ipairs(love.touch.getTouches()) do
+            loveCount = loveCount + 1
+            local x, y = love.touch.getPosition(id)
+            love.graphics.setColor(0.3, 0.8, 1, 1)
+            love.graphics.setLineWidth(2)
+            love.graphics.circle('line', x, y, r + 8)
+            if not tracked[id] then
+                love.graphics.print('?', x - font:getWidth('?') / 2, y - r - 8 - font:getHeight())
+                lines[#lines + 1] = { n = 100, text = string.format('LOVE lists a finger at %d,%d the game is not tracking', x, y) }
+            end
+        end
+    end
+    table.sort(lines, function(a, b) return a.n < b.n end)
+    local count = 0
+    for _ in pairs(touches) do count = count + 1 end
+    local head = string.format('FINGERS  game: %d   LOVE: %d   pinch: %s', count, loveCount, pinch and 'ON (taps ignored)' or 'off')
+    local small = ui.fonts.small
+    love.graphics.setFont(small)
+    local lh = small:getHeight() + 4
+    local w = small:getWidth(head) + 20
+    for _, l in ipairs(lines) do w = math.max(w, small:getWidth(l.text) + 20) end
+    local y0 = love.graphics.getHeight() * 0.25
+    love.graphics.setColor(0, 0, 0, 0.75)
+    love.graphics.rectangle('fill', 8, y0, w, (#lines + 1) * lh + 10)
+    love.graphics.setColor(pinch and 1 or 0.6, pinch and 0.4 or 0.9, pinch and 0.3 or 0.6, 1)
+    love.graphics.print(head, 18, y0 + 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    for i, l in ipairs(lines) do love.graphics.print(l.text, 18, y0 + 5 + i * lh) end
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function love.draw()
+    drawScene()
+    if fingerDebug then drawFingerDebug() end
 end
 
 -- Input --------------------------------------------------------------------
@@ -763,6 +829,7 @@ local function pressTopButton(id)
     elseif id == 'units' then openUnits()
     elseif id == 'pause' then togglePause()
     elseif id == 'log' then openLog()
+    elseif id == 'fingers' then fingerDebug = not fingerDebug
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
@@ -990,9 +1057,18 @@ local function pinchState()
     return { dist = math.max(dist, 1), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 }
 end
 
+-- The lowest finger number nobody is using, for the FINGERS debug view.
+local function freeFingerNumber()
+    local used = {}
+    for _, t in pairs(touches) do if t.n then used[t.n] = true end end
+    local n = 1
+    while used[n] do n = n + 1 end
+    return n
+end
+
 function love.touchpressed(id, x, y)
     noteTouch()
-    touches[id] = { x = x, y = y }
+    touches[id] = { x = x, y = y, n = freeFingerNumber(), seen = debugClock }
     touchCount = 0
     for _ in pairs(touches) do touchCount = touchCount + 1 end
     if touchCount >= 2 and state == 'playing' then
@@ -1006,7 +1082,7 @@ end
 
 function love.touchmoved(id, x, y)
     if not touches[id] then return end
-    touches[id].x, touches[id].y = x, y
+    touches[id].x, touches[id].y, touches[id].seen = x, y, debugClock
     if pinch and state == 'playing' then
         local now = pinchState()
         if now then
@@ -1032,6 +1108,10 @@ function love.wheelmoved(_, y)
 end
 
 function love.keypressed(key)
+    if key == 'f3' then
+        fingerDebug = not fingerDebug
+        return
+    end
     if key == 'f11' and not isWeb() then
         love.window.setFullscreen(not love.window.getFullscreen())
         return

@@ -137,6 +137,7 @@ function UI:layout(w, h)
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
         { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' },
+        { id = 'fingers', label = 'FINGERS' },
     }
     if self.touch then
         -- fingers pinch to zoom; the + and - buttons only cost room
