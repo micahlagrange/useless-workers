@@ -160,6 +160,23 @@ function TestWorker:testPickedFoodWithNowhereToGoIsKept()
     lu.assertEquals(#world:get(3, 4).items, 1)
 end
 
+-- The tool is held on the facing side, so a morphi turns to its work,
+-- whichever way its last step went.
+function TestWorker:testFacesTheWorkWhenStarting()
+    local world = World.fromGrid({
+        '..........',
+        '.b........',
+        '..........',
+    }, Rng.new(1))
+    local w = Worker.new(world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_FORAGER, 3, 2))
+    w.facing = 'right'
+    w.targetNode = world:get(2, 2).node
+    w.goal = 'work'
+    w:arrive()
+    lu.assertEquals(w.state, 'working')
+    lu.assertEquals(w.facing, 'left')
+end
+
 function TestWorker:testMinerWorksAWholeAreaWithoutIdling()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER))
     -- the whole bottom wall of the pocket, one drag: only the ends touch open ground at first

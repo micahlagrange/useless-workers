@@ -881,6 +881,13 @@ function Worker:arrive()
         self:say(inBed and 'zzz' or 'break', 2)
     elseif self.goal == 'work' then
         self.state = 'working'
+        -- turn to the work, not the way the last step went: the tool is
+        -- held on the facing side
+        local work = self.targetSite or self.targetNode
+        if work and work.x then
+            local c = Util.tileCenter(work.x, work.y)
+            self:face(c.x - self.x, 0)
+        end
         if self.targetSite then self.targetSite.working = true end
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then
             self.stateTimer = BUILD_SECONDS
