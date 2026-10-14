@@ -442,6 +442,7 @@ end
 
 function love.load()
     ui = UI.new()
+    Audio.loadVolumes()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
     -- start on the furthest unlocked arcade level
@@ -855,10 +856,21 @@ local function togglePause()
     game.paused = not game.paused
 end
 
-local function pressTopButton(id)
-    if id == 'gear' or id == 'values' then
-        -- the folded buttons or values: open, or close again
+-- Gear menu buttons worth pressing again and again: the menu stays open
+-- under them. The rest go somewhere or change the view, and close it.
+local STAYS_OPEN = { speed = true, zoomin = true, zoomout = true, mute = true, sound = true }
+
+-- b is the pressed button's rectangle, for a volume bar: where on it says how loud.
+local function pressTopButton(id, x, b)
+    local channel, step = id:match('^vol:(%a+):([%+%-])$')
+    local barChannel = id:match('^volbar:(%a+)$')
+    if id == 'gear' or id == 'values' or id == 'sound' then
+        -- the folded buttons, values or mixer: open, or close again
         ui.dropdown = ui.dropdown ~= id and id or nil
+    elseif channel then
+        Audio.setVolume(channel, Audio.getVolume(channel) + (step == '+' and 0.1 or -0.1))
+    elseif barChannel and b then
+        Audio.setVolume(barChannel, (x - b.x) / b.w)
     elseif id == 'units' then openUnits()
     elseif id == 'pause' then togglePause()
     elseif id == 'log' then openLog()
@@ -995,11 +1007,15 @@ local function pointerPressed(x, y, button, istouch)
     if ui.dropdown then
         -- an open dropdown takes the press: a button in it, or a press
         -- anywhere else just closes it
-        local id = ui:dropdownAt(vx, vy)
+        local id, b = ui:dropdownAt(vx, vy)
         if id == 'inside' then return end
+        if id then
+            if not (STAYS_OPEN[id] or id:find('^vol')) then ui.dropdown = nil end
+            pressTopButton(id, vx, b)
+            return
+        end
         local top = vy < TOP_BAR_H and ui:topButtonAt(vx, vy)
         if not (top == ui.dropdown) then ui.dropdown = nil end
-        if id then pressTopButton(id) return end
         if not top then return end
     end
     if vy < TOP_BAR_H then

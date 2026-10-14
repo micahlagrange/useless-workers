@@ -4,6 +4,7 @@ local Util = require('src.util')
 local Scoring = require('src.scoring')
 local Campaign = require('src.campaign')
 local Version = require('src.version')
+local Audio = require('src.audio')
 
 local UI = {}
 UI.__index = UI
@@ -134,7 +135,7 @@ function UI:layout(w, h)
     -- quick buttons, for fingers and for people who forget keys. The top
     -- bar is one row: what does not fit folds away each frame, see drawTopBar.
     local defs = {
-        { id = 'menu', label = 'MENU' }, { id = 'mute', label = 'MUTE' },
+        { id = 'menu', label = 'MENU' }, { id = 'sound', label = 'SOUND' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
         { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' },
@@ -730,7 +731,7 @@ function UI:drawTopBar(game)
     end
     for _, b in ipairs(self.topButtons) do
         if b.id ~= 'values' then
-            local active = (b.id == 'follow' and game.follow) or (b.id == 'mute' and game.muted) or (b.id == 'pause' and game.paused)
+            local active = (b.id == 'follow' and game.follow) or (b.id == 'sound' and (game.muted or self.dropdown == 'sound')) or (b.id == 'pause' and game.paused)
             local label = b.label
             if b.id == 'speed' then
                 label = 'SPEED ' .. (game.speed or 1) .. 'x'
@@ -775,11 +776,13 @@ function UI:drawDropdown(game)
         for i, d in ipairs(self.quickDefs) do
             local c, r0 = math.floor((i - 1) / rows), (i - 1) % rows
             local r = { id = d.id, x = x + c * (w + 8), y = y + 4 + r0 * (bh + 6), w = w, h = bh }
-            local active = (d.id == 'follow' and game.follow) or (d.id == 'mute' and game.muted) or (d.id == 'speed' and (game.speed or 1) > 1)
+            local active = (d.id == 'follow' and game.follow) or (d.id == 'sound' and game.muted) or (d.id == 'speed' and (game.speed or 1) > 1)
             local label = d.id == 'speed' and ('SPEED ' .. (game.speed or 1) .. 'x') or d.label
             self:button(r, label, active)
             self.dropButtons[#self.dropButtons + 1] = r
         end
+    elseif self.dropdown == 'sound' then
+        self:drawMixer(game)
     elseif self.dropdown == 'values' then
         local values = self.topValuesCache or {}
         local rowH = self.fonts.hud:getHeight() + 12
@@ -798,10 +801,58 @@ function UI:drawDropdown(game)
     end
 end
 
--- What a press hits in the open dropdown: a button id, 'inside', or nil.
+local MIXER_ROWS = { { 'music', 'MUSIC' }, { 'sfx', 'EFFECTS' }, { 'alert', 'ALERTS' } }
+
+-- The sound dropdown, under the SOUND button or the gear: mute, then a
+-- volume bar for each channel with - and + either side.
+function UI:drawMixer(game)
+    local anchor
+    for _, b in ipairs(self.topButtons) do
+        if b.id == 'sound' or (b.id == 'gear' and not anchor) then anchor = b end
+    end
+    if not anchor then self.dropdown = nil return end
+    local bh = self.quickH + 8
+    local labelW = 0
+    for _, row in ipairs(MIXER_ROWS) do labelW = math.max(labelW, self.fonts.small:getWidth(row[2])) end
+    local pctW = self.fonts.small:getWidth('100%')
+    local w = math.min(labelW + 12 + bh + 8 + 160 + 8 + bh + 8 + pctW, self.vw - 28)
+    local x = math.max(14, math.min(anchor.x + anchor.w - w, self.vw - 14 - w))
+    local y = TOP_BAR_H + 4
+    local h = (#MIXER_ROWS + 1) * (bh + 6) + 6
+    love.graphics.setColor(0.05, 0.05, 0.04, 0.94)
+    love.graphics.rectangle('fill', x - 6, y - 2, w + 12, h + 4)
+    local function add(r) self.dropButtons[#self.dropButtons + 1] = r end
+    -- anything else in the panel is a press on nothing that keeps it open
+    add({ id = 'values', x = x - 6, y = y - 2, w = w + 12, h = h + 4 })
+    local function push(r) table.insert(self.dropButtons, #self.dropButtons, r) end
+    local mute = { id = 'mute', x = x, y = y + 4, w = w, h = bh }
+    self:button(mute, game.muted and 'MUTED - TAP FOR SOUND' or 'MUTE ALL (M)', game.muted)
+    push(mute)
+    for i, row in ipairs(MIXER_ROWS) do
+        local channel, label = row[1], row[2]
+        local ry = y + 4 + i * (bh + 6)
+        local v = Audio.getVolume(channel)
+        self:printLine(label, x, ry + math.floor((bh - self.fonts.small:getHeight()) / 2), labelW, 'left', game.muted and C.dim or C.text, { self.fonts.small })
+        local bx = x + labelW + 12
+        local minus = { id = 'vol:' .. channel .. ':-', x = bx, y = ry, w = bh, h = bh }
+        local plus = { id = 'vol:' .. channel .. ':+', x = x + w - pctW - 8 - bh, y = ry, w = bh, h = bh }
+        local bar = { id = 'volbar:' .. channel, x = minus.x + bh + 8, y = ry, w = plus.x - 8 - (minus.x + bh + 8), h = bh }
+        self:button(minus, '-')
+        self:button(plus, '+')
+        love.graphics.setColor(0.16, 0.17, 0.14, 1)
+        love.graphics.rectangle('fill', bar.x, bar.y + bh / 2 - 5, bar.w, 10)
+        setColor(game.muted and C.dim or C.accent)
+        love.graphics.rectangle('fill', bar.x, bar.y + bh / 2 - 5, math.floor(bar.w * v + 0.5), 10)
+        self:printLine(math.floor(v * 100 + 0.5) .. '%', plus.x + bh + 4, ry + math.floor((bh - self.fonts.small:getHeight()) / 2), pctW + 4, 'right', C.text, { self.fonts.small })
+        push(minus) push(plus) push(bar)
+    end
+end
+
+-- What a press hits in the open dropdown: a button id, 'inside', or nil,
+-- and the button's rectangle.
 function UI:dropdownAt(mx, my)
     for _, b in ipairs(self.dropButtons or {}) do
-        if hit(b, mx, my) then return b.id == 'values' and 'inside' or b.id end
+        if hit(b, mx, my) then return b.id == 'values' and 'inside' or b.id, b end
     end
     return nil
 end

@@ -178,7 +178,7 @@ local function playingScreens(tag)
     H.setState('confirmquit')
     frame(tag .. ' menu')
     H.setState('playing')
-    for _, which in ipairs({ 'gear', 'values' }) do
+    for _, which in ipairs({ 'gear', 'values', 'sound' }) do
         ui.dropdown = which
         frame(tag .. ' ' .. which .. ' open')
         ui.dropdown = nil
