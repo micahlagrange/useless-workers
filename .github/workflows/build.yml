@@ -95,7 +95,10 @@ jobs:
     # butler is fetched directly instead of through a Docker action: the action's
     # image build pulls from broth.itch.ovh at job start and took the whole job
     # down when that host failed to resolve.
+    # Only the main line ships to itch. Epic and redesign branches build and
+    # test here but wait to be merged before anyone plays them.
     - name: Install butler
+      if: github.ref == 'refs/heads/claude/game-jam-repo-analysis-ao9tmq'
       run: |
         set -e
         curl -fsSL -o butler.zip https://github.com/itchio/butler/releases/latest/download/butler-linux-amd64.zip \
@@ -108,6 +111,7 @@ jobs:
         echo "BUTLER=$BUTLER" >> "$GITHUB_ENV"
 
     - name: Publish to Itch.io
+      if: github.ref == 'refs/heads/claude/game-jam-repo-analysis-ao9tmq'
       env:
         BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
       run: |
