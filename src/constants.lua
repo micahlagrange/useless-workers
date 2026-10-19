@@ -189,6 +189,14 @@ QUIT_PENALTY        = 3
 FED_SAMPLE_SECONDS  = 1
 ENDLESS_DRAIN_STEP  = 0.1
 GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
+-- The run's audit log (src/stats.lua): a day is a slice of a season, and
+-- the player's note on an export is kept short. Milestones are never two
+-- closer than MILESTONE_GAP_DAYS, so a year brings one or two.
+DAYS_PER_SEASON     = 9
+DAY_SECONDS         = QUARTER_SECONDS / DAYS_PER_SEASON
+STATS_FORMAT        = 1
+STATS_BLURB_MAX     = 200
+MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 2
 
 -- startHunger: how fed a morphi arrives (a little less for each one after
 -- the first, so the band does not all get hungry at the same moment).

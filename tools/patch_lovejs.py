@@ -11,6 +11,10 @@ love.js keeps the save folder in IndexedDB but only writes it back from a
 beforeunload handler, which a closing tab rarely lets finish. The patched
 love.js also flushes every few seconds and whenever the page is hidden.
 
+A browser has no folder a player can open, so a file the game writes into
+downloads/ in its save folder (the stats EXPORT) is handed to the browser
+as a download and then deleted.
+
 Usage: patch_lovejs.py <path-to-lovejs-zip-or-index.html>
 """
 import io
@@ -43,6 +47,14 @@ FLUSH = ('(function(){var busy=false;function flush(){if(busy)return;busy=true;'
          'setInterval(flush,3000);'
          'document.addEventListener("visibilitychange",function(){if(document.hidden)flush()});'
          'window.addEventListener("pagehide",flush)})();')
+DOWNLOADS = ('(function(){setInterval(function(){var root="/home/web_user/love";var games;'
+             'try{games=FS.readdir(root)}catch(e){return}'
+             'games.forEach(function(g){if(g=="."||g=="..")return;var dir=root+"/"+g+"/downloads";var names;'
+             'try{names=FS.readdir(dir)}catch(e){return}'
+             'names.forEach(function(n){if(n=="."||n=="..")return;var p=dir+"/"+n;'
+             'try{var data=FS.readFile(p);var url=URL.createObjectURL(new Blob([data],{type:"application/json"}));'
+             'var a=document.createElement("a");a.href=url;a.download=n;document.body.appendChild(a);a.click();a.remove();'
+             'setTimeout(function(){URL.revokeObjectURL(url)},10000);FS.unlink(p)}catch(e){Module["printErr"](e)}})})},1000)})();')
 
 
 def patch_lovejs(js: str) -> str:
@@ -50,7 +62,7 @@ def patch_lovejs(js: str) -> str:
         return js
     if UNLOAD_HOOK not in js:
         sys.exit('patch_lovejs: love.js has no beforeunload sync to hook; saves would not persist')
-    return js.replace(UNLOAD_HOOK, FLUSH + UNLOAD_HOOK, 1)
+    return js.replace(UNLOAD_HOOK, FLUSH + DOWNLOADS + UNLOAD_HOOK, 1)
 
 
 def patch_zip(path: str) -> None:
