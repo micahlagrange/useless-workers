@@ -105,4 +105,30 @@ function TestStats:test_history_reads_oldest_first()
     lu.assertEquals(h[2], 'Day 2 (Spring): Priya starved and wandered off.')
 end
 
+function TestStats:test_an_arcade_level_counts_days_from_its_start()
+    H.newLevel(1, 'arcade', 1)
+    H.closeGoal()
+    local game = H.game()
+    for _ = 1, math.floor((DAY_SECONDS * 2 + 1) * 15) do
+        love.update(1 / 15)
+        if H.state() ~= 'playing' then break end
+    end
+    lu.assertTrue(#game.stats.days >= 1)
+    lu.assertEquals(game.stats.days[1].day, 1)
+end
+
+function TestStats:test_the_note_takes_spaces_once()
+    H.newGame('PUPPER', 1)
+    H.openSub('export')
+    H.sub.text = ''
+    love.textinput('a')
+    love.keypressed('space')
+    love.textinput(' ')  -- the desktop sends the space as text too
+    love.textinput('b')
+    love.keypressed('space') -- love.js sends no text for it
+    love.textinput('c')
+    lu.assertEquals(H.sub.text, 'a b c')
+    love.keypressed('escape')
+end
+
 os.exit(lu.LuaUnit.run())

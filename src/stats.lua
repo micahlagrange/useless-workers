@@ -86,10 +86,15 @@ function Stats.new(meta)
 end
 
 -- Days follow the season clock, so day 10 is always the first of Summer.
--- A level with no seasons just counts up.
-function Stats.dayOf(scoring)
+-- A level's clock is not a season (arcade has none): its days just count
+-- up from the start.
+function Stats.dayOf(game)
+    local scoring = game.scoring
+    if scoring.quarterTimer > QUARTER_SECONDS then
+        return math.floor((game.clock or 0) / DAY_SECONDS) + 1
+    end
     local into = math.floor((QUARTER_SECONDS - scoring.quarterTimer) / DAY_SECONDS)
-    if scoring.quarterTimer < 1e8 then into = math.min(math.max(into, 0), DAYS_PER_SEASON - 1) end
+    into = math.min(math.max(into, 0), DAYS_PER_SEASON - 1)
     return (scoring.quarter - 1) * DAYS_PER_SEASON + into + 1
 end
 
@@ -98,7 +103,7 @@ end
 function Stats:event(kind, game, who, text, tile)
     self.counts[kind] = (self.counts[kind] or 0) + 1
     self.events[#self.events + 1] = {
-        day = Stats.dayOf(game.scoring), clock = math.floor((game.clock or 0) * 10 + 0.5) / 10,
+        day = Stats.dayOf(game), clock = math.floor((game.clock or 0) * 10 + 0.5) / 10,
         kind = kind, who = who, text = text, x = tile and tile.x, y = tile and tile.y,
     }
 end
@@ -227,7 +232,7 @@ end
 -- milestone reached.
 function Stats:update(game)
     local reached
-    local today = Stats.dayOf(game.scoring)
+    local today = Stats.dayOf(game)
     while #self.days < today do
         local day = #self.days + 1
         local r = self:row(game, day)

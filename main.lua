@@ -1294,7 +1294,13 @@ function love.keypressed(key)
     if state == 'export' and not sub.saved then
         if key == 'return' or key == 'kpenter' then exportRun()
         elseif key == 'escape' then closeSub()
-        elseif key == 'backspace' then sub.text = sub.text:sub(1, -2) end
+        elseif key == 'backspace' then sub.text = sub.text:sub(1, -2)
+        elseif key == 'space' then
+            -- love.js sends no text for the space bar; on the desktop the
+            -- text that follows this key is skipped instead
+            sub.text = (sub.text .. ' '):sub(1, STATS_BLURB_MAX)
+            sub.spaced = true
+        end
         return
     end
     if key == 'm' and not (state == 'title' and title.editingSeed) then
@@ -1421,6 +1427,8 @@ function love.textinput(text)
     end
     if state == 'export' and not sub.saved then
         -- printable ASCII only: the C64 face has nothing else
+        if text == ' ' and sub.spaced then sub.spaced = false return end
+        sub.spaced = false
         text = text:gsub('[^\32-\126]', '')
         sub.text = (sub.text .. text):sub(1, STATS_BLURB_MAX)
         return
