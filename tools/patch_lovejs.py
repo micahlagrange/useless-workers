@@ -2,7 +2,8 @@
 """Make the love.js page fill the browser window, and make saves stick.
 
 makelove's love.js template centres a fixed-size canvas under a heading. For
-phones and itch.io's embed we want the canvas to be the whole viewport, with
+phones and itch.io's embed we want the canvas to be the whole viewport (less
+the safe-area insets, where an Artifact viewer's top bar sits), with
 no page scrolling or browser pinch-zoom, so the game gets a resize event
 (SDL reads the canvas CSS size because the window is resizable) and lays its
 HUD out for whatever screen it is on.
@@ -20,9 +21,12 @@ import zipfile
 STYLE = """
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #17191a; }
+  /* the game fills what is left inside the safe area: a phone's notch and
+     home bar, or the bar a claude.ai Artifact viewer puts on top */
+  html { box-sizing: border-box; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
   center, center > div { width: 100%; height: 100%; margin: 0; padding: 0; }
   h1, footer { display: none; }
-  #canvas { width: 100vw; height: 100vh; touch-action: none; visibility: hidden; }
+  #canvas { display: block; width: 100%; height: 100%; touch-action: none; visibility: hidden; }
   #loadingCanvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
 </style>
 </head>"""
