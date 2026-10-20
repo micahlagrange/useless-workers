@@ -1,5 +1,3 @@
-DEBUG = false
-
 require('src.constants')
 
 -- lib requires
@@ -21,7 +19,7 @@ local Layer = require('src.drawing.layer')
 local collision = require('src.collision')
 local Timers = require('src.system.timer')
 local needTracker = require('src.needs.tracker')
-local food = require('src.needs.food')
+-- local food = require('src.needs.food')
 local Mouse = require('src.system.input.mouse')
 local UI = require('src.system.ui')
 

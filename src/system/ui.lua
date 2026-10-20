@@ -1,4 +1,3 @@
--- local physics = require("love.physics")
 local object      = require('libs.classic')
 local spritesheet = require('src.drawing.spritesheet')
 local food        = require('src.needs.food')
@@ -9,37 +8,36 @@ local guielement  = object:extend()
 local mouseDownOn = nil
 
 -- Create a world for the physics objects to exist in
-local uiworld     = love.physics.newWorld(0, 0, true)
+local camX, camY  = Camera:position()
 local UI          = {}
 
-local function createUIShape(x, y, w, h)
-    -- Create a body in the world at position (100, 100)
-    local body = love.physics.newBody(uiworld, x, y, "static")
-
-    -- Create a rectangle shape associated with the body
-    local shape = love.physics.newRectangleShape(w, h)
-
-    local fixture = love.physics.newFixture(body, shape)
-    fixture:setSensor(true)
-    return fixture
+UIDebugText       = ""
+local function beginContact(a, b, coll)
+    local x, y = coll:getNormal()
+    UIDebugText = UIDebugText ..
+        "\n" ..
+        a:getUserData() .. " colliding with " .. b:getUserData() .. " with a vector normal of: " .. x .. ", " .. y
+    exit()
 end
+local function endContact() end
+local function preSolve() end
+local function postSolve() end
 
-
-function guielement:new(name, facing, spriteSheet)
+function guielement:new(name, facing, sheet)
     self.name               = name or 'guielement'
     self.facing             = facing or RIGHT
     self.x, self.y          = -999, -999
     self.mouseDownOn        = false
     self.width, self.height = 32, 32
 
-    self.spriteSheet        = love.graphics.newImage(spriteSheet)
+    self.spriteSheet        = love.graphics.newImage(sheet)
     self.arrowGrid          = spritesheet.NewAnim8Grid(self.spriteSheet, 32, 32)
     self.idleAnim           = Anim8.newAnimation(self.arrowGrid('1-1', 1), 1)
     self.clickedAnim        = Anim8.newAnimation(self.arrowGrid('2-2', 1), 1)
     self.scaleX             = 1
     self.scaleY             = 1
     self.currentAnimation   = self.idleAnim
-    self.fixture            = createUIShape(self.x, self.y, self.width, self.height)
+    self.fixture            = UI.CreateShape(self.x, self.y, self.width, self.height)
 end
 
 function guielement:setMouseDownOn(val)
@@ -85,10 +83,38 @@ function guielement:draw()
         self.scaleY)
 end
 
-function guielement:debug()
-    local body = self.fixture:getBody()
-    local shape = self.fixture:getShape()
+function UI.printDebugPoints(fixture)
+    local body = fixture:getBody()
+    local shape = fixture:getShape()
+    -- assumes square shape
+    local x1, y1, x2, y2, x3, y3, x4, y4 = body:getWorldPoints(shape:getPoints())
+
+    love.graphics.print("L:" .. x1 .. ", " .. y1, x1, y1 - 15)
+
+    love.graphics.print("L:" .. x2 .. ", " .. y2, x2, y2)
+
+    love.graphics.print("L:" .. x3 .. ", " .. y3, x3, y3 + 15)
+
+    love.graphics.print("L:" .. x4 .. ", " .. y4, x4, y4 + 30)
+end
+
+function UI.printDebugNearFixture(fixture)
+    local body = fixture:getBody()
+    local shape = fixture:getShape()
+    local worldX, worldY = body:getPosition()
+    local localX, localY = body:getLocalPoints(shape:getPoints())
+    -- Draw the world and local coordinates
+    love.graphics.setColor(0, 1, 0)
+    love.graphics.print("W:" .. worldX .. ", " .. worldY, worldX, worldY)
+    love.graphics.print("L:" .. localX .. ", " .. localY, worldX, worldY + 15)
+    love.graphics.setColor(1, 1, 1)
+end
+
+function UI.debugDrawFixture(fixture)
+    local body = fixture:getBody()
+    local shape = fixture:getShape()
     love.graphics.polygon('line', body:getWorldPoints(shape:getPoints()))
+    UI.printDebugPoints(fixture)
 end
 
 local function cleanEatenFood()
@@ -123,16 +149,14 @@ local function getClickedUIElement(mouseX, mouseY)
         -- Check if the point is inside the shape
         local bx, by = Camera:worldCoords(body:getPosition()) -- this works but i want to fix it "better" by setting the world coords relative to the camera at guiworld creation time!
         -- local bx, by = body:getPosition()
-        print("clicked:", lx, ly, "\n\t\tbody at ", bx, by)
         if shape:testPoint(bx, by, body:getAngle(), lx, ly) then
-            print("Mouse clicked inside the physics object!")
             return guielement
         end
     end
     return false
 end
 
-function UI.mouseDown(mouseX, mouseY, button, x, y)
+function UI.mouseDown(mouseX, mouseY, button)
     print('mouseDown')
     local uiElement = getClickedUIElement(mouseX, mouseY)
     if uiElement then
@@ -152,7 +176,7 @@ function UI.mouseUp(mouseX, mouseY, button, x, y)
             if mouseDownOn == uiElement then uiElement:click() end
         else
             if mouseDownOn == nil then
-                -- addRandomFood(x, y)
+                addRandomFood(x, y)
             end
         end
     end
@@ -177,8 +201,12 @@ function UI.draw_all_ui_elements(debug)
     for _, e in pairs(uiElements) do
         e:draw()
         if debug == true then
-            e:debug()
+            UI.debugDrawFixture(e.fixture)
         end
+    end
+
+    if debug then
+        love.graphics.print(UIDebugText, 500, 500)
     end
 end
 

@@ -1,3 +1,5 @@
+DEBUG = false
+
 function love.conf(t)
   t.title = "Morphi"
   -- t.version = "11.5"   -- It's a lie, we actually use 11.5 but itch.io throws a dumb error!
