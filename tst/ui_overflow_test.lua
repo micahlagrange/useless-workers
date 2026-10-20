@@ -253,7 +253,12 @@ local function freePlayScreens()
         H.openSub('export')
         H.sub.text = string.rep('What was fun? ', 20):sub(1, STATS_BLURB_MAX)
         frame('free play d' .. d .. ' export, full note')
-        H.sub.saved = 'Saved 108 days to C:/Users/somebody/AppData/Roaming/LOVE/morphis/stats/20261019-120000-PUPPER.json'
+        local json = H.game().stats:export('What was fun? Bridges. What was not? Waiting.')
+        H.sub.saved = { json = json, name = '20261019-120000-what-was-fun-bridges-what-b123.json', days = 108, web = false }
+        frame('free play d' .. d .. ' export, desktop')
+        H.sub.saved.message = 'Saved to C:/Users/somebody/AppData/Roaming/LOVE/morphis/stats/20261019-120000-what-was-fun-bridges-what-b123.json'
+        frame('free play d' .. d .. ' export, desktop, downloaded')
+        H.sub.saved = { json = json, name = '20261019-120000-what-was-fun-bridges-what-b123.json', days = 108, web = true }
         frame('free play d' .. d .. ' export, saved')
         H.sub.text = ''
         H.setState('confirmquit')

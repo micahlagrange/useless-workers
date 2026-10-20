@@ -333,6 +333,20 @@ function Stats.json(v)
     return table.concat(out)
 end
 
+-- A run's file name: when it was exported, the first few words of the
+-- player's note and the build, so names sort in the order runs were made:
+-- 20261019-182722-idk-but-it-was-the-b107.json. The run viewer
+-- (tools/stats_viewer.html) and tools/stats_archive.py name runs the same way.
+function Stats.runName(blurb, stamp, build)
+    local words = {}
+    for w in (blurb or ''):lower():gmatch('[%a%d]+') do
+        if #words < 5 then words[#words + 1] = w end
+    end
+    local slug = table.concat(words, '-'):sub(1, 40):gsub('%-+$', '')
+    if slug == '' then slug = 'run' end
+    return stamp .. '-' .. slug .. '-b' .. tostring(build or 0) .. '.json'
+end
+
 -- The whole run as JSON. blurb is the player's few words on what was fun
 -- and what was not, cut to STATS_BLURB_MAX characters.
 function Stats:export(blurb, extra)

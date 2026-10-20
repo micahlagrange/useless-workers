@@ -590,6 +590,11 @@ function love.update(dt)
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
     end
+    if state == 'export' and sub.saved and sub.saved.web and not sub.saved.message
+        and not love.filesystem.getInfo('exports/' .. sub.saved.name) then
+        sub.saved = nil
+        closeSub()
+    end
     -- 'confirmquit' and 'goal' are pauses: nothing updates
 end
 
@@ -851,32 +856,42 @@ local function closeSub()
     state = sub.back == 'confirmquit' and 'tools' or sub.back
 end
 
--- The run's audit log, with the player's note, into the save folder's
--- stats/ (on the desktop, %APPDATA%/LOVE/morphis/stats and the like).
+-- The run's audit log, with the player's note, as JSON text to paste into
+-- the run viewer (tools/stats_viewer.html). On the web the page shows it in
+-- a text box over the game, with COPY and DOWNLOAD (tools/patch_lovejs.py
+-- watches exports/ in the save folder); on the desktop the game shows it
+-- with its own COPY and DOWNLOAD.
 local function exportRun()
     if not game.stats then return end
     game.stats:update(game)
-    local name = 'stats/' .. os.date('%Y%m%d-%H%M%S') .. '-' .. tostring(game.seedString):gsub('[^%w]+', '_') .. '.json'
-    love.filesystem.createDirectory('stats')
+    local name = Stats.runName(sub.text, os.date('%Y%m%d-%H%M%S'), Version.build)
     local data = game.stats:export(sub.text, {
-        exportedAt = os.date('%Y-%m-%d %H:%M:%S'), endedAs = sub.back, clock = math.floor(game.clock or 0),
+        exportedAt = os.date('%Y-%m-%d %H:%M:%S'), endedAs = sub.back, clock = math.floor(game.clock or 0), runName = name,
     })
-    local ok, err = love.filesystem.write(name, data)
-    -- the web page hands anything in downloads/ to the browser as a download
-    -- (tools/patch_lovejs.py): there is no save folder a player can open
-    if ok and isWeb() then
-        love.filesystem.createDirectory('downloads')
-        ok, err = love.filesystem.write('downloads/' .. name:sub(7), data)
-    end
     love.keyboard.setTextInput(false)
-    if ok then
-        sub.saved = isWeb() and ('Exported ' .. #game.stats.days .. ' days as ' .. name:sub(7) .. '. On the test page it goes to Claude; anywhere else, look in your downloads.')
-            or ('Saved ' .. #game.stats.days .. ' days to ' .. love.filesystem.getSaveDirectory() .. '/' .. name)
-        sub.text = ''
-        Audio.playSFX('report')
-    else
-        sub.saved = 'Could not save: ' .. tostring(err)
+    sub.saved = { json = data, name = name, days = #game.stats.days, web = isWeb() }
+    sub.text = ''
+    if isWeb() then
+        love.filesystem.createDirectory('exports')
+        local ok, err = love.filesystem.write('exports/' .. name, data)
+        if not ok then sub.saved.message = 'Could not show the text box: ' .. tostring(err) end
     end
+    Audio.playSFX('report')
+end
+
+-- DOWNLOAD on the desktop: the run into the save folder's stats/.
+local function downloadRun()
+    love.filesystem.createDirectory('stats')
+    local ok, err = love.filesystem.write('stats/' .. sub.saved.name, sub.saved.json)
+    sub.saved.message = ok and ('Saved to ' .. love.filesystem.getSaveDirectory() .. '/stats/' .. sub.saved.name)
+        or ('Could not save: ' .. tostring(err))
+end
+
+-- Leaving the export screen also takes down the web page's text box.
+local function closeExport()
+    if sub.saved and sub.saved.web then love.filesystem.remove('exports/' .. sub.saved.name) end
+    sub.saved = nil
+    closeSub()
 end
 
 -- The same level, or the same free play seed, from the top.
@@ -1033,7 +1048,12 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'export' then
         if pb == 'save' then exportRun()
         elseif pb == 'typing' then love.keyboard.setTextInput(true)
-        elseif pb == 'cancel' or pb == 'done' then closeSub() end
+        elseif pb == 'copy' and sub.saved then
+            love.system.setClipboardText(sub.saved.json)
+            sub.saved.message = 'Copied ' .. #sub.saved.json .. ' characters. Paste them into the run viewer.'
+        elseif pb == 'download' and sub.saved then downloadRun()
+        elseif pb == 'cancel' then closeSub()
+        elseif pb == 'done' then closeExport() end
         return
     elseif state == 'history' then
         if pb == 'older' then sub.scroll = sub.scroll + math.max(1, sub.fit - 2)
@@ -1401,7 +1421,7 @@ function love.keypressed(key)
         elseif key == 'h' then openSub('history')
         elseif key == 'e' then openSub('export') end
     elseif state == 'export' then
-        if key == 'return' or key == 'kpenter' or key == 'escape' then closeSub() end
+        if key == 'return' or key == 'kpenter' or key == 'escape' then closeExport() end
     elseif state == 'tools' then
         if key == 'escape' then state = 'confirmquit' end
     elseif state == 'history' then

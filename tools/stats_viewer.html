@@ -5,8 +5,11 @@
 <style>
 /* Steps through a Morphis run (a stats EXPORT) one day at a time: the map
    at the start of each day with what changed since the day before, the
-   band, and the numbers. Loads run.json published beside it, or a file
-   picked on the page. Source: tools/stats_viewer.html.
+   band, and the numbers. A run comes in pasted (the game's EXPORT shows
+   it as text) and is kept in the page's database, collection "runs", named
+   <exported>-<first words of the note>-b<build>.json so names sort by
+   when the run was made. Claude copies them to the archive on the dev
+   machine with tools/stats_archive.py. Source: tools/stats_viewer.html.
    Layout: map on top, day controls under it, then the day's numbers, what
    happened and a strip of small charts; two columns on a wide screen.
    One deliberate look, the game's own dark night palette, in both themes. */
@@ -67,7 +70,16 @@ ul.list .t { min-width: 0; overflow-wrap: anywhere }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .78rem; color: var(--dim) }
 .legend span { display: inline-flex; gap: 5px; align-items: center }
 .legend b { width: 11px; height: 11px; display: inline-block; border-radius: 2px }
-.loader { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .85rem; color: var(--dim) }
+.runs { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 900px) { .runs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) } }
+.runs textarea { width: 100%; min-height: 6.5rem; resize: vertical; background: #0d0f09; color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 8px; font: 12px/1.35 var(--mono) }
+.runs .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px }
+.runs .say { color: var(--dim); font-size: .85rem; min-width: 0; overflow-wrap: anywhere }
+.runs .say.bad { color: var(--warn) }
+ul.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 12.5rem; overflow-y: auto; font-size: .85rem }
+ul.saved button { width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 3px; padding: 5px 8px; cursor: pointer; overflow-wrap: anywhere; color: var(--ink); font: inherit }
+ul.saved button:hover { border-color: var(--line) }
+ul.saved button[aria-current="true"] { border-color: var(--accent); color: var(--accent) }
 .side { display: grid; gap: 16px; align-content: start; min-width: 0 }
 .band li .t { color: var(--ink) }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto } }
@@ -76,8 +88,23 @@ ul.list .t { min-width: 0; overflow-wrap: anywhere }
 <div class="wrap">
   <header>
     <h1>Morphis Run Viewer</h1>
-    <div class="meta" id="meta">Loading the run…</div>
+    <div class="meta" id="meta">Paste a run below, or pick a saved one.</div>
   </header>
+
+  <section class="card runs" aria-label="Runs">
+    <div>
+      <h2><label for="paste">Paste a run</label></h2>
+      <textarea id="paste" placeholder="In the game: MENU, then ... in the corner, then EXPORT. Copy the text it shows and paste it here."></textarea>
+      <div class="row">
+        <button class="btn" id="add" type="button">VIEW AND SAVE</button>
+        <span class="say" id="say" role="status"></span>
+      </div>
+    </div>
+    <div>
+      <h2>Saved runs</h2>
+      <ul class="saved" id="saved"><li class="empty">Loading…</li></ul>
+    </div>
+  </section>
 
   <div class="grid">
     <section class="card">
@@ -110,11 +137,6 @@ ul.list .t { min-width: 0; overflow-wrap: anywhere }
     <h2>The whole run</h2>
     <div class="charts" id="charts"></div>
   </section>
-
-  <div class="loader">
-    <label for="file">Open another run (a stats .json):</label>
-    <input type="file" id="file" accept=".json,application/json">
-  </div>
 </div>
 
 <script>
@@ -308,6 +330,10 @@ function drawCharts() {
     c.strokeStyle = '#353a29'; c.lineWidth = 1;
     const per = run.meta.daysPerSeason || 9;
     for (let s = per; s < days.length; s += per) { c.beginPath(); c.moveTo(X(s), 4); c.lineTo(X(s), h - 4); c.stroke(); }
+    // milestone days: dashed gold
+    c.strokeStyle = '#e3b93c'; c.setLineDash([6, 6]); c.lineWidth = 1.5;
+    for (const m of run.milestones || []) { c.beginPath(); c.moveTo(X(m.day - 1), 4); c.lineTo(X(m.day - 1), h - 4); c.stroke(); }
+    c.setLineDash([]);
     c.fillStyle = '#98a083'; c.font = '20px IBM Plex Mono, monospace'; c.textAlign = 'right'; c.fillText('max ' + max, w - 6, 18); c.textAlign = 'left';
     for (const [k, , color] of series) {
       c.strokeStyle = color; c.lineWidth = 3; c.beginPath();
@@ -391,11 +417,90 @@ cv.addEventListener('pointermove', tipAt);
 cv.addEventListener('pointerdown', tipAt);
 cv.addEventListener('pointerleave', () => { $('tip').hidden = true; });
 
-$('file').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try { load(JSON.parse(await f.text()), f.name); } catch (err) { $('meta').textContent = f.name + ' is not a stats export: ' + err.message; }
+// Saved runs ---------------------------------------------------------------
+// The same name the game gives a run (Stats.runName in src/stats.lua): when
+// it was exported, the first five words of the note, the build.
+function runName(r) {
+  const m = r.meta || {};
+  if (m.runName) return m.runName;
+  const at = /^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(m.exportedAt || '');
+  const now = new Date(), p = n => String(n).padStart(2, '0');
+  const stamp = at ? at.slice(1, 4).join('') + '-' + at.slice(4, 7).join('')
+    : now.getFullYear() + p(now.getMonth() + 1) + p(now.getDate()) + '-' + p(now.getHours()) + p(now.getMinutes()) + p(now.getSeconds());
+  const words = (String(m.blurb || '').toLowerCase().match(/[a-z0-9]+/g) || []).slice(0, 5);
+  const slug = words.join('-').slice(0, 40).replace(/-+$/, '') || 'run';
+  return stamp + '-' + slug + '-b' + (m.build || 0) + '.json';
+}
+const PART = 200000;
+let db = null, saved = new Map(), showing = null;
+function say(t, bad) { $('say').textContent = t; $('say').className = 'say' + (bad ? ' bad' : ''); }
+function renderSaved() {
+  const ul = $('saved'); ul.replaceChildren();
+  if (!db) { ul.append(el('li', 'empty', 'Saving needs this page open signed in on claude.ai. Pasted runs still show.')); return; }
+  const names = [...saved.keys()].sort().reverse();
+  if (!names.length) ul.append(el('li', 'empty', 'None yet. Paste one to start.'));
+  for (const n of names) {
+    const b = el('button', null, n.replace(/\.json$/, ''));
+    b.type = 'button';
+    if (n === showing) b.setAttribute('aria-current', 'true');
+    b.onclick = () => openSaved(n);
+    const li = el('li'); li.append(b); ul.append(li);
+  }
+}
+function textOf(name) {
+  const parts = saved.get(name) || [];
+  const total = Math.max(0, ...parts.map(p => p.parts || 1));
+  if (parts.length < total) return null;
+  return parts.slice().sort((a, b) => a.part - b.part).map(p => p.text).join('');
+}
+function openSaved(name) {
+  const text = textOf(name);
+  if (!text) { say(name + ' is still arriving. Try again in a moment.', true); return; }
+  try { showing = name; load(JSON.parse(text), name); renderSaved(); say(''); }
+  catch (err) { say(name + ' could not be read: ' + err.message, true); }
+}
+$('add').onclick = async () => {
+  const text = $('paste').value.trim();
+  if (!text) { say("Paste the text the game's EXPORT shows first.", true); $('paste').focus(); return; }
+  let r;
+  try { r = JSON.parse(text); } catch (err) { say('That is not a whole run: ' + err.message + '. Copy all of the export text and try again.', true); return; }
+  if (!r || !Array.isArray(r.days) || !r.days.length) { say("That JSON has no days in it. Paste a run from the game's EXPORT.", true); return; }
+  const name = runName(r);
+  showing = name;
+  load(r, name);
+  if (!db) { say('Showing it. It is not saved: open this page signed in on claude.ai to keep runs.'); return; }
+  if (saved.has(name)) { say('Showing it. Already saved as ' + name + '.'); renderSaved(); return; }
+  $('add').disabled = true;
+  try {
+    const parts = Math.max(1, Math.ceil(text.length / PART)), at = new Date().toISOString(), base = name.replace(/\.json$/, '');
+    for (let i = 0; i < parts; i++) {
+      await db.collection('runs').doc(base + '--' + (i + 1)).set({ name, part: i + 1, parts, savedAt: at, text: text.slice(i * PART, (i + 1) * PART) });
+    }
+    $('paste').value = '';
+    say('Saved as ' + name + '. Claude archives it on the dev machine.');
+  } catch (err) {
+    say('Showing it, but it did not save (' + (err && err.code || 'error') + '). Try again.', true);
+  }
+  $('add').disabled = false;
 };
-fetch('run.json').then(r => r.ok ? r.json() : Promise.reject(r.status))
-  .then(r => load(r, 'run.json'))
-  .catch(() => { $('meta').textContent = 'No run is published with this page. Open a stats export below.'; });
+
+renderSaved();
+(async () => {
+  if (!window.claude || !window.claude.use) return;
+  db = await claude.use('db');
+  if (!db) { renderSaved(); return; }
+  let first = true;
+  db.collection('runs').onSnapshot(snap => {
+    saved = new Map();
+    for (const d of snap.docs) {
+      const doc = d.data();
+      if (!doc || !doc.name) continue;
+      if (!saved.has(doc.name)) saved.set(doc.name, []);
+      saved.get(doc.name).push(doc);
+    }
+    renderSaved();
+    // open the newest run the first time the list arrives
+    if (first && !run && saved.size) { first = false; openSaved([...saved.keys()].sort().pop()); }
+  }, () => say('The saved runs stopped updating. Reload the page.', true));
+})();
 </script>

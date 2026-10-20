@@ -131,4 +131,24 @@ function TestStats:test_the_note_takes_spaces_once()
     love.keypressed('escape')
 end
 
+function TestStats:test_run_names_sort_by_when_and_carry_the_note_and_build()
+    lu.assertEquals(Stats.runName("idk but it was the first try so let's try it!", '20261019-182722', 107),
+        '20261019-182722-idk-but-it-was-the-b107.json')
+    lu.assertEquals(Stats.runName('', '20261020-090000', 123), '20261020-090000-run-b123.json')
+    lu.assertEquals(Stats.runName('  !!  ', '20261020-090000', 123), '20261020-090000-run-b123.json')
+end
+
+function TestStats:test_export_shows_the_json_and_done_takes_it_away()
+    H.newGame('PUPPER', 1)
+    H.openSub('export')
+    H.sub.text = 'bridges were fun'
+    H.exportRun()
+    lu.assertEquals(H.sub.saved.web, false)
+    lu.assertStrContains(H.sub.saved.json, '"blurb":"bridges were fun"')
+    lu.assertStrContains(H.sub.saved.json, '"runName":"' .. H.sub.saved.name .. '"')
+    lu.assertStrContains(H.sub.saved.name, '-bridges-were-fun-b')
+    love.keypressed('escape')
+    lu.assertNil(H.sub.saved)
+end
+
 os.exit(lu.LuaUnit.run())

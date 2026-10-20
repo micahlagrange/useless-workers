@@ -1872,13 +1872,43 @@ function UI:drawTools(fingerDebug)
 end
 
 -- EXPORT: a few words from the player, then the run is written out.
+-- saved, once the note is in: {json, name, days, web, message}. On the web
+-- the page shows the text in a box of its own over the game; here, the
+-- start of it, with COPY and DOWNLOAD.
 function UI:drawExport(text, saved)
-    local x, y, pw, ph = self:panel(760, 380)
+    local x, y, pw, ph = self:panel(760, saved and not saved.web and 460 or 380)
     self:centeredFit('EXPORT THIS RUN', y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if saved then
-        local h = self:printWrap(saved, x + 24, y + 80, pw - 48, C.good, { self.fonts.small, self.fonts.tiny }, 6)
-        self:panelButtonRow(x, y, pw, ph, { { 'done', 'DONE', true } })
-        return h
+        local tiny = self.fonts.tiny
+        local head = saved.days .. ' days as ' .. saved.name
+        self:printWrap(head, x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, tiny }, 2)
+        if saved.web and not saved.message then
+            self:printWrap('The run is in the text box over the game. Copy it, or download it, then paste it into the run viewer.', x + 24, y + 120, pw - 48, C.good, { self.fonts.small, tiny }, 4)
+            self:panelButtonRow(x, y, pw, ph, { { 'done', 'DONE', true } })
+            return
+        end
+        -- the preview gives up room for the message under it
+        local msgH = 0
+        if saved.message then
+            local _, ml = tiny:getWrap(saved.message, pw - 48)
+            msgH = #ml * tiny:getHeight() + 8
+        end
+        local box = { x = x + 24, y = y + 116, w = pw - 48, h = math.max(tiny:getHeight() + 12, ph - 200 - msgH) }
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle('fill', box.x, box.y, box.w, box.h)
+        local _, lines = tiny:getWrap(saved.json:sub(1, 4000), box.w - 16)
+        local fit = math.max(1, math.floor((box.h - 12) / tiny:getHeight()))
+        setColor(C.text)
+        love.graphics.setFont(tiny)
+        for i = 1, math.min(fit, #lines) do
+            love.graphics.print(lines[i], box.x + 8, box.y + 6 + (i - 1) * tiny:getHeight())
+        end
+        if saved.message then
+            self:printWrap(saved.message, x + 24, box.y + box.h + 8, pw - 48, C.good, { tiny }, 99)
+        end
+        self:panelButtonRow(x, y, pw, ph, saved.web and { { 'done', 'DONE', true } }
+            or { { 'copy', 'COPY', true }, { 'download', 'DOWNLOAD', false }, { 'done', 'DONE', false } })
+        return
     end
     self:printWrap('What was fun? What was not? (' .. STATS_BLURB_MAX .. ' letters at most)', x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, self.fonts.tiny }, 2)
     local box = { x = x + 24, y = y + 120, w = pw - 48, h = ph - 210 }

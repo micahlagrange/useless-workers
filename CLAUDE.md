@@ -11,18 +11,23 @@ A LÖVE 11 game (Lua 5.1), played on desktop and in the browser through love.js.
 
 ## The backlog and how each kind ships
 
-Micah files bugs and epics at https://claude.ai/artifact/KZhh7Y5bZffR6kcRafQaV6 (collection `items`: `kind` bug/feature/redesign, `priority` 1-4, `text`, `attachments` [{id, name, type, enc}], `status` open/working/testing/done, `note`, `build`). Work it top down: lowest `priority` number first, oldest first within one. Set `status` to working when you start, testing (with `note` and `build`) when it is on itch or a test page, and leave done to Micah. Read an attachment with the Artifact tool (`read`, `path` = its id); `enc: base64` means the file is base64 text to decode, `enc: text` means it was a text file stored as text/plain.
+Micah files bugs and epics at https://claude.ai/artifact/KZhh7Y5bZffR6kcRafQaV6 (collection `items`: `kind` bug/epic, `title`, `priority` 1-4, `status` open/working/testing/done, `note`, `build`; a bug adds `text` and `attachments` [{id, name, type, enc}], an epic adds `testStrategy` and `stories` [{id, text, done, note?, link?}]; items filed before 2026-10-20 may also carry an old `text`). Work it top down: lowest `priority` number first, oldest first within one. Set `status` to working when you start, testing (with `note` and `build`) when it is on itch, and leave done to Micah. Write what each story got in its `note`. Read an attachment with the Artifact tool (`read`, `path` = its id); `enc: base64` means the file is base64 text to decode, `enc: text` means it was a text file stored as text/plain.
+
+There are two kinds, bug and epic.
 
 - **Bug**: fix on the main line. Publish (push) as soon as it is ready for a human to try: unit tests pass and a headless run shows the fix. Run sims fast (game speed up, `Worker:update` stepped in a loop, or a test that plays the level) rather than watching real time, and take only the screenshots that prove the fix.
-- **Feature epic**: branch `epic/<slug>` off the main line. Each story is done on that branch and gets its own Artifact test page (`tools/artifact_prep.sh`), never an itch push. When every story is done, merge into the main line and push: that publishes.
-- **Redesign epic**: branch `redesign/<slug>` with its own prototypes and test harnesses, kept apart from epics. Rebase onto the main line and push only once it meets the epic's "Ship when" bar.
+- **Epic**: branch `epic/<slug>` off the main line, one story at a time. Iterate locally: unit tests, headless sims, the local web build and screenshots, following the epic's `testStrategy`. Publish nothing along the way: no Artifact test pages, no itch. When every story is closed, merge into the main line and push: that publishes.
 - CI builds and tests every branch but only pushes the main line to itch.
 
 ## Seeing it run
 
 - Web build: makelove packs the committed tree, so commit first. Then `makelove lovejs` (or `python -m makelove lovejs`), `python3 tools/patch_lovejs.py makelove-build/lovejs/morphis-lovejs.zip`, and unzip it somewhere outside `makelove-build` (a server running inside it locks the folder on Windows). Serve that folder with `python3 -m http.server 8000`: the game is at `http://localhost:8000/morphis/`.
 - Screenshots: `node tools/drive.js steps.json outdir [--phone]` plays the build headless with Playwright (software GL, no GPU needed) and saves the shots its steps ask for. love.js takes a click's position from the last mouse move, so the script hovers before each click. On the title screen, Enter twice starts the first level.
-- Phone testing without itch: `tools/artifact_prep.sh <unzipped>/morphis out/` lays the build out for a claude.ai Artifact (which will not serve `.data` files), then publish `out/index.html` with the other files beside it and `capabilities: {db: {}, user: {}}`.
-- Name every test page `Morphis <EPIC> b<build> - <what's new>` (for example `Morphis STATS b123 - milestones and graphs`): pass it as the third argument of `tools/artifact_prep.sh`, which sets the `<title>` tag, the only thing that names the artifact. Republish the same file path and url to update a page instead of making another.
-- Stats EXPORTs from a test page land in that page's database, not a download. To get them onto this machine: ArtifactData `list` on the test page, collection `exports`, `out_dir` `stats/inbox`; then `python tools/stats_inbox.py --clean` writes each run to `stats/<name>` for `tools/stats_report.py`.
-- Run exports (and sims and graphs) are never committed: `stats/` is ignored but for its README. When done with a run, move it to `C:/Users/sixst/Documents/morphis-stats-archive`.
+- Phone testing without itch, only when Micah asks for it: `tools/artifact_prep.sh <unzipped>/morphis out/` lays the build out for a claude.ai Artifact (which will not serve `.data` files), then publish `out/index.html` with the other files beside it.
+- Name a test page `Morphis <EPIC> b<build> - <what's new>`: pass it as the third argument of `tools/artifact_prep.sh`, which sets the `<title>` tag, the only thing that names the artifact.
+
+## Run stats
+
+- A run's audit log (`src/stats.lua`) leaves the game as text: EXPORT (MENU, then `...` in its corner, or the game over and end of year screens) shows the JSON with COPY and DOWNLOAD; in a browser it sits in a selectable text box over the game. Micah pastes it into the run viewer, https://claude.ai/artifact/MkPjsiF2xNFFwgc3SRYMMf (source `tools/stats_viewer.html`, published with `capabilities: {db: {}, user: {}}`), which saves it in its database as `<exported>-<first words of the note>-b<build>.json`.
+- To bring saved runs onto this machine: ArtifactData `list` on the run viewer, collection `runs`, `out_dir` `stats/inbox`; then `python tools/stats_archive.py --clean` writes each one to the archive, `C:/Users/sixst/Documents/morphis-stats-archive`, under that name. Read them there with `tools/stats_report.py`.
+- Run exports, sims and graphs are never committed: `stats/` is ignored but for its README.
