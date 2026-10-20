@@ -6,6 +6,7 @@
 --   * spills out of its button, or runs under another button,
 --   * overlaps another piece of text.
 local lu = require('libs.luaunit')
+local Stats = require('src.stats')
 local Stub = dofile('tst/love_stub.lua')
 Stub.install()
 dofile('conf.lua')
@@ -237,6 +238,32 @@ local function freePlayScreens()
         frame('free play d' .. d .. ' annual')
         H.finishGame('gameover')
         frame('free play d' .. d .. ' game over')
+        -- a long run's milestones and history, then the screens that show them
+        local stats = H.game().stats
+        for i = 1, 6 do
+            stats.milestones[#stats.milestones + 1] = { id = 'm' .. i, day = i * 18, season = 'Winter ' .. i, text = Stats.MILESTONES[i].text }
+            stats:event('starved', H.game(), 'Bartholomew')
+            stats:event('arrived', H.game(), 'Fatima')
+        end
+        frame('free play d' .. d .. ' game over, milestones')
+        H.finishGame('annual')
+        frame('free play d' .. d .. ' annual, milestones')
+        H.openSub('history')
+        frame('free play d' .. d .. ' history')
+        H.openSub('export')
+        H.sub.text = string.rep('What was fun? ', 20):sub(1, STATS_BLURB_MAX)
+        frame('free play d' .. d .. ' export, full note')
+        local json = H.game().stats:export('What was fun? Bridges. What was not? Waiting.')
+        H.sub.saved = { json = json, name = '20261019-120000-what-was-fun-bridges-what-b123.json', days = 108, web = false }
+        frame('free play d' .. d .. ' export, desktop')
+        H.sub.saved.message = 'Saved to C:/Users/somebody/AppData/Roaming/LOVE/morphis/stats/20261019-120000-what-was-fun-bridges-what-b123.json'
+        frame('free play d' .. d .. ' export, desktop, downloaded')
+        H.sub.saved = { json = json, name = '20261019-120000-what-was-fun-bridges-what-b123.json', days = 108, web = true }
+        frame('free play d' .. d .. ' export, saved')
+        H.sub.text = ''
+        H.setState('confirmquit')
+        H.openSub('tools')
+        frame('free play d' .. d .. ' tester tools')
     end
 end
 

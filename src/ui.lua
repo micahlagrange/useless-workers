@@ -139,7 +139,6 @@ function UI:layout(w, h)
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
         { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' }, { id = 'tiles', label = 'TILES' },
-        { id = 'fingers', label = 'FINGERS' },
     }
     if self.touch then
         -- fingers pinch to zoom; the + and - buttons only cost room
@@ -682,10 +681,12 @@ function UI:drawTopBar(game)
     for i, v in ipairs(values) do valuesW = valuesW + v.w + (i > 1 and gapV or 0) end
     local pauseW = self.fonts.small:getWidth('PAUSE') + 2 * self.quickPad
     local gearW = bh + 12
+    -- DEV: the tester's tools (FINGERS, HISTORY, EXPORT), always on the bar
+    local devW = self.fonts.small:getWidth('DEV') + self.quickPad
     local quickW = 0
     for _, d in ipairs(self.quickDefs) do quickW = quickW + d.w + 6 end
     local valuesBtnW = self.fonts.small:getWidth(key.word .. ' ' .. key.value) + 52
-    local room = self.vw - 16 - 8 - pauseW - 6
+    local room = self.vw - 16 - 8 - pauseW - 6 - devW - 6
     local foldButtons = valuesW + 20 + quickW > room
     local foldValues = foldButtons and valuesW + 20 + gearW + 6 > room
     self.foldValues, self.foldButtons = foldValues, foldButtons
@@ -693,6 +694,8 @@ function UI:drawTopBar(game)
     self.topButtons = {}
     local x = self.vw - 8 - pauseW
     self.topButtons[#self.topButtons + 1] = { id = 'pause', label = 'PAUSE', x = x, y = by, w = pauseW, h = bh }
+    x = x - 6 - devW
+    self.topButtons[#self.topButtons + 1] = { id = 'dev', label = 'DEV', x = x, y = by, w = devW, h = bh }
     x = x - 6
     if foldButtons then
         x = x - gearW
@@ -1581,6 +1584,9 @@ function UI:drawSeedKeyboard(y)
     end
 end
 
+-- The buttons under a finished run: the run's history and its export.
+local RUN_BUTTONS = { { 'history', 'HISTORY', false }, { 'export', 'EXPORT', false } }
+
 function UI:drawLevelClear(game)
     local lv = game.level
     local last = lv.index >= #game.levels
@@ -1610,10 +1616,10 @@ function UI:drawLevelClear(game)
     end
     if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
     if not last then
-        self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false } })
+        self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
     else
         self:centeredFit('All ' .. #game.levels .. ' levels clear.', y + 250, pw - 40, C.text, { self.fonts.hud })
-        self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true } })
+        self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
     end
 end
 
@@ -1789,7 +1795,7 @@ function UI:drawLevelFailed(game)
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false } })
+    self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
 function UI:drawConfirmQuit()
@@ -1799,8 +1805,26 @@ function UI:drawConfirmQuit()
     self:panelButtonRow(x, y, pw, ph, { { 'restart', self.touch and 'RESTART' or 'RESTART (R)', false }, { 'yes', self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
 end
 
-function UI:drawGameOver(scoring, highScore, isNew)
-    local x, y, pw, ph = self:panel(720, 360)
+-- The milestones the run reached, under the score: one line each, as many
+-- as fit between top and bottom. Returns the y after them.
+function UI:drawMilestones(stats, x, y, w, bottom)
+    local list = stats and stats.milestones or {}
+    if #list == 0 then return y end
+    local tiny = self.fonts.tiny
+    local lh = tiny:getHeight() + 4
+    self:printLine('MILESTONES', x, y, w, 'center', C.accent, { self.fonts.small, tiny })
+    y = y + self.fonts.small:getHeight() + 6
+    local first = math.max(1, #list - math.floor((bottom - y) / lh) + 1)
+    for i = first, #list do
+        local m = list[i]
+        self:printLine(m.season .. ': ' .. m.text, x, y, w, 'center', C.text, { self.fonts.small, tiny })
+        y = y + lh
+    end
+    return y
+end
+
+function UI:drawGameOver(scoring, highScore, isNew, stats)
+    local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0))
     self:centeredFit('The wilds took them all.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 80, pw - 40, C.dim)
     self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + math.floor(ph * 0.42), pw - 40, C.text, { self.fonts.big, self.fonts.hud })
@@ -1809,11 +1833,12 @@ function UI:drawGameOver(scoring, highScore, isNew)
     else
         self:centered('HIGH SCORE: ' .. highScore, y + math.floor(ph * 0.58), self.fonts.hud, C.dim)
     end
-    self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true } })
+    self:drawMilestones(stats, x + 20, y + math.floor(ph * 0.58) + 40, pw - 40, y + ph - 70)
+    self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
-function UI:drawAnnual(scoring, highScore, isNew)
-    local x, y, pw, ph = self:panel(720, 420)
+function UI:drawAnnual(scoring, highScore, isNew, stats)
+    local x, y, pw, ph = self:panel(720, 420 + (stats and #stats.milestones > 0 and 40 + 22 * #stats.milestones or 0))
     self:centered('THE YEAR IS OVER', y + 24, self.fonts.big, C.good)
     love.graphics.setFont(self.fonts.hud)
     local rs = math.min(26, math.floor((ph - 200) / math.max(#scoring.reports, 1)))
@@ -1832,7 +1857,96 @@ function UI:drawAnnual(scoring, highScore, isNew)
     else
         self:centered('HIGH SCORE: ' .. highScore, ry + 66, self.fonts.hud, C.dim)
     end
-    self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false } })
+    self:drawMilestones(stats, x + 20, ry + 106, pw - 40, y + ph - 70)
+    self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
+end
+
+-- The tester's corner: FINGERS, and the run's audit log.
+function UI:drawTools(fingerDebug)
+    local x, y, pw, ph = self:panel(620, 300)
+    self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('For finding bugs and tuning the wilds.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
+    local bx = x + math.floor((pw - bw) / 2)
+    self:panelButton('fingers', { x = bx, y = y + 110, w = bw, h = bh }, fingerDebug and 'FINGERS: ON' or 'FINGERS: OFF', fingerDebug)
+    self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
+end
+
+-- EXPORT: a few words from the player, then the run is written out.
+-- saved, once the note is in: {json, name, days, web, message}. On the web
+-- the page shows the text in a box of its own over the game; here, the
+-- start of it, with COPY and DOWNLOAD.
+function UI:drawExport(text, saved)
+    local x, y, pw, ph = self:panel(760, saved and not saved.web and 460 or 380)
+    self:centeredFit('EXPORT THIS RUN', y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    if saved then
+        local tiny = self.fonts.tiny
+        local head = saved.days .. ' days as ' .. saved.name
+        self:printWrap(head, x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, tiny }, 2)
+        if saved.web and not saved.message then
+            self:printWrap('The run is in the text box over the game. Copy it, or download it, then paste it into the run viewer.', x + 24, y + 120, pw - 48, C.good, { self.fonts.small, tiny }, 4)
+            self:panelButtonRow(x, y, pw, ph, { { 'done', 'DONE', true } })
+            return
+        end
+        -- the preview gives up room for the message under it
+        local msgH = 0
+        if saved.message then
+            local _, ml = tiny:getWrap(saved.message, pw - 48)
+            msgH = #ml * tiny:getHeight() + 8
+        end
+        local box = { x = x + 24, y = y + 116, w = pw - 48, h = math.max(tiny:getHeight() + 12, ph - 200 - msgH) }
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle('fill', box.x, box.y, box.w, box.h)
+        local _, lines = tiny:getWrap(saved.json:sub(1, 4000), box.w - 16)
+        local fit = math.max(1, math.floor((box.h - 12) / tiny:getHeight()))
+        setColor(C.text)
+        love.graphics.setFont(tiny)
+        for i = 1, math.min(fit, #lines) do
+            love.graphics.print(lines[i], box.x + 8, box.y + 6 + (i - 1) * tiny:getHeight())
+        end
+        if saved.message then
+            self:printWrap(saved.message, x + 24, box.y + box.h + 8, pw - 48, C.good, { tiny }, 99)
+        end
+        self:panelButtonRow(x, y, pw, ph, saved.web and { { 'done', 'DONE', true } }
+            or { { 'copy', 'COPY', true }, { 'download', 'DOWNLOAD', false }, { 'done', 'DONE', false } })
+        return
+    end
+    self:printWrap('What was fun? What was not? (' .. STATS_BLURB_MAX .. ' letters at most)', x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, self.fonts.tiny }, 2)
+    local box = { x = x + 24, y = y + 120, w = pw - 48, h = ph - 210 }
+    love.graphics.setColor(0, 0, 0, 0.5)
+    love.graphics.rectangle('fill', box.x, box.y, box.w, box.h)
+    setColor(C.accent)
+    love.graphics.rectangle('line', box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1)
+    self.panelButtons[#self.panelButtons + 1] = { id = 'typing', x = box.x, y = box.y, w = box.w, h = box.h }
+    local caret = math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' '
+    self:printWrap(text .. caret, box.x + 10, box.y + 8, box.w - 20, C.text, { self.fonts.small, self.fonts.tiny }, 5)
+    self:printLine(#text .. '/' .. STATS_BLURB_MAX, box.x, box.y + box.h + 4, box.w, 'right', C.dim, { self.fonts.tiny })
+    self:panelButtonRow(x, y, pw, ph, { { 'cancel', 'CANCEL', false }, { 'save', self.touch and 'SAVE' or 'SAVE (ENTER)', true } })
+end
+
+-- HISTORY: the run as a plain list, newest at the bottom, scrolled by
+-- whole lines with the arrows.
+function UI:drawHistory(lines, scroll)
+    local x, y, pw, ph = self:panel(900, self.vh - 24)
+    self:printLine('HISTORY', x + 18, y + 14, pw - 36, 'left', C.text, { self.fonts.big, self.fonts.hud })
+    local tiny = self.fonts.tiny
+    local lh = tiny:getHeight() + 6
+    local top, bottom = y + 60, y + ph - 70
+    local fit = math.max(1, math.floor((bottom - top) / lh))
+    if #lines == 0 then
+        self:printLine('Nothing worth writing down yet.', x + 18, top, pw - 36, 'left', C.dim, { self.fonts.small, tiny })
+    end
+    local first = math.max(1, math.min(#lines - fit + 1, #lines - fit + 1 - (scroll or 0)))
+    for i = first, math.min(#lines, first + fit - 1) do
+        self:printLine(lines[i], x + 18, top + (i - first) * lh, pw - 36, 'left', C.text, { tiny })
+    end
+    local defs = { { 'close', 'CLOSE', true } }
+    if #lines > fit then
+        table.insert(defs, 1, { 'older', 'OLDER', false })
+        defs[#defs + 1] = { 'newer', 'NEWER', false }
+    end
+    self:panelButtonRow(x, y, pw, ph, defs)
+    return fit
 end
 
 return UI

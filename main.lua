@@ -14,6 +14,8 @@ local Tileset = require('src.tileset')
 local UI = require('src.ui')
 local Effects = require('src.effects')
 local Audio = require('src.audio')
+local Stats = require('src.stats')
+local Version = require('src.version')
 
 love.graphics.setDefaultFilter('nearest', 'nearest')
 
@@ -74,6 +76,12 @@ end
 -- FINGERS (gear menu, or F3): draws every finger the game is tracking and
 -- every one LOVE says is down, to catch fingers that get stuck.
 local fingerDebug = false
+-- the tester's corner, EXPORT and HISTORY: where to go back to, the note
+-- being typed, what the save said and how far HISTORY is scrolled
+-- back: the screen EXPORT or HISTORY returns to; toolsBack: the one the
+-- tester tools (DEV) return to
+local sub = { back = 'playing', toolsBack = 'playing', text = '', saved = nil, scroll = 0, fit = 1 }
+local exportBoxClosed -- defined with the EXPORT screen, called from love.update
 local debugClock = 0
 local reportTimer = 0
 local musicStarted = false
@@ -136,6 +144,7 @@ local function onComplain(worker, reason, node)
         text = worker.name .. " can't reach the " .. where
     end
     announce(text, node and { x = node.x, y = node.y } or nil, 'hardship')
+    if game.stats then game.stats:event('hardship', game, worker.name, reason) end
     Audio.playSFX('complain')
 end
 
@@ -150,6 +159,7 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'trade' and game.mode == 'free' then
         local t = worker:tile()
         Audio.playSFX('hire')
+        if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
         announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
             .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
@@ -158,6 +168,7 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'quit' then
         Audio.playSFX('quit')
         local t = worker:tile()
+        if game.stats then game.stats:event(data == 'morale' and 'left' or 'starved', game, worker.name, nil, t) end
         if data == 'morale' then
             announce(worker.name .. ' left the band. Too many hardships, too little care.', { x = t.x, y = t.y }, 'left')
         else
@@ -171,7 +182,8 @@ local function onWorkerEvent(worker, name, data)
     end
 end
 
-local function hire(n)
+-- migrants: true for arrivals after the start, which the stats count
+local function hire(n, migrants)
     local spots = game.world:spawnTiles(3)
     if #spots == 0 then spots = { { x = game.world.breakroom.x, y = game.world.breakroom.y } } end
     for _ = 1, n do
@@ -195,6 +207,7 @@ local function hire(n)
             onEvent = onWorkerEvent,
         })
         table.insert(game.workers, worker)
+        if migrants and game.stats then game.stats:event('arrived', game, worker.name, role) end
     end
 end
 
@@ -257,6 +270,7 @@ local function newGame(seedString, difficultyIndex)
     game.levels = Campaign.levels
     Effects.clear()
     ui:clear()
+    game.stats = Stats.new({ mode = 'free', seed = seedString, difficulty = DIFFICULTIES[difficultyIndex].name, build = Version.build })
     hire(DIFFICULTIES[difficultyIndex].workers)
     game.log = {}
     announce('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
@@ -307,6 +321,7 @@ local function newLevel(index, set, difficulty)
     game.report = nil
     game.highScore = 0
     game.isNewHigh = false
+    game.stats = Stats.new({ mode = game.mode, seed = game.seedString, level = run.def.name, build = Version.build })
     for _, spec in ipairs(run.specs) do
         table.insert(game.workers, Worker.new(game.world, game.jobs, game.scoring, game.rng, {
             x = spec.x, y = spec.y, role = spec.role, sheet = spec.sheet, name = spec.name,
@@ -377,7 +392,7 @@ local function closeQuarter()
     end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end
     if game.report.hires > 0 then
-        hire(game.report.hires)
+        hire(game.report.hires, true)
         Audio.playSFX('hire')
     end
     Audio.playSFX('report')
@@ -502,6 +517,7 @@ local function updatePlaying(dt, substep)
     local count, avg = staffStats()
     game.staffCount = count
     game.averageHunger = avg or game.averageHunger
+    if game.stats then game.stats:update(game) end
     if count == 0 and not isLevelMode() then
         finishGame('gameover')
         return
@@ -577,6 +593,7 @@ function love.update(dt)
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
     end
+    if state == 'export' then exportBoxClosed() end
     -- 'confirmquit' and 'goal' are pauses: nothing updates
 end
 
@@ -671,9 +688,15 @@ local function drawScene()
     if state == 'report' then
         ui:drawReport(game.report, game.scoring)
     elseif state == 'gameover' then
-        ui:drawGameOver(game.scoring, game.highScore, game.isNewHigh)
+        ui:drawGameOver(game.scoring, game.highScore, game.isNewHigh, game.stats)
     elseif state == 'annual' then
-        ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh)
+        ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh, game.stats)
+    elseif state == 'tools' then
+        ui:drawTools(fingerDebug)
+    elseif state == 'export' then
+        ui:drawExport(sub.text, sub.saved)
+    elseif state == 'history' then
+        sub.fit = ui:drawHistory(game.stats and game.stats:history() or {}, sub.scroll)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
     elseif state == 'goal' then
@@ -817,6 +840,81 @@ local function openMenu()
     love.mouse.setVisible(true)
 end
 
+-- EXPORT, HISTORY and the tester's corner open over another screen and go
+-- back to it.
+local function openSub(which)
+    if which == 'tools' then sub.toolsBack = state
+    elseif state ~= 'export' and state ~= 'history' then sub.back = state end
+    state = which
+    sub.saved, sub.scroll = nil, 0
+    love.keyboard.setTextInput(which == 'export')
+    love.mouse.setVisible(true)
+end
+
+-- Back to the screen underneath, and to play with the pointer hidden.
+local function backTo(s)
+    love.keyboard.setTextInput(false)
+    state = s
+    if s == 'playing' then hideCursor() end
+end
+
+local function closeSub()
+    backTo(sub.back)
+end
+
+-- The screen the run was exported from, under any tester screens.
+local function underneath()
+    return sub.back == 'tools' and sub.toolsBack or sub.back
+end
+
+-- The run's audit log, with the player's note, as JSON text to paste into
+-- the run viewer (tools/stats_viewer.html). On the web the page shows it in
+-- a text box over the game, with COPY and DOWNLOAD (tools/patch_lovejs.py
+-- watches exports/ in the save folder); on the desktop the game shows it
+-- with its own COPY and DOWNLOAD.
+local function exportRun()
+    if not game.stats then return end
+    game.stats:update(game)
+    local name = Stats.runName(sub.text, os.date('%Y%m%d-%H%M%S'), Version.build)
+    local data = game.stats:export(sub.text, {
+        exportedAt = os.date('%Y-%m-%d %H:%M:%S'), endedAs = underneath(), clock = math.floor(game.clock or 0), runName = name,
+    })
+    love.keyboard.setTextInput(false)
+    sub.saved = { json = data, name = name, days = #game.stats.days, web = isWeb() }
+    sub.text = ''
+    if isWeb() then
+        love.filesystem.createDirectory('exports')
+        local ok, err = love.filesystem.write('exports/' .. name, data)
+        if not ok then sub.saved.message = 'Could not show the text box: ' .. tostring(err) end
+    end
+    Audio.playSFX('report')
+end
+
+-- DOWNLOAD on the desktop: the run into the save folder's stats/.
+local function downloadRun()
+    love.filesystem.createDirectory('stats')
+    local ok, err = love.filesystem.write('stats/' .. sub.saved.name, sub.saved.json)
+    sub.saved.message = ok and ('Saved to ' .. love.filesystem.getSaveDirectory() .. '/stats/' .. sub.saved.name)
+        or ('Could not save: ' .. tostring(err))
+end
+
+-- Leaving the export screen also takes down the web page's text box.
+local function closeExport()
+    if sub.saved and sub.saved.web then love.filesystem.remove('exports/' .. sub.saved.name) end
+    sub.saved = nil
+    closeSub()
+end
+
+-- On the web, closing the page's text box deletes the file: leave the
+-- export screen with it.
+function exportBoxClosed()
+    if sub.saved and sub.saved.web and not sub.saved.message
+        and not love.filesystem.getInfo('exports/' .. sub.saved.name) then
+        sub.saved = nil
+        closeSub()
+    end
+end
+
 -- The same level, or the same free play seed, from the top.
 local function restartGame()
     Audio.playSFX('click')
@@ -893,6 +991,7 @@ local function pressTopButton(id, x, b)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
     elseif id == 'mute' then Audio.toggleMute()
     elseif id == 'menu' then openMenu()
+    elseif id == 'dev' then openSub('tools')
     elseif id == 'goal' then openGoal()
     end
     Audio.playSFX('click')
@@ -950,9 +1049,6 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'report' then
         if button == 1 then continueFromReport() end
         return
-    elseif state == 'gameover' then
-        if button == 1 then goToTitle() end
-        return
     elseif state == 'goal' then
         if button == 1 then closeGoal() end
         return
@@ -960,7 +1056,33 @@ local function pointerPressed(x, y, button, istouch)
     if button ~= 1 then return end
     local pb = ui:panelButtonAt(vx, vy)
     if pb then Audio.playSFX('click') end
-    if state == 'levelclear' then
+    if pb == 'history' or pb == 'export' then
+        openSub(pb)
+        return
+    end
+    if state == 'gameover' then
+        if pb == 'title' then goToTitle() end
+        return
+    elseif state == 'tools' then
+        if pb == 'fingers' then fingerDebug = not fingerDebug
+        elseif pb == 'back' then backTo(sub.toolsBack) end
+        return
+    elseif state == 'export' then
+        if pb == 'save' then exportRun()
+        elseif pb == 'typing' then love.keyboard.setTextInput(true)
+        elseif pb == 'copy' and sub.saved then
+            love.system.setClipboardText(sub.saved.json)
+            sub.saved.message = 'Copied ' .. #sub.saved.json .. ' characters. Paste them into the run viewer.'
+        elseif pb == 'download' and sub.saved then downloadRun()
+        elseif pb == 'cancel' then closeSub()
+        elseif pb == 'done' then closeExport() end
+        return
+    elseif state == 'history' then
+        if pb == 'older' then sub.scroll = sub.scroll + math.max(1, sub.fit - 2)
+        elseif pb == 'newer' then sub.scroll = math.max(0, sub.scroll - math.max(1, sub.fit - 2))
+        elseif pb == 'close' then closeSub() end
+        return
+    elseif state == 'levelclear' then
         if pb == 'next' then nextLevelOrTitle() elseif pb == 'title' then goToTitle() end
         return
     elseif state == 'levelfailed' then
@@ -969,7 +1091,7 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'annual' then
         if pb == 'title' then
             goToTitle()
-        else
+        elseif pb == 'next' then
             game.scoring:startEndless()
             state = 'playing'
             hideCursor()
@@ -1221,6 +1343,18 @@ function love.keypressed(key)
         love.window.setFullscreen(not love.window.getFullscreen())
         return
     end
+    if state == 'export' and not sub.saved then
+        if key == 'return' or key == 'kpenter' then exportRun()
+        elseif key == 'escape' then closeSub()
+        elseif key == 'backspace' then sub.text = sub.text:sub(1, -2)
+        elseif key == 'space' then
+            -- love.js sends no text for the space bar; on the desktop the
+            -- text that follows this key is skipped instead
+            sub.text = (sub.text .. ' '):sub(1, STATS_BLURB_MAX)
+            sub.spaced = true
+        end
+        return
+    end
     if key == 'm' and not (state == 'title' and title.editingSeed) then
         Audio.toggleMute()
         return
@@ -1304,7 +1438,16 @@ function love.keypressed(key)
     elseif state == 'gameover' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'escape' then
             goToTitle()
-        end
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export') end
+    elseif state == 'export' then
+        if key == 'return' or key == 'kpenter' or key == 'escape' then closeExport() end
+    elseif state == 'tools' then
+        if key == 'escape' then backTo(sub.toolsBack) end
+    elseif state == 'history' then
+        if key == 'up' then sub.scroll = sub.scroll + 1
+        elseif key == 'down' then sub.scroll = math.max(0, sub.scroll - 1)
+        elseif key == 'escape' or key == 'h' or key == 'return' then closeSub() end
     elseif state == 'goal' then
         closeGoal()
     elseif state == 'levelclear' then
@@ -1312,12 +1455,16 @@ function love.keypressed(key)
             nextLevelOrTitle()
         elseif key == 'escape' then
             goToTitle()
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export')
         end
     elseif state == 'levelfailed' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'r' then
             newLevel(game.level.index, game.level.set, game.level.difficulty)
         elseif key == 'escape' then
             goToTitle()
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export')
         end
     elseif state == 'annual' then
         if key == 'return' or key == 'kpenter' or key == 'space' then
@@ -1326,6 +1473,8 @@ function love.keypressed(key)
             hideCursor()
         elseif key == 't' or key == 'escape' then
             goToTitle()
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export')
         end
     end
 end
@@ -1333,6 +1482,14 @@ end
 function love.textinput(text)
     if title.swallowText then
         title.swallowText = false
+        return
+    end
+    if state == 'export' and not sub.saved then
+        -- printable ASCII only: the C64 face has nothing else
+        if text == ' ' and sub.spaced then sub.spaced = false return end
+        sub.spaced = false
+        text = text:gsub('[^\32-\126]', '')
+        sub.text = (sub.text .. text):sub(1, STATS_BLURB_MAX)
         return
     end
     if state == 'title' and title.editingSeed and #title.seed < 12 and text:match('^[%w]$') then
@@ -1358,5 +1515,8 @@ if TEST_HOOKS then
         buildTitleOptions = buildTitleOptions,
         announce = announce,
         lookAt = lookAt,
+        openSub = openSub,
+        exportRun = exportRun,
+        sub = sub,
     }
 end
