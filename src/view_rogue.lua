@@ -34,7 +34,7 @@ Rogue.GROUND_GAIN = { water = 1.35, grass = 1.15, dirt = 1.2, stone = 1.05, snow
 Rogue.GLYPH = {
     bush = '"', tree = '\226\153\163', stump = '\226\136\153',  -- U+2663 club, U+2219 bullet operator
     ore = '$', food = '%', logs = '=', gold = '$',
-    floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', wall = '#', door = '+', floor = '\194\183', bridge = '=',
+    floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', wall = 'O', door = '+', floor = '.', bridge = '=',
     morphi = '@', fire = '*',
     axe = '/', pickaxe = '\\', saw = '-', log = '=',
 }
