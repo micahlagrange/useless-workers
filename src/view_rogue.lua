@@ -43,9 +43,13 @@ Rogue.FOOD_COLOR = {
     steak = { 0.85, 0.35, 0.3 }, fish = { 0.5, 0.75, 0.95 }, cheese = { 0.98, 0.85, 0.3 },
     chili = { 0.95, 0.25, 0.15 }, candy = { 0.95, 0.5, 0.8 }, grapes = { 0.6, 0.4, 0.85 },
 }
+-- Each species as the letter nearest its shape, in its sprite's own body
+-- colour: a dog, two round blobs (the twins are one in two colours), a crab
+-- with its claws up, a frog with its eyes up.
+Rogue.SPECIES_GLYPH = { pupper = 'd', woofoof = 'o', twins = '8', cwab = 'M', blue = 'O', ribbit = 'm' }
 Rogue.SPECIES_COLOR = {
-    pupper = { 0.85, 0.63, 0.4 }, woofoof = { 0.95, 0.95, 0.95 }, twins = { 0.9, 0.56, 0.82 },
-    cwab = { 0.9, 0.3, 0.25 }, blue = { 0.35, 0.56, 0.9 }, ribbit = { 0.4, 0.78, 0.33 },
+    pupper = { 0.95, 0.85, 0.6 }, woofoof = { 0.55, 0.95, 0.98 }, twins = { 1.0, 0.68, 0.78 },
+    cwab = { 0.93, 0.15, 0.17 }, blue = { 0.42, 0.48, 0.95 }, ribbit = { 0.45, 0.8, 0.4 },
 }
 
 function Rogue.new(world)
@@ -215,7 +219,7 @@ function Rogue:drawWorkerBody(w, clock, sx, feetY)
     -- a step every other frame while walking, so the glyph is seen to go
     local bob = 0
     if w.moving then bob = (math.floor((w.animTime or 0) / 0.24) % 2 == 0) and 0 or -1 end
-    self:glyph(self.GLYPH.morphi, w.x - TILE_SIZE / 2, feetY - TILE_SIZE + bob, c[1], c[2], c[3])
+    self:glyph(self.SPECIES_GLYPH[w.sheet] or self.GLYPH.morphi, w.x - TILE_SIZE / 2, feetY - TILE_SIZE + bob, c[1], c[2], c[3])
     local tool = w:toolInHand()
     if tool then
         local swing = 0

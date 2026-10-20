@@ -73,8 +73,14 @@ function TestTileset:testTKeySwapsTheRendererInPlay()
     lu.assertEquals(game.tileset, 'rogue')
     lu.assertEquals(Tileset.current(), 'rogue')
     local rogue = frame()
-    -- every morphi is an @, and the ground is glyphs: at least one per tile
-    lu.assertEquals(rogue['@'], #game.workers)
+    -- every morphi is its species' letter, and the ground is glyphs: at least one per tile
+    local expected = {}
+    for _, w in ipairs(game.workers) do
+        local g = Rogue.SPECIES_GLYPH[w.sheet]
+        lu.assertNotNil(g, 'no glyph for ' .. tostring(w.sheet))
+        expected[g] = (expected[g] or 0) + 1
+    end
+    for g, n in pairs(expected) do lu.assertTrue((rogue[g] or 0) >= n, g .. ' drawn ' .. tostring(rogue[g]) .. ' < ' .. n) end
     local ground = 0
     for _, glyphs in pairs(Rogue.GROUND) do
         for _, g in ipairs(glyphs) do ground = ground + (rogue[g] or 0) end
@@ -126,7 +132,7 @@ function TestTileset:testRogueDrawsEveryKindOfThing()
     view:drawWorkers(game.workers, 1, game.workers[1])
     local seen = {}
     for _, t in ipairs(Stub.texts) do seen[t.text] = true end
-    for _, g in ipairs({ Rogue.GLYPH.binLeft, Rogue.GLYPH.binRight, Rogue.GLYPH.bed, Rogue.GLYPH.wall, Rogue.GLYPH.door, Rogue.GLYPH.bridge, Rogue.GLYPH.floorSpot, Rogue.GLYPH.fire, Rogue.GLYPH.morphi, 'CAMP' }) do
+    for _, g in ipairs({ Rogue.GLYPH.binLeft, Rogue.GLYPH.binRight, Rogue.GLYPH.bed, Rogue.GLYPH.wall, Rogue.GLYPH.door, Rogue.GLYPH.bridge, Rogue.GLYPH.floorSpot, Rogue.GLYPH.fire, Rogue.SPECIES_GLYPH[game.workers[1].sheet], 'CAMP' }) do
         lu.assertTrue(seen[g], 'never drew ' .. g)
     end
     -- the font the HUD had is the font it gets back
