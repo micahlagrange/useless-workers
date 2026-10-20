@@ -78,7 +78,9 @@ end
 local fingerDebug = false
 -- the tester's corner, EXPORT and HISTORY: where to go back to, the note
 -- being typed, what the save said and how far HISTORY is scrolled
-local sub = { back = 'confirmquit', text = '', saved = nil, scroll = 0, fit = 1 }
+-- back: the screen EXPORT or HISTORY returns to; toolsBack: the one the
+-- tester tools (DEV) return to
+local sub = { back = 'playing', toolsBack = 'playing', text = '', saved = nil, scroll = 0, fit = 1 }
 local exportBoxClosed -- defined with the EXPORT screen, called from love.update
 local debugClock = 0
 local reportTimer = 0
@@ -841,16 +843,28 @@ end
 -- EXPORT, HISTORY and the tester's corner open over another screen and go
 -- back to it.
 local function openSub(which)
-    if state ~= 'tools' and state ~= 'export' and state ~= 'history' then sub.back = state end
+    if which == 'tools' then sub.toolsBack = state
+    elseif state ~= 'export' and state ~= 'history' then sub.back = state end
     state = which
     sub.saved, sub.scroll = nil, 0
     love.keyboard.setTextInput(which == 'export')
     love.mouse.setVisible(true)
 end
 
-local function closeSub()
+-- Back to the screen underneath, and to play with the pointer hidden.
+local function backTo(s)
     love.keyboard.setTextInput(false)
-    state = sub.back == 'confirmquit' and 'tools' or sub.back
+    state = s
+    if s == 'playing' then hideCursor() end
+end
+
+local function closeSub()
+    backTo(sub.back)
+end
+
+-- The screen the run was exported from, under any tester screens.
+local function underneath()
+    return sub.back == 'tools' and sub.toolsBack or sub.back
 end
 
 -- The run's audit log, with the player's note, as JSON text to paste into
@@ -863,7 +877,7 @@ local function exportRun()
     game.stats:update(game)
     local name = Stats.runName(sub.text, os.date('%Y%m%d-%H%M%S'), Version.build)
     local data = game.stats:export(sub.text, {
-        exportedAt = os.date('%Y-%m-%d %H:%M:%S'), endedAs = sub.back, clock = math.floor(game.clock or 0), runName = name,
+        exportedAt = os.date('%Y-%m-%d %H:%M:%S'), endedAs = underneath(), clock = math.floor(game.clock or 0), runName = name,
     })
     love.keyboard.setTextInput(false)
     sub.saved = { json = data, name = name, days = #game.stats.days, web = isWeb() }
@@ -977,6 +991,7 @@ local function pressTopButton(id, x, b)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
     elseif id == 'mute' then Audio.toggleMute()
     elseif id == 'menu' then openMenu()
+    elseif id == 'dev' then openSub('tools')
     elseif id == 'goal' then openGoal()
     end
     Audio.playSFX('click')
@@ -1050,7 +1065,7 @@ local function pointerPressed(x, y, button, istouch)
         return
     elseif state == 'tools' then
         if pb == 'fingers' then fingerDebug = not fingerDebug
-        elseif pb == 'back' then state = 'confirmquit' end
+        elseif pb == 'back' then backTo(sub.toolsBack) end
         return
     elseif state == 'export' then
         if pb == 'save' then exportRun()
@@ -1085,8 +1100,6 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'confirmquit' then
         if pb == 'yes' then
             goToTitle()
-        elseif pb == 'tools' then
-            openSub('tools')
         elseif pb == 'restart' then
             restartGame()
         else
@@ -1430,7 +1443,7 @@ function love.keypressed(key)
     elseif state == 'export' then
         if key == 'return' or key == 'kpenter' or key == 'escape' then closeExport() end
     elseif state == 'tools' then
-        if key == 'escape' then state = 'confirmquit' end
+        if key == 'escape' then backTo(sub.toolsBack) end
     elseif state == 'history' then
         if key == 'up' then sub.scroll = sub.scroll + 1
         elseif key == 'down' then sub.scroll = math.max(0, sub.scroll - 1)
@@ -1442,12 +1455,16 @@ function love.keypressed(key)
             nextLevelOrTitle()
         elseif key == 'escape' then
             goToTitle()
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export')
         end
     elseif state == 'levelfailed' then
         if key == 'return' or key == 'kpenter' or key == 'space' or key == 'r' then
             newLevel(game.level.index, game.level.set, game.level.difficulty)
         elseif key == 'escape' then
             goToTitle()
+        elseif key == 'h' then openSub('history')
+        elseif key == 'e' then openSub('export')
         end
     elseif state == 'annual' then
         if key == 'return' or key == 'kpenter' or key == 'space' then

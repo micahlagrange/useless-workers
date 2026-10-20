@@ -8,11 +8,12 @@ sort in the order the runs were made.
 
 How a played run gets to the archive:
 
-1. **In the game:** MENU, then the `...` in its corner (tester tools), or the
-   game over / end of year screen: EXPORT asks for a short note on what was
-   fun and what was not, then shows the run as JSON text with COPY and
-   DOWNLOAD. In a browser the text sits in a box over the game, so it can be
-   highlighted and copied by hand too.
+1. **In the game:** the DEV button on the top bar (tester tools), or the
+   screen at the end of any game (game over, end of year, level clear or
+   failed): EXPORT asks for a short note on what was fun and what was not,
+   then shows the run as JSON text with COPY and DOWNLOAD. In a browser the
+   text sits in a box over the game, so it can be highlighted and copied by
+   hand too.
 2. **In the run viewer** (https://claude.ai/artifact/MkPjsiF2xNFFwgc3SRYMMf):
    paste the text and press VIEW AND SAVE. It shows the run and keeps it in
    the viewer's database under its name.

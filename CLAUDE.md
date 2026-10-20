@@ -28,6 +28,6 @@ There are two kinds, bug and epic.
 
 ## Run stats
 
-- A run's audit log (`src/stats.lua`) leaves the game as text: EXPORT (MENU, then `...` in its corner, or the game over and end of year screens) shows the JSON with COPY and DOWNLOAD; in a browser it sits in a selectable text box over the game. Micah pastes it into the run viewer, https://claude.ai/artifact/MkPjsiF2xNFFwgc3SRYMMf (source `tools/stats_viewer.html`, published with `capabilities: {db: {}, user: {}}`), which saves it in its database as `<exported>-<first words of the note>-b<build>.json`.
+- A run's audit log (`src/stats.lua`) leaves the game as text: EXPORT (the DEV button on the top bar, or the screen at the end of any game: game over, end of year, level clear or failed) shows the JSON with COPY and DOWNLOAD; in a browser it sits in a selectable text box over the game. Micah pastes it into the run viewer, https://claude.ai/artifact/MkPjsiF2xNFFwgc3SRYMMf (source `tools/stats_viewer.html`, published with `capabilities: {db: {}, user: {}}`), which saves it in its database as `<exported>-<first words of the note>-b<build>.json`.
 - To bring saved runs onto this machine: ArtifactData `list` on the run viewer, collection `runs`, `out_dir` `stats/inbox`; then `python tools/stats_archive.py --clean` writes each one to the archive, `C:/Users/sixst/Documents/morphis-stats-archive`, under that name. Read them there with `tools/stats_report.py`.
 - Run exports, sims and graphs are never committed: `stats/` is ignored but for its README.

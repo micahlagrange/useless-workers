@@ -131,6 +131,59 @@ function TestStats:test_the_note_takes_spaces_once()
     love.keypressed('escape')
 end
 
+-- The DEV button on the top bar, pressed where the bar draws it.
+local function pressTopButton(id)
+    local ui = H.ui()
+    love.draw()
+    for _, b in ipairs(ui.topButtons) do
+        if b.id == id then
+            local x, y = (b.x + b.w / 2) * ui.scale, (b.y + b.h / 2) * ui.scale
+            love.mousemoved(x, y, 0, 0, false)
+            love.mousepressed(x, y, 1, false, 1)
+            love.mousereleased(x, y, 1, false, 1)
+            return true
+        end
+    end
+    return false
+end
+
+function TestStats:test_dev_opens_the_tester_tools_from_play_and_back_returns_there()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    lu.assertTrue(pressTopButton('dev'))
+    lu.assertEquals(H.state(), 'tools')
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'playing')
+end
+
+function TestStats:test_export_from_the_tools_goes_back_to_the_tools_and_names_the_screen_under_them()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    H.openSub('tools')
+    H.openSub('export')
+    H.sub.text = 'from the tools'
+    H.exportRun()
+    lu.assertStrContains(H.sub.saved.json, '"endedAs":"playing"')
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'tools')
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'playing')
+end
+
+function TestStats:test_a_cleared_arcade_level_can_be_exported()
+    H.newLevel(1, 'arcade', 1)
+    H.closeGoal()
+    H.levelClear()
+    lu.assertEquals(H.state(), 'levelclear')
+    love.keypressed('e')
+    lu.assertEquals(H.state(), 'export')
+    H.sub.text = 'meadow'
+    H.exportRun()
+    lu.assertStrContains(H.sub.saved.json, '"endedAs":"levelclear"')
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'levelclear')
+end
+
 function TestStats:test_run_names_sort_by_when_and_carry_the_note_and_build()
     lu.assertEquals(Stats.runName("idk but it was the first try so let's try it!", '20261019-182722', 107),
         '20261019-182722-idk-but-it-was-the-b107.json')

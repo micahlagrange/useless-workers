@@ -681,10 +681,12 @@ function UI:drawTopBar(game)
     for i, v in ipairs(values) do valuesW = valuesW + v.w + (i > 1 and gapV or 0) end
     local pauseW = self.fonts.small:getWidth('PAUSE') + 2 * self.quickPad
     local gearW = bh + 12
+    -- DEV: the tester's tools (FINGERS, HISTORY, EXPORT), always on the bar
+    local devW = self.fonts.small:getWidth('DEV') + self.quickPad
     local quickW = 0
     for _, d in ipairs(self.quickDefs) do quickW = quickW + d.w + 6 end
     local valuesBtnW = self.fonts.small:getWidth(key.word .. ' ' .. key.value) + 52
-    local room = self.vw - 16 - 8 - pauseW - 6
+    local room = self.vw - 16 - 8 - pauseW - 6 - devW - 6
     local foldButtons = valuesW + 20 + quickW > room
     local foldValues = foldButtons and valuesW + 20 + gearW + 6 > room
     self.foldValues, self.foldButtons = foldValues, foldButtons
@@ -692,6 +694,8 @@ function UI:drawTopBar(game)
     self.topButtons = {}
     local x = self.vw - 8 - pauseW
     self.topButtons[#self.topButtons + 1] = { id = 'pause', label = 'PAUSE', x = x, y = by, w = pauseW, h = bh }
+    x = x - 6 - devW
+    self.topButtons[#self.topButtons + 1] = { id = 'dev', label = 'DEV', x = x, y = by, w = devW, h = bh }
     x = x - 6
     if foldButtons then
         x = x - gearW
@@ -1580,6 +1584,9 @@ function UI:drawSeedKeyboard(y)
     end
 end
 
+-- The buttons under a finished run: the run's history and its export.
+local RUN_BUTTONS = { { 'history', 'HISTORY', false }, { 'export', 'EXPORT', false } }
+
 function UI:drawLevelClear(game)
     local lv = game.level
     local last = lv.index >= #game.levels
@@ -1609,10 +1616,10 @@ function UI:drawLevelClear(game)
     end
     if lv.isNewBest then self:centered('NEW BEST', y + 215, self.fonts.hud, C.good) end
     if not last then
-        self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false } })
+        self:panelButtonRow(x, y, pw, ph, { { 'next', 'NEXT LEVEL', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
     else
         self:centeredFit('All ' .. #game.levels .. ' levels clear.', y + 250, pw - 40, C.text, { self.fonts.hud })
-        self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true } })
+        self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
     end
 end
 
@@ -1788,14 +1795,11 @@ function UI:drawLevelFailed(game)
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false } })
+    self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
 function UI:drawConfirmQuit()
     local x, y, pw, ph = self:panel(720, 230)
-    -- the tools for testers, out of the way in the corner
-    local s = self.touch and 34 or 26
-    self:panelButton('tools', { x = x + pw - s - 6, y = y + 6, w = s, h = s }, '...', false, C.dim)
     self:centeredFit('Quit to the title screen?', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Or start this one over.', y + 76, pw - 40, C.dim)
     self:panelButtonRow(x, y, pw, ph, { { 'restart', self.touch and 'RESTART' or 'RESTART (R)', false }, { 'yes', self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
@@ -1818,9 +1822,6 @@ function UI:drawMilestones(stats, x, y, w, bottom)
     end
     return y
 end
-
--- The buttons under a finished run: the run's history and its export.
-local RUN_BUTTONS = { { 'history', 'HISTORY', false }, { 'export', 'EXPORT', false } }
 
 function UI:drawGameOver(scoring, highScore, isNew, stats)
     local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0))
