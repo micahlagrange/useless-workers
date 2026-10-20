@@ -3,3 +3,4 @@ build_output.log
 *.love
 stats/sim-*
 stats/*-graphs/
+stats/inbox/

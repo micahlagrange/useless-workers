@@ -6,7 +6,8 @@ Exported runs go here, for reading with `tools/stats_report.py`.
   game over / end of year screen: EXPORT asks for a short note on what was fun
   and what was not, then writes the run. On the desktop it lands in the save
   folder's `stats/` (Windows: `%APPDATA%/LOVE/morphis/stats/`); in a browser
-  it downloads. Copy the file in here.
+  it downloads; on an Artifact test page it goes to the page's database and
+  Claude pulls it in here with `tools/stats_inbox.py` (see CLAUDE.md).
 - **Without playing:** `python tools/stats_sim.py` plays free play headless with
   a simple player and writes `stats/sim-<seed>-<player>.json` (not committed).
 
