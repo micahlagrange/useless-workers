@@ -405,7 +405,7 @@ function UI:printLine(text, x, y, maxWidth, align, color, fonts)
     local px = x
     if align == 'center' then px = x + (maxWidth - w) / 2 elseif align == 'right' then px = x + maxWidth - w end
     love.graphics.print(text, math.floor(px), y)
-    return font:getHeight()
+    return font:getHeight(), w
 end
 
 -- A paragraph: wrapped in the largest font that keeps it to maxLines.
@@ -1030,7 +1030,9 @@ function UI:drawBottomBar(game)
         local ix, iy, iw = 16, self.vh - BOTTOM_BAR_H + 8, self.vw - 32
         if w and w.alive then
             local lh = self.fonts.small:getHeight() + 8
-            self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            -- the name line, with what it eats at the end, as on the units list
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - 24, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             if w.arcade then
                 self:printLine(w.ate and 'has eaten' or 'not eaten yet', ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
