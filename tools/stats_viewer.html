@@ -170,13 +170,15 @@ function describe(a, b) {
 }
 
 const $ = id => document.getElementById(id);
+// the game writes an empty list as {} (Lua cannot tell them apart)
+const arr = v => Array.isArray(v) ? v : [];
 const cv = $('map'), ctx = cv.getContext('2d');
 let run = null, grids = [], day = 1, timer = null, cell = 10;
 
 // Every day's map, rebuilt once from the first day and the daily changes.
 function buildGrids(r) {
   const out = [];
-  const maps = r.maps || [];
+  const maps = arr(r.maps);
   if (!maps.length) return out;
   let g = maps[0].full.map(row => row.split(''));
   out.push(g.map(row => row.slice()));
@@ -271,9 +273,9 @@ function renderSide() {
   // events and milestones during the day before this one started
   const ev = $('events'); ev.replaceChildren();
   const list = [];
-  for (const m of run.milestones || []) if (m.day === day) list.push(['milestone', m.text]);
+  for (const m of arr(run.milestones)) if (m.day === day) list.push(['milestone', m.text]);
   const hard = {};
-  for (const e of run.events || []) {
+  for (const e of arr(run.events)) {
     if (e.day !== day) continue;
     if (e.kind === 'hardship') { const key = e.text || 'hardship'; hard[key] = (hard[key] || []).concat(e.who || '?'); continue; }
     const words = { arrived: 'arrived', left: 'had enough and left', starved: 'starved and wandered off', trade: 'struck a deal' };
@@ -332,7 +334,7 @@ function drawCharts() {
     for (let s = per; s < days.length; s += per) { c.beginPath(); c.moveTo(X(s), 4); c.lineTo(X(s), h - 4); c.stroke(); }
     // milestone days: dashed gold
     c.strokeStyle = '#e3b93c'; c.setLineDash([6, 6]); c.lineWidth = 1.5;
-    for (const m of run.milestones || []) { c.beginPath(); c.moveTo(X(m.day - 1), 4); c.lineTo(X(m.day - 1), h - 4); c.stroke(); }
+    for (const m of arr(run.milestones)) { c.beginPath(); c.moveTo(X(m.day - 1), 4); c.lineTo(X(m.day - 1), h - 4); c.stroke(); }
     c.setLineDash([]);
     c.fillStyle = '#98a083'; c.font = '20px IBM Plex Mono, monospace'; c.textAlign = 'right'; c.fillText('max ' + max, w - 6, 18); c.textAlign = 'left';
     for (const [k, , color] of series) {
