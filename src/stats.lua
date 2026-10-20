@@ -128,7 +128,9 @@ function Stats:row(game, day)
     local scoring, world = game.scoring, game.world
     local r = {
         day = day, clock = round(game.clock or 0),
-        quarter = scoring.quarter, season = scoring:seasonLabel(),
+        quarter = scoring.quarter,
+        -- named from the day: the season label stops at Winter once the year is over
+        season = scoring.quarterTimer > QUARTER_SECONDS and scoring:seasonLabel() or Stats.seasonOfDay(day),
         pop = 0, hunger = 0, morale = 0, hungry = 0, starving = 0, lowMorale = 0,
         work = 0, foodTime = 0, rest = 0, sulk = 0, idle = 0,
         roles = {},
