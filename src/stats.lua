@@ -134,6 +134,7 @@ function Stats:row(game, day)
         pop = 0, hunger = 0, morale = 0, hungry = 0, starving = 0, lowMorale = 0,
         work = 0, foodTime = 0, rest = 0, sulk = 0, idle = 0,
         roles = {},
+        band = {},      -- where each morphi is and how it is doing: name, role, x, y, hunger, morale, doing
         stockLogs = world.stock.logs, stockGold = world.stock.gold,
         storedFood = world:storedCount('food'),
         food = scoring.lifetimeDelivered.food or 0,
@@ -156,6 +157,8 @@ function Stats:row(game, day)
             if b == 'food' then b = 'foodTime' end
             r[b] = r[b] + 1
             r.roles[w.role] = (r.roles[w.role] or 0) + 1
+            local t = w:tile()
+            r.band[#r.band + 1] = { name = w.name, role = w.role, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5), morale = math.floor((w.morale or MORALE_MAX) + 0.5), doing = bucket(w) }
         end
     end
     if r.pop > 0 then
