@@ -138,7 +138,7 @@ function UI:layout(w, h)
         { id = 'menu', label = 'MENU' }, { id = 'sound', label = 'SOUND' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
-        { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' },
+        { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' }, { id = 'tiles', label = 'TILES' },
         { id = 'fingers', label = 'FINGERS' },
     }
     if self.touch then
@@ -732,6 +732,7 @@ function UI:drawTopBar(game)
     for _, b in ipairs(self.topButtons) do
         if b.id ~= 'values' then
             local active = (b.id == 'follow' and game.follow) or (b.id == 'sound' and (game.muted or self.dropdown == 'sound')) or (b.id == 'pause' and game.paused)
+                or (b.id == 'tiles' and game.tileset == 'rogue')
             local label = b.label
             if b.id == 'speed' then
                 label = 'SPEED ' .. (game.speed or 1) .. 'x'
@@ -777,6 +778,7 @@ function UI:drawDropdown(game)
             local c, r0 = math.floor((i - 1) / rows), (i - 1) % rows
             local r = { id = d.id, x = x + c * (w + 8), y = y + 4 + r0 * (bh + 6), w = w, h = bh }
             local active = (d.id == 'follow' and game.follow) or (d.id == 'sound' and game.muted) or (d.id == 'speed' and (game.speed or 1) > 1)
+                or (d.id == 'tiles' and game.tileset == 'rogue')
             local label = d.id == 'speed' and ('SPEED ' .. (game.speed or 1) .. 'x') or d.label
             self:button(r, label, active)
             self.dropButtons[#self.dropButtons + 1] = r

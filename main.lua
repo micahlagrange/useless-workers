@@ -10,7 +10,7 @@ local Abilities = require('src.abilities')
 local Highscore = require('src.highscore')
 local Campaign = require('src.campaign')
 local Camera = require('src.camera')
-local View = require('src.view')
+local Tileset = require('src.tileset')
 local UI = require('src.ui')
 local Effects = require('src.effects')
 local Audio = require('src.audio')
@@ -240,7 +240,8 @@ local function newGame(seedString, difficultyIndex)
     game.staffCount = 0
     game.averageHunger = 100
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
-    game.view = View.new(game.world)
+    game.view = Tileset.newView(game.world)
+    game.tileset = Tileset.current()
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
     game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
     game.camera.scale = 2
@@ -294,7 +295,8 @@ local function newLevel(index, set, difficulty)
     game.staffCount = #run.specs
     game.averageHunger = run.def.hunger or HUNGER_MAX
     game.abilities = Abilities.new(game.world, game.jobs, onEffect)
-    game.view = View.new(game.world)
+    game.view = Tileset.newView(game.world)
+    game.tileset = Tileset.current()
     game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
     game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
     game.camera:fitWorld()
@@ -443,6 +445,7 @@ end
 function love.load()
     ui = UI.new()
     Audio.loadVolumes()
+    Tileset.load()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
     -- start on the furthest unlocked arcade level
@@ -581,7 +584,8 @@ local function drawWorld()
     local cam = game.camera
     game.view:rebuildCanvas() -- before the camera transform, see View:rebuildCanvas
     -- beyond the map: dark ground, not a black hole
-    love.graphics.setColor(0.11, 0.13, 0.09, 1)
+    local out = game.view.outside
+    love.graphics.setColor(out[1], out[2], out[3], 1)
     love.graphics.rectangle('fill', 0, 0, love.graphics.getDimensions())
     love.graphics.setColor(1, 1, 1, 1)
     cam:apply()
@@ -828,6 +832,13 @@ local function zoomBy(factor)
     game.camera:zoomAt(factor, w / 2, h / 2)
 end
 
+-- Swap the skin: a new renderer for the same world, and remember the choice.
+local function cycleTileset()
+    Tileset.cycle()
+    game.view = Tileset.newView(game.world)
+    game.tileset = Tileset.current()
+end
+
 local function cycleSpeed()
     for i, v in ipairs(SIM_SPEEDS) do
         if v == simSpeed then simSpeed = SIM_SPEEDS[i % #SIM_SPEEDS + 1] break end
@@ -876,6 +887,7 @@ local function pressTopButton(id, x, b)
     elseif id == 'log' then openLog()
     elseif id == 'fingers' then fingerDebug = not fingerDebug
     elseif id == 'speed' then cycleSpeed()
+    elseif id == 'tiles' then cycleTileset()
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
@@ -1253,6 +1265,9 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'tab' then
             cycleSpeed()
+            Audio.playSFX('click')
+        elseif key == 't' then
+            cycleTileset()
             Audio.playSFX('click')
         elseif key == 'u' then
             openUnits()
