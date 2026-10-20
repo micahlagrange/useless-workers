@@ -145,8 +145,9 @@ def graphs(path, run):
         ax.legend(fontsize=7, loc='upper left', ncol=len(keys))
         ax.grid(alpha=0.2)
     for ms in run['milestones']:
-        axes[0].annotate('*', (ms['day'], 0), fontsize=12, color='#c80')
-    axes[-1].set_xlabel('day (grey lines: new season)')
+        for ax in axes:
+            ax.axvline(ms['day'], color='#c80', linewidth=1.2, linestyle='--')
+    axes[-1].set_xlabel('day (grey lines: new season, dashed gold: milestone)')
     fig.suptitle('%s  seed %s' % (os.path.basename(path), run['meta'].get('seed')))
     fig.tight_layout()
     png = os.path.join(out, 'overview.png')
