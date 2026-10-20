@@ -1,8 +1,8 @@
 -- The 'rogue' tile set: the world as Dwarf Fortress draws it, one glyph per
 -- tile on black. Same calls as src/view.lua; only what things look like
--- differs. Glyphs come from the C64 face, so only its characters are used
--- (no smiley, no wavy water, no shaded rock: it has none, and its ticks and
--- dots are chunky, so the ground is mostly plain dots).
+-- differs. Glyphs come from the C64 face, with a few from DejaVu Sans where
+-- it has none (the zodiac crab, the fortress's smiley and shaded blocks). Its
+-- ticks and dots are chunky, so the ground is mostly plain dots.
 require('src.constants')
 local View = require('src.view')
 
@@ -11,6 +11,7 @@ Rogue.__index = Rogue
 
 Rogue.outside = { 0, 0, 0 }
 
+local FALLBACK_FONT = 'assets/fonts/dejavu-glyphs.ttf'
 local GLYPH_SIZE = 16   -- the C64 face at 16 fits a 16 px tile
 local SMALL_SIZE = 8    -- what rides along: carried goods, tools
 
@@ -43,10 +44,10 @@ Rogue.FOOD_COLOR = {
     steak = { 0.85, 0.35, 0.3 }, fish = { 0.5, 0.75, 0.95 }, cheese = { 0.98, 0.85, 0.3 },
     chili = { 0.95, 0.25, 0.15 }, candy = { 0.95, 0.5, 0.8 }, grapes = { 0.6, 0.4, 0.85 },
 }
--- Each species as the letter nearest its shape, in its sprite's own body
--- colour: a dog, two round blobs (the twins are one in two colours), a crab
--- with its claws up, a frog with its eyes up.
-Rogue.SPECIES_GLYPH = { pupper = 'd', woofoof = 'o', twins = '8', cwab = 'M', blue = 'O', ribbit = 'm' }
+-- Each species as the glyph nearest its shape, in its sprite's own body
+-- colour: a dog, two round blobs (the twins are one in two colours), the
+-- zodiac crab, a frog with its eyes up.
+Rogue.SPECIES_GLYPH = { pupper = 'd', woofoof = 'o', twins = '8', cwab = 'k9', blue = 'O', ribbit = 'm' }  -- U+264B Cancer
 Rogue.SPECIES_COLOR = {
     pupper = { 0.95, 0.85, 0.6 }, woofoof = { 0.55, 0.95, 0.98 }, twins = { 1.0, 0.68, 0.78 },
     cwab = { 0.93, 0.15, 0.17 }, blue = { 0.42, 0.48, 0.95 }, ribbit = { 0.45, 0.8, 0.4 },
@@ -59,6 +60,13 @@ function Rogue.new(world)
     self.font:setFilter('nearest', 'nearest')
     self.small = love.graphics.newFont(FONT_PATH, SMALL_SIZE)
     self.small:setFilter('nearest', 'nearest')
+    -- what the C64 face lacks (the zodiac crab, the fortress's own glyphs)
+    -- comes from a few glyphs of DejaVu Sans
+    for _, pair in ipairs({ { self.font, GLYPH_SIZE }, { self.small, SMALL_SIZE } }) do
+        local fb = love.graphics.newFont(FALLBACK_FONT, pair[2])
+        fb:setFilter('nearest', 'nearest')
+        pair[1]:setFallbacks(fb)
+    end
     self.widths = {}
     return self
 end
