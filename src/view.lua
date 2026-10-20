@@ -8,6 +8,9 @@ View.__index = View
 
 local FRAME_TIME = 0.12
 
+-- The ground beyond the map's edge.
+View.outside = { 0.11, 0.13, 0.09 }
+
 function View.new(world)
     local self = setmetatable({}, View)
     self.world = world
@@ -484,6 +487,45 @@ function View:drawWorker(w, clock, selected)
         love.graphics.setColor(1, 1, 1, 0.9)
         love.graphics.ellipse('line', w.x, feetY, 8, 4)
     end
+    self:drawWorkerBody(w, clock, sx, feetY)
+    self:drawWorkerCargo(w, clock, sx, feetY)
+    if w.state == 'breaking' then
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.print('z', w.x + 6, w.y - 14)
+    end
+    -- arcade: a tick once the meal is had, nothing before
+    if w.arcade then
+        if w.ate then
+            love.graphics.setColor(0.45, 0.85, 0.4, 0.95)
+            love.graphics.setLineWidth(1)
+            love.graphics.line(w.x - 5, feetY + 4, w.x - 2, feetY + 6.5, w.x + 4, feetY + 1.5)
+        end
+    -- hunger as a dot in its status colour: blue satiated, green fed, amber
+    -- hungry, red (blinking) starving
+    elseif w:isWorking() then
+        local status = w:hungerStatus()
+        local col = ({ satiated = { 0.5, 0.75, 1.0 }, fed = { 0.45, 0.8, 0.4 }, hungry = { 0.95, 0.72, 0.25 }, starving = { 0.95, 0.25, 0.2 } })[status]
+        if status ~= 'starving' or math.floor(clock * 3) % 2 == 0 then
+            love.graphics.setColor(0, 0, 0, 0.5)
+            love.graphics.circle('fill', w.x, feetY + 4, 2.2)
+            love.graphics.setColor(col[1], col[2], col[3], 1)
+            love.graphics.circle('fill', w.x, feetY + 4, 1.6)
+        end
+    end
+    if w.bubble then
+        self:drawBubble(w.x, w.y - 26, w.bubble.text)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The morphi itself, feet at feetY, facing sx (1 right, -1 left), and the
+-- tool in its hand. A tile set with another look overrides this.
+function View:drawWorkerBody(w, clock, sx, feetY)
+    local sheet = self.sheets[w.sheet] or self.sheets.pupper
+    local frameIndex = 1
+    if w.moving then
+        frameIndex = math.floor(w.animTime / FRAME_TIME) % sheet.frames + 1
+    end
     if w.state == 'quitting' then
         love.graphics.setColor(0.6, 0.6, 0.6, 1)
     else
@@ -496,6 +538,11 @@ function View:drawWorker(w, clock, selected)
         if w.state == 'working' then swing = -0.9 + 0.7 * math.sin((clock or 0) * 12 + w.id) end
         self:drawTool(tool, w.x + 5 * sx, feetY - 6, swing, sx)
     end
+end
+
+-- What it carries: the work load bobbing overhead, the pocketed snack at
+-- its side.
+function View:drawWorkerCargo(w, clock, sx, feetY)
     local cargo = w.slots[SLOT_WORK]
     if cargo then
         local bob = math.sin((clock or 0) * 6 + w.id) * 1
@@ -526,33 +573,6 @@ function View:drawWorker(w, clock, selected)
             love.graphics.draw(img, w.x + 7, feetY - 4, 0, 0.4, 0.4, 8, 8)
         end
     end
-    if w.state == 'breaking' then
-        love.graphics.setColor(1, 1, 1, 0.8)
-        love.graphics.print('z', w.x + 6, w.y - 14)
-    end
-    -- arcade: a tick once the meal is had, nothing before
-    if w.arcade then
-        if w.ate then
-            love.graphics.setColor(0.45, 0.85, 0.4, 0.95)
-            love.graphics.setLineWidth(1)
-            love.graphics.line(w.x - 5, feetY + 4, w.x - 2, feetY + 6.5, w.x + 4, feetY + 1.5)
-        end
-    -- hunger as a dot in its status colour: blue satiated, green fed, amber
-    -- hungry, red (blinking) starving
-    elseif w:isWorking() then
-        local status = w:hungerStatus()
-        local col = ({ satiated = { 0.5, 0.75, 1.0 }, fed = { 0.45, 0.8, 0.4 }, hungry = { 0.95, 0.72, 0.25 }, starving = { 0.95, 0.25, 0.2 } })[status]
-        if status ~= 'starving' or math.floor(clock * 3) % 2 == 0 then
-            love.graphics.setColor(0, 0, 0, 0.5)
-            love.graphics.circle('fill', w.x, feetY + 4, 2.2)
-            love.graphics.setColor(col[1], col[2], col[3], 1)
-            love.graphics.circle('fill', w.x, feetY + 4, 1.6)
-        end
-    end
-    if w.bubble then
-        self:drawBubble(w.x, w.y - 26, w.bubble.text)
-    end
-    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function View:drawWorkers(workers, clock, selectedWorker)

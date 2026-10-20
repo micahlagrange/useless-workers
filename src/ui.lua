@@ -138,7 +138,7 @@ function UI:layout(w, h)
         { id = 'menu', label = 'MENU' }, { id = 'sound', label = 'SOUND' },
         { id = 'zoomin', label = '+' }, { id = 'zoomout', label = '-' },
         { id = 'follow', label = 'FOLLOW' }, { id = 'units', label = 'UNITS' }, { id = 'goal', label = 'GOAL' },
-        { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' },
+        { id = 'speed', label = 'SPEED 4x' }, { id = 'log', label = 'LOG' }, { id = 'tiles', label = 'TILES' },
     }
     if self.touch then
         -- fingers pinch to zoom; the + and - buttons only cost room
@@ -404,7 +404,7 @@ function UI:printLine(text, x, y, maxWidth, align, color, fonts)
     local px = x
     if align == 'center' then px = x + (maxWidth - w) / 2 elseif align == 'right' then px = x + maxWidth - w end
     love.graphics.print(text, math.floor(px), y)
-    return font:getHeight()
+    return font:getHeight(), w
 end
 
 -- A paragraph: wrapped in the largest font that keeps it to maxLines.
@@ -731,6 +731,7 @@ function UI:drawTopBar(game)
     for _, b in ipairs(self.topButtons) do
         if b.id ~= 'values' then
             local active = (b.id == 'follow' and game.follow) or (b.id == 'sound' and (game.muted or self.dropdown == 'sound')) or (b.id == 'pause' and game.paused)
+                or (b.id == 'tiles' and game.tileset == 'rogue')
             local label = b.label
             if b.id == 'speed' then
                 label = 'SPEED ' .. (game.speed or 1) .. 'x'
@@ -776,6 +777,7 @@ function UI:drawDropdown(game)
             local c, r0 = math.floor((i - 1) / rows), (i - 1) % rows
             local r = { id = d.id, x = x + c * (w + 8), y = y + 4 + r0 * (bh + 6), w = w, h = bh }
             local active = (d.id == 'follow' and game.follow) or (d.id == 'sound' and game.muted) or (d.id == 'speed' and (game.speed or 1) > 1)
+                or (d.id == 'tiles' and game.tileset == 'rogue')
             local label = d.id == 'speed' and ('SPEED ' .. (game.speed or 1) .. 'x') or d.label
             self:button(r, label, active)
             self.dropButtons[#self.dropButtons + 1] = r
@@ -1027,7 +1029,9 @@ function UI:drawBottomBar(game)
         local ix, iy, iw = 16, self.vh - BOTTOM_BAR_H + 8, self.vw - 32
         if w and w.alive then
             local lh = self.fonts.small:getHeight() + 8
-            self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            -- the name line, with what it eats at the end, as on the units list
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - 24, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             if w.arcade then
                 self:printLine(w.ate and 'has eaten' or 'not eaten yet', ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
