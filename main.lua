@@ -79,6 +79,7 @@ local fingerDebug = false
 -- the tester's corner, EXPORT and HISTORY: where to go back to, the note
 -- being typed, what the save said and how far HISTORY is scrolled
 local sub = { back = 'confirmquit', text = '', saved = nil, scroll = 0, fit = 1 }
+local exportBoxClosed -- defined with the EXPORT screen, called from love.update
 local debugClock = 0
 local reportTimer = 0
 local musicStarted = false
@@ -590,11 +591,7 @@ function love.update(dt)
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
     end
-    if state == 'export' and sub.saved and sub.saved.web and not sub.saved.message
-        and not love.filesystem.getInfo('exports/' .. sub.saved.name) then
-        sub.saved = nil
-        closeSub()
-    end
+    if state == 'export' then exportBoxClosed() end
     -- 'confirmquit' and 'goal' are pauses: nothing updates
 end
 
@@ -892,6 +889,16 @@ local function closeExport()
     if sub.saved and sub.saved.web then love.filesystem.remove('exports/' .. sub.saved.name) end
     sub.saved = nil
     closeSub()
+end
+
+-- On the web, closing the page's text box deletes the file: leave the
+-- export screen with it.
+function exportBoxClosed()
+    if sub.saved and sub.saved.web and not sub.saved.message
+        and not love.filesystem.getInfo('exports/' .. sub.saved.name) then
+        sub.saved = nil
+        closeSub()
+    end
 end
 
 -- The same level, or the same free play seed, from the top.
