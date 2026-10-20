@@ -47,7 +47,7 @@ Rogue.FOOD_COLOR = {
 -- Each species as the glyph nearest its shape, in its sprite's own body
 -- colour: a dog, two round blobs (the twins are one in two colours), the
 -- zodiac crab, a frog with its eyes up.
-Rogue.SPECIES_GLYPH = { pupper = 'd', woofoof = 'o', twins = '8', cwab = 'k9', blue = 'O', ribbit = 'm' }  -- U+264B Cancer
+Rogue.SPECIES_GLYPH = { pupper = 'd', woofoof = 'o', twins = '8', cwab = '♋', blue = 'O', ribbit = 'm' }  -- U+264B Cancer
 Rogue.SPECIES_COLOR = {
     pupper = { 0.95, 0.85, 0.6 }, woofoof = { 0.55, 0.95, 0.98 }, twins = { 1.0, 0.68, 0.78 },
     cwab = { 0.93, 0.15, 0.17 }, blue = { 0.42, 0.48, 0.95 }, ribbit = { 0.45, 0.8, 0.4 },
