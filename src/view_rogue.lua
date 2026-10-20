@@ -1,7 +1,8 @@
 -- The 'rogue' tile set: the world as Dwarf Fortress draws it, one glyph per
 -- tile on black. Same calls as src/view.lua; only what things look like
 -- differs. Glyphs come from the C64 face, so only its characters are used
--- (no smiley, no wavy water: it has none).
+-- (no smiley, no wavy water, no shaded rock: it has none, and its ticks and
+-- dots are chunky, so the ground is mostly plain dots).
 require('src.constants')
 local View = require('src.view')
 
@@ -16,19 +17,19 @@ local SMALL_SIZE = 8    -- what rides along: carried goods, tools
 -- Ground, by tile type. Several glyphs mean the colour seed picks one, so
 -- grass is not a flat field of dots.
 Rogue.GROUND = {
-    grass     = { '.', ',', '`', "'" },
+    grass     = { '.', '.', ',', '.' },
     dirt      = { '.', ',' },
     water     = { '~' },
-    stone     = { '\226\150\146' },  -- U+2592 medium shade: rough rock
-    snow      = { '\226\150\146' },
+    stone     = { '#' },
+    snow      = { '#' },
     bridge    = { '=' },
-    breakroom = { '\194\183' },      -- U+00B7 middle dot: swept camp ground
-    wall      = { '#' },
+    breakroom = { '.' },
+    wall      = { 'O' },   -- a built wall, as the fortress draws one
     door      = { '+' },
 }
 -- How much brighter than the painted tile the glyph is, since a glyph on
 -- black has far less ink than a filled square.
-Rogue.GROUND_GAIN = { water = 1.35, grass = 1.2, dirt = 1.25, stone = 1.3, snow = 1.0, bridge = 1.1, breakroom = 1.0, wall = 1.1, door = 1.1 }
+Rogue.GROUND_GAIN = { water = 1.35, grass = 1.15, dirt = 1.2, stone = 1.05, snow = 0.95, bridge = 1.1, breakroom = 1.05, wall = 1.1, door = 1.1 }
 
 Rogue.GLYPH = {
     bush = '"', tree = '\226\153\163', stump = '\226\136\153',  -- U+2663 club, U+2219 bullet operator
