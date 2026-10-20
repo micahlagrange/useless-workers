@@ -1,6 +1,9 @@
 # Run stats
 
-Exported runs go here, for reading with `tools/stats_report.py`.
+Exported runs go here while they are being read with `tools/stats_report.py`.
+They are never committed (`.gitignore` keeps everything here but this file).
+When a run is done with, move it and its graphs to the archive outside the
+repo: `C:/Users/sixst/Documents/morphis-stats-archive`.
 
 - **From the game:** MENU, then the `...` in its corner (tester tools), or the
   game over / end of year screen: EXPORT asks for a short note on what was fun

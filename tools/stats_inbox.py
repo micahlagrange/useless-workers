@@ -6,7 +6,7 @@ one document per part ({name, part, parts, createdAt, text}). Claude pulls
 them onto this machine with ArtifactData (action list, collection exports,
 out_dir stats/inbox), which saves each document as
 stats/inbox/exports/<id>.json. This joins the parts and writes
-stats/<name>, skipping runs already there.
+stats/<name>, skipping runs already there or already archived.
 
     python tools/stats_inbox.py            # then: python tools/stats_report.py stats/<name>
 
@@ -22,6 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ap = argparse.ArgumentParser()
 ap.add_argument('--inbox', default=os.path.join(ROOT, 'stats', 'inbox', 'exports'))
 ap.add_argument('--out', default=os.path.join(ROOT, 'stats'))
+# runs that were read and put away; see stats/README.md
+ap.add_argument('--archive', default=os.path.join(os.path.expanduser('~'), 'Documents', 'morphis-stats-archive'))
 ap.add_argument('--clean', action='store_true')
 args = ap.parse_args()
 
@@ -43,6 +45,9 @@ for name, parts in sorted(runs.items()):
         continue
     if os.path.exists(target):
         print('already here: %s' % safe)
+        continue
+    if os.path.exists(os.path.join(args.archive, safe)):
+        print('already archived: %s' % safe)
         continue
     text = ''.join(parts[i]['text'] for i in range(1, total + 1))
     try:

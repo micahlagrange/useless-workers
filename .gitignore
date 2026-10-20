@@ -1,6 +1,6 @@
 makelove-build/
 build_output.log
 *.love
-stats/sim-*
-stats/*-graphs/
-stats/inbox/
+# run exports, sims and graphs are working files, never committed
+stats/*
+!stats/README.md
