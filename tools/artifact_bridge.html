@@ -1,0 +1,35 @@
+<script>
+// Added by tools/artifact_prep.sh to the Artifact test page only. A stats
+// EXPORT from the game is written into this page's database (collection
+// "exports") instead of downloading, so Claude can pull it onto the dev
+// machine with tools/stats_inbox.py. A document holds at most 256 KiB, so a
+// long run goes up in parts. Without the database (signed out, no access)
+// the export downloads as usual.
+(function () {
+  var db = null;
+  var PART = 200000;
+  if (window.claude && window.claude.use) {
+    window.claude.use('db').then(function (d) { db = d; }, function () {});
+  }
+  // called by love.js's downloads/ poll (tools/patch_lovejs.py); true means
+  // "taken care of, do not download"
+  window.morphisExport = function (name, bytes, fallback) {
+    if (!db) return false;
+    var text = new TextDecoder().decode(bytes);
+    var base = name.replace(/\.json$/, '').replace(/[^A-Za-z0-9_\-.]/g, '_');
+    var parts = Math.max(1, Math.ceil(text.length / PART));
+    var at = new Date().toISOString();
+    var writes = [];
+    for (var i = 0; i < parts; i++) {
+      writes.push(db.collection('exports').doc(base + '-' + (i + 1)).set({
+        name: name, part: i + 1, parts: parts, createdAt: at, text: text.slice(i * PART, (i + 1) * PART),
+      }));
+    }
+    Promise.all(writes).catch(function (err) {
+      console.error('export to the page database failed, downloading instead', err && err.code);
+      fallback();
+    });
+    return true;
+  };
+})();
+</script>

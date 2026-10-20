@@ -866,7 +866,7 @@ local function exportRun()
     end
     love.keyboard.setTextInput(false)
     if ok then
-        sub.saved = isWeb() and ('Downloaded ' .. #game.stats.days .. ' days as ' .. name:sub(7) .. '. Look in your downloads.')
+        sub.saved = isWeb() and ('Exported ' .. #game.stats.days .. ' days as ' .. name:sub(7) .. '. On the test page it goes to Claude; anywhere else, look in your downloads.')
             or ('Saved ' .. #game.stats.days .. ' days to ' .. love.filesystem.getSaveDirectory() .. '/' .. name)
         sub.text = ''
         Audio.playSFX('report')

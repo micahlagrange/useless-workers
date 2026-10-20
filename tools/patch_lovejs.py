@@ -13,7 +13,9 @@ love.js also flushes every few seconds and whenever the page is hidden.
 
 A browser has no folder a player can open, so a file the game writes into
 downloads/ in its save folder (the stats EXPORT) is handed to the browser
-as a download and then deleted.
+as a download and then deleted. A page can take it instead by defining
+window.morphisExport(name, bytes, download) and returning true (the
+Artifact test page does, see tools/artifact_bridge.html).
 
 Usage: patch_lovejs.py <path-to-lovejs-zip-or-index.html>
 """
@@ -52,9 +54,10 @@ DOWNLOADS = ('(function(){setInterval(function(){var root="/home/web_user/love";
              'games.forEach(function(g){if(g=="."||g=="..")return;var dir=root+"/"+g+"/downloads";var names;'
              'try{names=FS.readdir(dir)}catch(e){return}'
              'names.forEach(function(n){if(n=="."||n=="..")return;var p=dir+"/"+n;'
-             'try{var data=FS.readFile(p);var url=URL.createObjectURL(new Blob([data],{type:"application/json"}));'
+             'try{var data=FS.readFile(p);FS.unlink(p);var save=function(){var url=URL.createObjectURL(new Blob([data],{type:"application/json"}));'
              'var a=document.createElement("a");a.href=url;a.download=n;document.body.appendChild(a);a.click();a.remove();'
-             'setTimeout(function(){URL.revokeObjectURL(url)},10000);FS.unlink(p)}catch(e){Module["printErr"](e)}})})},1000)})();')
+             'setTimeout(function(){URL.revokeObjectURL(url)},10000)};'
+             'if(!(window.morphisExport&&window.morphisExport(n,data,save)))save()}catch(e){Module["printErr"](e)}})})},1000)})();')
 
 
 def patch_lovejs(js: str) -> str:
