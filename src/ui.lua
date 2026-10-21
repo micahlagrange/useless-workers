@@ -1321,10 +1321,18 @@ function UI:drawJobs(game)
     local title = w.name .. "'s jobs"
     local titleRow = small:getWidth(title) > pw - 36 - buttonsW - 10
     local top = titleRow and 52 + self.fonts.hud:getHeight() + 6 or 52
-    local ph = top + stateH + 6
-        + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
-        + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
-        + wrapH(hints.disliked) + 6 + math.max(bh, wrapH(trait, inner - bw - 12)) + 12
+    local function height()
+        return top + stateH + 6
+            + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
+            + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
+            + wrapH(hints.disliked) + 6 + math.max(bh, wrapH(trait, inner - bw - 12)) + 12
+    end
+    -- too tall for the screen (six jobs on a tablet held upright, a phone on
+    -- its side): tighter rows, then the shortest buttons that still read
+    local room = self.vh - 16
+    if height() > room then gap, bh = 6, 30 end
+    if height() > room then gap, bh = 4, 26 end
+    local ph = height()
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
     self.jobPanel = { x = x, y = y, w = pw, h = ph }
