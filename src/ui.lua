@@ -1243,12 +1243,18 @@ function UI:drawJobs(game)
     local w = game.selectedWorker
     if not (w and w.alive and w.jobSet) then return end
     local js = w.jobSet
-    local gap = 8
-    local bh = self.touch and 38 or 30
+    -- a short screen (a phone on its side) packs the rows a little tighter
+    local short = self.vh < 420
+    local gap = short and 6 or 8
+    local bh = (self.touch and not short) and 38 or 30
     local small = self.fonts.small
-    local pw = math.min(760, self.vw - 24)
-    local inner = pw - 36
-    local minW = small:getWidth('LUMBERJACK') + 16
+    -- < and > for the previous and next morphi sit at the panel's sides
+    -- (the screen's sides on a phone); the choices go between them
+    local navW = math.max(36, small:getWidth('<') + 20)
+    local side = 10 + navW + 8
+    local pw = math.min(760 + 2 * (side - 18), self.vw - 16)
+    local inner = pw - 2 * side
+    local minW = small:getWidth('LUMBERJACK') + 12
     local cols = Util.clamp(math.floor((inner + gap) / (minW + gap)), 1, 5)
     local bw = math.floor((inner - (cols - 1) * gap) / cols)
     local function rowsFor(n) return math.ceil(n / cols) end
@@ -1266,14 +1272,13 @@ function UI:drawJobs(game)
         return #lines * small:getHeight()
     end
     local stateH = small:getHeight() + 6
-    -- the header: UNITS (back to the list), < >, CLOSE on the right; the
+    -- the header: UNITS (back to the list) and CLOSE on the right; the
     -- title beside them when it fits, else on a row of its own below
     local btnW = 100
     local unitsW = small:getWidth('UNITS') + 24
-    local navW = math.max(self.touch and 44 or 36, small:getWidth('<') + 24)
-    local buttonsW = unitsW + 2 * navW + btnW + 3 * 8
+    local buttonsW = unitsW + btnW + 8
     local title = w.name .. "'s jobs"
-    local titleRow = small:getWidth(title) > inner - buttonsW - 10
+    local titleRow = small:getWidth(title) > pw - 36 - buttonsW - 10
     local top = titleRow and 52 + self.fonts.hud:getHeight() + 6 or 52
     local ph = top + stateH + 6
         + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
@@ -1282,20 +1287,22 @@ function UI:drawJobs(game)
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
     self.jobPanel = { x = x, y = y, w = pw, h = ph }
-    -- the previous and next morphi, beside CLOSE, and UNITS before them
-    local navX = x + pw - btnW - 18 - 2 * (navW + 8)
-    local unitsX = navX - 8 - unitsW
+    local unitsX = x + pw - btnW - 18 - 8 - unitsW
     if titleRow then
-        self:printLine(title, x + 18, y + 52, inner, 'left', C.good, { self.fonts.hud, self.fonts.small })
+        self:printLine(title, x + 18, y + 52, pw - 36, 'left', C.good, { self.fonts.hud, self.fonts.small })
     else
         self:printLine(title, x + 18, y + 16, unitsX - x - 18 - 10, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
     end
     self:panelButton('units', { x = unitsX, y = y + 12, w = unitsW, h = 30 }, 'UNITS', false)
-    self:panelButton('jobprev', { x = navX, y = y + 12, w = navW, h = 30 }, '<', false)
-    self:panelButton('jobnext', { x = navX + navW + 8, y = y + 12, w = navW, h = 30 }, '>', false)
+    -- the previous and next morphi, at the screen's sides, level with the panel's middle
+    local navH = 72
+    local navY = y + top + math.floor((ph - top - navH) / 2)
+    self:panelButton('jobprev', { x = x + 10, y = navY, w = navW, h = navH }, '<', false)
+    self:panelButton('jobnext', { x = x + pw - 10 - navW, y = navY, w = navW, h = navH }, '>', false)
     self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
     local cy = y + top
-    self:printLine(w:describeState(), x + 18, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+    local lx = x + side
+    self:printLine(w:describeState(), lx, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     cy = cy + stateH + 6
     -- one block of choices; choices[i] = false stands for NONE. The job in
     -- the slot is lit; the others are dimmed so it stands out, a choice that
@@ -1303,11 +1310,11 @@ function UI:drawJobs(game)
     -- in a dim amber.
     local DIM_WARN, DIM_AMBER = { 0.55, 0.33, 0.28 }, { 0.68, 0.53, 0.25 }
     local function grid(slot, choices)
-        cy = cy + self:printWrap(hints[slot], x + 18, cy, inner, C.text, { small }, 3) + 6
+        cy = cy + self:printWrap(hints[slot], lx, cy, inner, C.text, { small }, 3) + 6
         for i, choice in ipairs(choices) do
             local job = choice or nil
             local r, c = math.floor((i - 1) / cols), (i - 1) % cols
-            local rect = { x = x + 18 + c * (bw + gap), y = cy + r * (bh + gap), w = bw, h = bh }
+            local rect = { x = lx + c * (bw + gap), y = cy + r * (bh + gap), w = bw, h = bh }
             local current = js[slot] == job
             local ok = current or JobSets.canSet(js, slot, job)
             local label = job and JobSets.label(job):upper() or 'NONE'
@@ -1325,12 +1332,12 @@ function UI:drawJobs(game)
     grid('neutral', neutral)
     -- the disliked job in a box like the others, so it reads the same;
     -- tapping it only says why it cannot change
-    cy = cy + self:printWrap(hints.disliked, x + 18, cy, inner, C.text, { small }, 3) + 6
-    self:panelButton('job:disliked:' .. js.disliked, { x = x + 18, y = cy, w = bw, h = bh }, JobSets.label(js.disliked):upper(), false, C.warn)
+    cy = cy + self:printWrap(hints.disliked, lx, cy, inner, C.text, { small }, 3) + 6
+    self:panelButton('job:disliked:' .. js.disliked, { x = lx, y = cy, w = bw, h = bh }, JobSets.label(js.disliked):upper(), false, C.warn)
     -- why it cannot change, beside the box (a short screen has no row to spare)
     local tw = inner - bw - 12
     local th = wrapH(trait, tw)
-    self:printWrap(trait, x + 18 + bw + 12, cy + math.max(0, math.floor((bh - th) / 2)), tw, C.dim, { small }, 4)
+    self:printWrap(trait, lx + bw + 12, cy + math.max(0, math.floor((bh - th) / 2)), tw, C.dim, { small }, 4)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
