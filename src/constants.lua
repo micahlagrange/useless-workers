@@ -171,6 +171,12 @@ MAX_WORKERS            = 12
 -- clean; how well it was looked after (its care score) sets its mood when
 -- it grows up.
 START_BABIES       = 1
+-- Eggs, not migrants: at each change of season EGGS_PER_SEASON pairs of
+-- grown-ups, picked at random for now (relationships come later), lay an
+-- egg in a free nest. A nest holds one egg or baby; the home nest counts as
+-- one. With no free nest, no egg. An egg hatches after EGG_HATCH_SECONDS.
+EGGS_PER_SEASON    = 2
+EGG_HATCH_SECONDS  = 60
 FIRST_BABY_NAME    = 'Morphi'
 BABY_SECONDS       = 300
 BABY_NEED_DRAIN    = { fun = 0.2, clean = 0.12, sleep = 0.25 }  -- per second

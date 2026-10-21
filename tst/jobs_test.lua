@@ -145,15 +145,8 @@ function TestDeal:test_free_play_deals_jobs_and_immigrants_get_them_too()
     end
     lu.assertTrue(JobSets.covered(sets))
     H.closeGoal()
-    -- run past the first change of season: the migrants come with jobs
-    local n = #g.workers
-    for _ = 1, math.floor((QUARTER_SECONDS + 2) / 0.1) do love.update(0.1) end
-    if #g.workers > n then
-        for i = n + 1, #g.workers do
-            lu.assertNotNil(g.workers[i].jobSet)
-            lu.assertTrue(threeDifferent(g.workers[i].jobSet))
-        end
-    end
+    -- newcomers are eggs now: they get their jobs when they grow up
+    -- (tst/babies_test.lua)
 end
 
 TestJobRules = {}

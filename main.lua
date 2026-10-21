@@ -161,6 +161,11 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'hatched' then
+        Audio.playSFX('hire')
+        local t = worker:tile()
+        announce(worker.name .. ' hatched! A new baby in the nest.', { x = t.x, y = t.y }, 'news')
+        if game.stats then game.stats:event('hatched', game, worker.name, 'egg', t) end
     elseif name == 'cared' then Audio.playSFX('click')
     elseif name == 'grewUp' then
         -- dealt its jobs the way a newcomer is, favouring what the bunch lacks
@@ -252,13 +257,66 @@ local function hire(n, migrants)
     end
 end
 
+-- Nests with nobody in them: built nests and the home nest, one egg or baby each.
+local function freeNests()
+    local taken = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.nest and (w:isEgg() or w:isBaby()) then taken[w.nest.x .. ',' .. w.nest.y] = true end
+    end
+    local out = {}
+    local br = game.world.breakroom
+    if br and not taken[br.x .. ',' .. br.y] then out[#out + 1] = { x = br.x, y = br.y, home = true } end
+    for _, b in ipairs(game.world.beds) do
+        if not taken[b.x .. ',' .. b.y] then out[#out + 1] = { x = b.x, y = b.y } end
+    end
+    return out
+end
+
+-- A pair of grown-ups lays an egg in a free nest; the egg takes one
+-- parent's looks and tastes.
+local function layEgg(a, b, nest)
+    game.hired = game.hired + 1
+    local parent = game.jobRng:int(1, 2) == 1 and a or b
+    local egg = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+        x = nest.x, y = nest.y, stage = 'egg', sheet = parent.sheet, band = game.workers,
+        nest = { x = nest.x, y = nest.y }, parents = { a.name, b.name },
+        name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
+        drain = game.scoring.drain, hunger = HUNGER_MAX,
+        wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
+    })
+    table.insert(game.workers, egg)
+    if game.stats then game.stats:event('laid', game, egg.name, a.name .. ' and ' .. b.name, { x = nest.x, y = nest.y }) end
+    return egg
+end
+
+-- The change of season: random pairs lay eggs while there are free nests.
+-- Returns how many were laid, and whether a pair went without for want of a nest.
+local function layEggs()
+    local laid, wanted = 0, false
+    for _ = 1, EGGS_PER_SEASON do
+        local grown = {}
+        for _, w in ipairs(game.workers) do if w:isWorking() then grown[#grown + 1] = w end end
+        local alive = 0
+        for _, w in ipairs(game.workers) do if w.alive then alive = alive + 1 end end
+        if #grown < 2 or alive >= MAX_WORKERS then break end
+        local nests = freeNests()
+        if #nests == 0 then wanted = true break end
+        local i = game.jobRng:int(1, #grown)
+        local a = table.remove(grown, i)
+        local b = grown[game.jobRng:int(1, #grown)]
+        layEgg(a, b, nests[1])
+        laid = laid + 1
+    end
+    return laid, wanted
+end
+
 -- A baby (free play starts with one, Morphi) in the home nest.
 local function hireBaby(name)
     local br = game.world.breakroom
     game.hired = game.hired + 1
     local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
     local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
-        x = br.x, y = br.y, stage = 'baby', sheet = sheet, band = game.workers,
+        x = br.x, y = br.y, stage = 'baby', sheet = sheet, band = game.workers, nest = { x = br.x, y = br.y },
         name = name or MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
         drain = game.scoring.drain, hunger = HUNGER_MAX,
         wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
@@ -453,7 +511,12 @@ local function closeQuarter()
         if node.ready then game.jobs:postNode(node) end
     end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end
-    if game.report.hires > 0 then
+    if game.mode == 'free' then
+        -- eggs, not migrants
+        game.report.hires = 0
+        game.report.eggs, game.report.noNest = layEggs()
+        if game.report.eggs > 0 then Audio.playSFX('hire') end
+    elseif game.report.hires > 0 then
         hire(game.report.hires, true)
         Audio.playSFX('hire')
     end
@@ -469,7 +532,16 @@ local function continueFromReport()
     else
         state = 'playing'
         hideCursor()
-        announce(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' little blob' .. (game.report.hires == 1 and '' or 's') .. ' wandered in to join the bunch.')
+        local eggs = game.report.eggs or 0
+        local line = game.scoring:seasonLabel() .. ' begins. '
+        if eggs > 0 then
+            line = line .. (eggs == 1 and 'A new egg' or (eggs .. ' new eggs')) .. ' in the nest' .. (eggs == 1 and '' or 's') .. '!'
+        elseif game.report.noNest then
+            line = line .. 'No egg this time: every nest is full. Weave a NEST.'
+        else
+            line = line .. 'No new eggs this season.'
+        end
+        announce(line)
     end
 end
 
@@ -920,8 +992,8 @@ end
 -- The job screen for the picked morphi (free play: main, neutral, disliked).
 local function openJobs()
     local w = game.selectedWorker
-    if w and w.alive and w:isBaby() then
-        ui:toast(w.name .. ' is a baby: no jobs yet, it grows up in a season')
+    if w and w.alive and (w:isBaby() or w:isEgg()) then
+        ui:toast(w.name .. (w:isEgg() and ' is still an egg' or ' is a baby') .. ': no jobs yet, it grows up in a season')
         return
     end
     if not (w and w.alive and w.jobSet) then

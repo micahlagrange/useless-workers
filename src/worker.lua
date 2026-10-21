@@ -28,7 +28,13 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.world, self.jobs, self.scoring, self.rng = world, jobs, scoring, rng
     -- free play: main, neutral and disliked jobs (role mirrors the main one);
     -- elsewhere one job, the role. doing is the job of the task in hand.
-    self.stage = opts.stage -- 'baby', or nil for a grown-up
+    self.stage = opts.stage -- 'egg', 'baby', or nil for a grown-up
+    self.nest = opts.nest   -- an egg's or a baby's nest: {x, y}
+    self.parents = opts.parents
+    if self.stage == 'egg' then
+        self.role = 'baby'
+        self.hatchTimer = EGG_HATCH_SECONDS
+    end
     if self.stage == 'baby' then
         self.role = 'baby'
         self.age = 0
@@ -163,13 +169,27 @@ function Worker:tile()
 end
 
 function Worker:isWorking()
-    return self.alive and self.state ~= 'quitting' and self.stage ~= 'baby'
+    return self.alive and self.state ~= 'quitting' and self.stage == nil
 end
 
 -- Babies ---------------------------------------------------------------------
 
 function Worker:isBaby()
     return self.stage == 'baby'
+end
+
+function Worker:isEgg()
+    return self.stage == 'egg'
+end
+
+-- Out of the egg: a baby now, in the same nest.
+function Worker:hatch()
+    self.stage = 'baby'
+    self.age = 0
+    self.needs = { fun = 100, clean = 100, sleep = 100 }
+    self.careSum, self.careTime = 0, 0
+    self.hunger = HUNGER_MAX
+    self:emit('hatched')
 end
 
 -- How well it is looked after right now, 0-100: the mean of its needs.
@@ -260,7 +280,7 @@ function Worker:decideBaby()
         self.tuckedIn = nil
         if self:startBreak() then return end
     end
-    local home = self.world.breakroom
+    local home = self.nest or self.world.breakroom
     local t = self:tile()
     local cx, cy = home and home.x or t.x, home and home.y or t.y
     local target = self.rng and self.world:randomNearbyPassable(self.rng, cx, cy, BABY_WANDER)
@@ -1396,6 +1416,12 @@ function Worker:update(dt, clock)
         if self.bubble.ttl <= 0 then self.bubble = nil end
     end
     if not self.alive then return end
+    -- an egg just sits in its nest until it hatches
+    if self.stage == 'egg' then
+        self.hatchTimer = self.hatchTimer - dt
+        if self.hatchTimer <= 0 then self:hatch() end
+        return
+    end
     if self.state ~= 'quitting' then
         local here = self:tile()
         if not self.world:isPassable(here.x, here.y) then self:unstick(here.x, here.y) end
@@ -1489,6 +1515,7 @@ function Worker:describeState()
     end
     if self.wilds and self.jobSet and self.idleSince then return 'Idle - ' .. self:idleSummary() end
     if self.stage == 'baby' then return 'Toddling about' end
+    if self.stage == 'egg' then return 'An egg, hatching in ' .. math.ceil(self.hatchTimer) .. 's' end
     return 'Idle'
 end
 

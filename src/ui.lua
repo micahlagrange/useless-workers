@@ -1675,7 +1675,7 @@ function UI:drawReport(report, scoring)
         { 'Fed', report.fedPct .. '%' },
         { 'Grumbles', tostring(report.complaints), UI.iconComplaint },
         { 'Wandered off', tostring(report.attrition) },
-        { 'Little blobs arriving', '+' .. report.hires, UI.iconMorphi },
+        { 'New eggs', '+' .. (report.eggs or report.hires or 0), UI.iconMorphi },
     }
     local rs = math.min(30, math.floor((ph - 130) / #rows))
     local ry = y + 70

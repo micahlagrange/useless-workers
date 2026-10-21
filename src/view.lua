@@ -564,6 +564,21 @@ function View:drawWorkerBody(w, clock, sx, feetY)
     -- standing about, a little blob breathes: a soft squash and stretch
     local sy = 1
     if not w.moving then sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7) end
+    if w.stage == 'egg' then
+        -- a speckled egg, wobbling now and then
+        local wob = math.sin((clock or 0) * 9 + w.id) * (math.floor((clock or 0) + w.id) % 4 == 0 and 0.25 or 0)
+        love.graphics.push()
+        love.graphics.translate(w.x, feetY - 5)
+        love.graphics.rotate(wob)
+        love.graphics.setColor(0.98, 0.95, 0.86)
+        love.graphics.ellipse('fill', 0, 0, 4, 5)
+        love.graphics.setColor(0.72, 0.6, 0.5)
+        love.graphics.circle('fill', -1.5, -1, 0.7)
+        love.graphics.circle('fill', 1.2, 1.5, 0.6)
+        love.graphics.circle('fill', 1, -2.5, 0.5)
+        love.graphics.pop()
+        return
+    end
     local size = w.stage == 'baby' and BABY_SCALE or 1
     love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx * (2 - sy) * size, sy * size, 8, 16)
     local tool = w:toolInHand()

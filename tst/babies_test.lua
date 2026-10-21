@@ -132,4 +132,68 @@ function TestCaretaker:test_a_baby_knows_when_someone_minds_babies()
     lu.assertTrue(b:hasCaretaker())
 end
 
+
+TestEggs = {}
+
+local function seasonChange()
+    -- to the end of the season, then on from the report
+    local g = H.game()
+    g.scoring.quarterTimer = 0.05
+    for _ = 1, 5 do
+        love.update(0.1)
+        if H.state() == 'report' then break end
+    end
+    lu.assertEquals(H.state(), 'report')
+    love.keypressed('return')
+end
+
+local function eggs(g)
+    local out = {}
+    for _, w in ipairs(g.workers) do if w.alive and w:isEgg() then out[#out + 1] = w end end
+    return out
+end
+
+function TestEggs:test_no_free_nest_no_egg()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    local n = #g.workers
+    seasonChange()
+    -- Morphi has the home nest and nobody has woven a nest yet
+    lu.assertEquals(#eggs(g), 0)
+    lu.assertEquals(#g.workers, n, 'nobody wandered in: no migrants any more')
+    local said = false
+    for _, e in ipairs(g.log) do if e.text:find('Weave a NEST') then said = true end end
+    lu.assertTrue(said, 'the season line says to weave a nest')
+end
+
+function TestEggs:test_a_pair_lays_an_egg_in_a_free_nest_and_it_hatches()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    -- one woven nest
+    local br = g.world.breakroom
+    local spot
+    for dx = -4, 4 do for dy = -4, 4 do
+        local x, y = br.x + dx, br.y + dy
+        if not spot and g.world:canSite(SITE_BED, x, y) then spot = { x = x, y = y } end
+    end end
+    g.world:markBed(spot.x, spot.y)
+    seasonChange()
+    local laid = eggs(g)
+    lu.assertEquals(#laid, 1, 'one free nest, one egg')
+    local egg = laid[1]
+    lu.assertEquals({ egg.nest.x, egg.nest.y }, { spot.x, spot.y })
+    lu.assertEquals(#egg.parents, 2)
+    local sheets = {}
+    for _, w in ipairs(g.workers) do if w.name == egg.parents[1] or w.name == egg.parents[2] then sheets[w.sheet] = true end end
+    lu.assertTrue(sheets[egg.sheet], 'the egg takes the looks of a parent')
+    lu.assertFalse(egg:isWorking())
+    for _ = 1, math.floor((EGG_HATCH_SECONDS + 1) / 0.1) do love.update(0.1) end
+    lu.assertTrue(egg:isBaby(), 'it hatched into a baby')
+    local said = false
+    for _, e in ipairs(g.log) do if e.text:find('hatched') then said = true end end
+    lu.assertTrue(said)
+end
+
 os.exit(lu.LuaUnit.run())
