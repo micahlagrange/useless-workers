@@ -36,13 +36,17 @@ NODE_ORE  = 'ore'
 -- (gone once gathered, more blow in each season, most in Autumn)
 NODE_GRASS  = 'grass'
 NODE_LEAVES = 'leaves'
-NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE, NODE_GRASS, NODE_LEAVES }
+-- little critters that hop about the meadow; a hunter catches one for meat
+NODE_CRITTER = 'critter'
+CRITTER_HOP_SECONDS = 2.5
+HUNT_SECONDS = 3.0
+NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE, NODE_GRASS, NODE_LEAVES, NODE_CRITTER }
 -- free play has no ore lying about: shinies are hidden in the clay
 -- (SHINY_CHANCE) and found by digging. Hand built levels keep their ore.
-NODES_INITIAL      = { bush = 8, tree = 8, ore = 0, grass = 10, leaves = 6 }
+NODES_INITIAL      = { bush = 8, tree = 8, ore = 0, grass = 10, leaves = 6, critter = 5 }
 -- New growth each season. Tuned as 4 / 2 / 3 for 90 s seasons; times 300/90
 -- for 300 s seasons, so as much grows per minute as before.
-NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 0, grass = 6, leaves = 5 }
+NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 0, grass = 6, leaves = 5, critter = 6 }
 SHINY_CHANCE       = 0.08 -- share of clay and hard dirt tiles with a shiny hidden in them
 LEAVES_AUTUMN      = 2    -- leaf piles blowing in at the start of Autumn, times this
 GRASS_REGROW_SECONDS = 40
@@ -81,11 +85,13 @@ BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break 
 -- Morphis and their roles
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
+ROLE_HUNTER = 'hunter'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
     lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
     miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
+    hunter     = { label = 'Hunter',     jobType = 'hunt',   nodeKind = NODE_CRITTER, cargo = CARGO_FOOD, actionSeconds = HUNT_SECONDS, verb = 'hunting', sheets = { 'pupper', 'woofoof' } },
     builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
@@ -101,6 +107,9 @@ HIRE_SHEETS = { 'pupper', 'twins', 'cwab', 'woofoof', 'ribbit', 'blue' }
 -- that kind; a forager picks any kind into storage, and everyone takes only
 -- their own from it, or eats straight off a bush of their kind when hungry.
 FOOD_KINDS  = { 'steak', 'fish', 'cheese', 'chili', 'candy', 'grapes' }
+-- meat: the key stays 'steak'; in free play it comes only from hunting
+MEAT = 'steak'
+FOOD_WORDS = { steak = 'meat' }
 FOOD_SPRITE = { steak = 'yp_ham.png', fish = 'yp_tuna.png', cheese = 'yp_cheese.png', chili = 'yp_chilipepper.png', candy = 'yp_candy1.png', grapes = 'yp_grapes.png' }
 MORPHI_DIET = { pupper = 'steak', woofoof = 'fish', twins = 'cheese', cwab = 'chili', blue = 'candy', ribbit = 'grapes' }
 MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', cwab = 'miner', blue = 'miner', ribbit = 'lumberjack' }

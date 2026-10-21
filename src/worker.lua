@@ -412,13 +412,13 @@ end
 -- are already doing) or 'none' (no work of that kind
 -- anywhere: nothing ripe, nothing marked). at is the work out of reach.
 local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'nestwork' }
-local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather' }
+local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather', critter = 'hunt' }
 
 function Worker:whyNoWork(job, slot)
     local t = self:tile()
     local types = {}
     for _, ty in ipairs(JobSets.jobTypes(job)) do types[ty] = true end
-    if types.forage and self.world:nearestFreeStorageTile(self) == nil then
+    if (types.forage or types.hunt) and self.world:nearestFreeStorageTile(self) == nil then
         return { job = job, slot = slot, why = 'storage' }
     end
     local best, bestD = nil, math.huge
@@ -501,7 +501,7 @@ local WHY_TEXT = {
     none = 'none to do',
 }
 local NONE_TEXT = {
-    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build',
+    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build', hunter = 'no critters about',
 }
 
 -- The idle reason as a line for the player, naming the jobs.
@@ -887,7 +887,7 @@ function Worker:jobTiers()
     local function typesOf(job)
         local out = {}
         for _, t in ipairs(JobSets.jobTypes(job)) do
-            if t == 'forage' then
+            if t == 'forage' or t == 'hunt' then
                 if room == nil then room = self.world:nearestFreeStorageTile(self) ~= nil end
                 if room then out[#out + 1] = t end
             else

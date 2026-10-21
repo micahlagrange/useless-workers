@@ -38,9 +38,9 @@ end
 function TestWorldGen:testNodesLandInTheRightPlaces()
     local world = World.generate(987, Rng.new(987))
     -- hand built levels still have ore; free play plants none
-    local counts = { bush = 8, tree = 8, ore = 6, grass = 10, leaves = 6 }
+    local counts = { bush = 8, tree = 8, ore = 6, grass = 10, leaves = 6, critter = 6 }
     local planted = world:spawnAllNodes(counts)
-    lu.assertEquals(#planted, counts.bush + counts.tree + counts.ore + counts.grass + counts.leaves)
+    lu.assertEquals(#planted, counts.bush + counts.tree + counts.ore + counts.grass + counts.leaves + counts.critter)
     local reachable, enclosed = {}, {}
     for _, node in ipairs(planted) do
         local t = world:get(node.x, node.y)
@@ -340,7 +340,7 @@ function TestGrassLeaves:test_grass_and_leaves_leave_the_old_map_alone()
     local function spots(w)
         local out = {}
         for _, n in ipairs(w.nodes) do
-            if n.kind ~= NODE_GRASS and n.kind ~= NODE_LEAVES then out[#out + 1] = n.kind .. n.x .. ',' .. n.y end
+            if n.kind ~= NODE_GRASS and n.kind ~= NODE_LEAVES and n.kind ~= NODE_CRITTER then out[#out + 1] = n.kind .. n.x .. ',' .. n.y end
         end
         table.sort(out)
         return out
@@ -386,6 +386,36 @@ function TestShinies:test_the_same_seed_hides_the_same_shinies()
     local a = World.generate(4242, Rng.new(4242))
     local b = World.generate(4242, Rng.new(4242))
     for x = 1, a.w do for y = 1, a.h do lu.assertEquals(a.tiles[x][y].shiny, b.tiles[x][y].shiny) end end
+end
+
+
+TestCritters = {}
+
+function TestCritters:test_critters_hop_about_and_give_meat_when_caught()
+    local world = World.generate(987, Rng.new(987))
+    world:spawnAllNodes(NODES_INITIAL)
+    local critters = world:nodesOfKind(NODE_CRITTER)
+    lu.assertEquals(#critters, NODES_INITIAL.critter)
+    local c = critters[1]
+    lu.assertEquals(c.food, MEAT)
+    local x, y = c.x, c.y
+    local moved = false
+    for _ = 1, 100 do
+        world:update(0.5, function() end)
+        if c.x ~= x or c.y ~= y then moved = true break end
+    end
+    lu.assertTrue(moved, 'a critter hops about')
+    lu.assertEquals(world:get(c.x, c.y).node, c)
+    lu.assertNil(world:get(x, y).node)
+    -- a claimed critter stays put
+    c.claimedBy = {}
+    x, y = c.x, c.y
+    for _ = 1, 40 do world:update(0.5, function() end) end
+    lu.assertEquals({ c.x, c.y }, { x, y })
+    lu.assertEquals(world:harvestNode(c), CARGO_FOOD)
+    lu.assertEquals(#world:nodesOfKind(NODE_CRITTER), NODES_INITIAL.critter - 1)
+    -- free play bushes never grow meat: only hunting brings it home
+    for _, b in ipairs(world:nodesOfKind(NODE_BUSH)) do lu.assertNotEquals(b.food, MEAT) end
 end
 
 os.exit(lu.LuaUnit.run())

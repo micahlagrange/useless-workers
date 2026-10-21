@@ -495,10 +495,14 @@ end
 
 function World:addNode(kind, x, y, food)
     if kind == NODE_BUSH and not food then
-        -- spread the foods around so every morphi finds something
-        self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
-        food = FOOD_KINDS[self.foodCycle]
+        -- spread the foods around so every morphi finds something; in free
+        -- play meat ('steak') comes only from hunting, never a bush
+        repeat
+            self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
+            food = FOOD_KINDS[self.foodCycle]
+        until not (self.wilds and food == MEAT)
     end
+    if kind == NODE_CRITTER then food = MEAT end
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
         ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil,
@@ -590,7 +594,7 @@ end
 -- and most of that share sits across water so bridges are worth building.
 function World:spawnNodes(kind, count, enclosedFraction)
     enclosedFraction = enclosedFraction or NODE_ENCLOSED_FRACTION
-    local rng = (kind == NODE_GRASS or kind == NODE_LEAVES) and self.plantRng or self.rng
+    local rng = (kind == NODE_GRASS or kind == NODE_LEAVES or kind == NODE_CRITTER) and self.plantRng or self.rng
     local reach = self:reachableFromBreakroom()
     local reachable, enclosed, island = {}, {}, {}
     for x = 1, self.w do
@@ -659,6 +663,7 @@ end
 -- Bushes ripen and stumps regrow. onReady(node) fires when a node becomes workable.
 function World:update(dt, onReady)
     for _, node in ipairs(self.nodes) do
+        if node.kind == NODE_CRITTER and not node.claimedBy then self:hopCritter(node, dt) end
         if not node.ready then
             node.timer = node.timer - dt
             if node.timer <= 0 then
@@ -666,6 +671,23 @@ function World:update(dt, onReady)
                 if onReady then onReady(node) end
             end
         end
+    end
+end
+
+-- A critter nobody is after hops to a free grass tile next to it now and then.
+function World:hopCritter(node, dt)
+    node.hopTimer = (node.hopTimer or CRITTER_HOP_SECONDS * self.plantRng:random()) - dt
+    if node.hopTimer > 0 then return end
+    node.hopTimer = CRITTER_HOP_SECONDS * (0.6 + 0.8 * self.plantRng:random())
+    local dirs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+    local d = dirs[self.plantRng:int(1, 4)]
+    local x, y = node.x + d[1], node.y + d[2]
+    local t = self:get(x, y)
+    if t and t.type == TILE_GRASS and not t.node and not t.site and #t.items == 0 and (t.storage or 0) == 0 then
+        self.tiles[node.x][node.y].node = nil
+        node.x, node.y = x, y
+        t.node = node
+        node.hopped = 0.3
     end
 end
 
@@ -695,6 +717,10 @@ function World:harvestNode(node)
         self:removeNode(node)
         node.ready = false
         return CARGO_LEAVES
+    elseif node.kind == NODE_CRITTER then
+        self:removeNode(node)
+        node.ready = false
+        return CARGO_FOOD
     else
         self:removeNode(node)
         node.ready = false

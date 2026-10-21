@@ -199,6 +199,17 @@ function View:drawNodes(clock)
                 local gx = px + 4 + i * 2
                 love.graphics.line(gx, py + 13, gx + (i - 2) * 0.8, py + 13 - h - (i % 2) * 2)
             end
+        elseif node.kind == NODE_CRITTER then
+            -- a little round critter with long ears, bobbing
+            local hop = math.abs(math.sin((clock or 0) * 5 + node.id)) * 1.5
+            love.graphics.setColor(0, 0, 0, 0.18)
+            love.graphics.ellipse('fill', px + 8, py + 13, 4, 1.5)
+            love.graphics.setColor(0.93, 0.88, 0.8)
+            love.graphics.ellipse('fill', px + 8, py + 10 - hop, 4, 3)
+            love.graphics.ellipse('fill', px + 6.5, py + 6 - hop, 1, 2.5)
+            love.graphics.ellipse('fill', px + 9.5, py + 6 - hop, 1, 2.5)
+            love.graphics.setColor(0.2, 0.15, 0.15)
+            love.graphics.rectangle('fill', px + 9, py + 9 - hop, 1, 1)
         elseif node.kind == NODE_LEAVES then
             for i, c in ipairs({ { 6, 10, 0.86, 0.55, 0.3 }, { 10, 11, 0.93, 0.72, 0.32 }, { 8, 8, 0.78, 0.42, 0.25 } }) do
                 love.graphics.setColor(c[3], c[4], c[5])

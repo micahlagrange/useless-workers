@@ -80,6 +80,7 @@ function TestDeal:test_an_immigrant_favours_the_jobs_the_band_lacks()
     local band = {
         { main = ROLE_FORAGER, neutral = ROLE_MINER, disliked = ROLE_LUMBERJACK },
         { main = ROLE_MINER, neutral = ROLE_FORAGER, disliked = ROLE_LUMBERJACK },
+        { main = ROLE_HUNTER, neutral = ROLE_FORAGER, disliked = ROLE_MINER },
     }
     for seed = 1, 30 do
         local s = JobSets.dealOne(Rng.new(seed), band)
@@ -88,7 +89,7 @@ function TestDeal:test_an_immigrant_favours_the_jobs_the_band_lacks()
     end
     -- with every job covered, the immigrant still has three different jobs
     -- and takes a main nobody has as main when there is one
-    band[3] = { main = ROLE_BUILDER, neutral = ROLE_FORAGER, disliked = ROLE_MINER }
+    band[4] = { main = ROLE_BUILDER, neutral = ROLE_FORAGER, disliked = ROLE_MINER }
     for seed = 1, 30 do
         local s = JobSets.dealOne(Rng.new(seed), band)
         lu.assertTrue(threeDifferent(s))
@@ -238,6 +239,20 @@ local function firstJob(w, workers, world, jobs)
         if w.doing then return w.doing end
     end
     return nil
+end
+
+function TestJobOrder:test_a_hunter_catches_a_critter_and_brings_meat_home()
+    self.bush.ready = false; self.bush.timer = 999
+    local critter = self.world:addNode(NODE_CRITTER, 9, 5)
+    critter.hopTimer = 999 -- sit still for the test
+    self.jobs:postNode(critter)
+    local w = self.make({ main = ROLE_HUNTER, neutral = ROLE_FORAGER, disliked = ROLE_MINER })
+    lu.assertEquals(firstJob(w, { w }, self.world, self.jobs), ROLE_HUNTER)
+    run({ w }, self.world, self.jobs, 20)
+    lu.assertEquals(self.world:storedCount(ITEM_FOOD), 1)
+    local item = self.world.items[1]
+    lu.assertEquals(item.food, MEAT)
+    lu.assertEquals(#self.world:nodesOfKind(NODE_CRITTER), 0)
 end
 
 function TestJobOrder:test_main_beats_neutral_beats_disliked()

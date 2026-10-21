@@ -111,7 +111,7 @@ end
 
 -- Game setup ---------------------------------------------------------------
 
-local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny', grass = 'grass tuft', leaves = 'leaf pile' }
+local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny', grass = 'grass tuft', leaves = 'leaf pile', critter = 'critter' }
 
 -- Everything announced goes into the log (LOG up top), with when, what
 -- kind and where, so it can be read later and looked at on the map. Only

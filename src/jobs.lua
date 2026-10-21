@@ -6,7 +6,7 @@ require('src.constants')
 local Jobs = {}
 Jobs.__index = Jobs
 
-local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather' }
+local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather', critter = 'hunt' }
 
 function Jobs.typeForNode(node)
     return TYPE_FOR_KIND[node.kind]
@@ -147,6 +147,8 @@ function Jobs:takeNearest(jobTypes, fromX, fromY, predicate, claim, tries)
                         d = math.min(d, math.abs(s.x - fromX) + math.abs(s.y - fromY))
                     end
                 else
+                    -- a critter hops about: its job is wherever it is now
+                    if job.node then job.x, job.y = job.node.x, job.node.y end
                     d = math.abs(job.x - fromX) + math.abs(job.y - fromY)
                 end
                 candidates[#candidates + 1] = { job = job, d = d, order = i }

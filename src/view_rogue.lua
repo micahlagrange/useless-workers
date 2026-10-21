@@ -34,7 +34,7 @@ Rogue.GROUND_GAIN = { water = 1.35, grass = 1.15, dirt = 1.2, stone = 1.05, snow
 
 Rogue.GLYPH = {
     bush = '"', tree = '\226\153\163', stump = '\226\136\153',  -- U+2663 club, U+2219 bullet operator
-    ore = '$', food = '%', logs = '=', gold = '$', grass = 'w', cropped = ',', leaves = '&',
+    ore = '$', food = '%', logs = '=', gold = '$', grass = 'w', cropped = ',', leaves = '&', critter = 'r',
     floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', wall = 'O', door = '+', floor = '.', bridge = '=',
     morphi = '@', fire = '*',
     axe = '/', pickaxe = '\\', saw = '-', log = '=',
@@ -165,6 +165,8 @@ function Rogue:drawNodes(clock)
             self:glyph(node.ready and self.GLYPH.grass or self.GLYPH.cropped, px, py, 0.4, 0.75, 0.32)
         elseif node.kind == NODE_LEAVES then
             self:glyph(self.GLYPH.leaves, px, py, 0.9, 0.6, 0.3)
+        elseif node.kind == NODE_CRITTER then
+            self:glyph(self.GLYPH.critter, px, py, 0.93, 0.88, 0.8)
         end
     end
     love.graphics.setColor(1, 1, 1, 1)

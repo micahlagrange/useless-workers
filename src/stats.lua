@@ -16,11 +16,11 @@ Stats.TILE_CHARS = {
     water = '~', grass = '.', dirt = ',', stone = '#', snow = '*', bridge = '=',
     breakroom = 'C', wall = 'W', door = 'D',
 }
-Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l' }
+Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l', critter = 'r' }
 Stats.LEGEND = {
     ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'clay', ['*'] = 'hard dirt',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
-    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
+    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', r = 'critter', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
 }
 
 local function tileChar(t)
