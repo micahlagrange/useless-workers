@@ -968,16 +968,18 @@ function Worker:followPath(dt)
         return
     end
     self.walkTime = self.walkTime + dt
-    if self.walkTime > WORKER_PATIENCE and (self.goal == 'work' or self.goal == 'eat') then
-        if self.targetNode then
-            self:complain('slow', self.targetNode)
-        else
-            self:dropJob()
-            self.state = 'idle'
-        end
+    -- a morphi walks as far as it takes and never gives up on a long walk
+    -- (Micah, 2026-10-21). Only a way that has been shut since it set off
+    -- (a wall built across it) sends it back to think again, quietly.
+    local node = self.path and self.path[self.pathIndex]
+    if node and not self.world:isPassable(node.x, node.y) then
+        self:dropJob()
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
         return
     end
-    local node = self.path and self.path[self.pathIndex]
     if not node then
         self:arrive()
         return

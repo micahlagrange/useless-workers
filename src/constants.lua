@@ -112,7 +112,6 @@ HUNGER_EAT_THRESHOLD   = 20
 HUNGER_STARVING        = 1
 FRUIT_HUNGER_VALUE     = 55
 WORKER_SPEED           = 72     -- pixels per second, 4.5 tiles per second
-WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving up
 WORKER_SULK_SECONDS    = 3
 ICK_SECONDS            = 30
 COMPLAINT_COOLDOWN     = 40     -- seconds before anyone complains about the same tree again
