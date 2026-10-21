@@ -103,7 +103,7 @@ function TestBench:test_tipping_points()
 end
 
 function TestBench:test_runs_survive_the_trip_between_processes()
-    local run = fakeRun('beds', 'Z', { 3, 3, 3, 3 })
+    local run = fakeRun('nests', 'Z', { 3, 3, 3, 3 })
     run.seasons[1].drain = 0.55
     local back = Bench.deserialize(Bench.serialize(run))
     lu.assertEquals(back, run)

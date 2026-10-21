@@ -150,11 +150,21 @@ function Stats:row(game, day)
         logs = scoring.lifetimeDelivered.logs or 0,
         gold = scoring.lifetimeDelivered.gold or 0,
         arrived = self.counts.arrived, starved = self.counts.starved, left = self.counts.left,
+        laid = self.counts.laid, hatched = self.counts.hatched, grewUp = self.counts.grewUp, died = self.counts.died,
+        eggs = 0, babies = 0, little = {},  -- format 3: the eggs and babies, as {name, stage, x, y, hunger, care}
         trades = self.counts.trade, hardships = self.counts.hardship,
         drain = round(scoring.drain, 2),
         ripeBushes = world:readyNodeCount(NODE_BUSH), trees = world:readyNodeCount(NODE_TREE), ore = world:readyNodeCount(NODE_ORE),
     }
     for _, w in ipairs(game.workers) do
+        if w.alive and (w.stage == 'egg' or w.stage == 'baby') then
+            local t = w:tile()
+            if w.stage == 'egg' then r.eggs = r.eggs + 1 else r.babies = r.babies + 1 end
+            r.little[#r.little + 1] = {
+                name = w.name, stage = w.stage, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5),
+                care = w.stage == 'baby' and math.floor(w:careScore() + 0.5) or nil,
+            }
+        end
         if w:isWorking() then
             r.pop = r.pop + 1
             r.hunger = r.hunger + w.hunger

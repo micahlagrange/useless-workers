@@ -65,7 +65,8 @@ function Bench.runOne(seed, strategy, years, difficulty)
         local sc, w = game.scoring, game.world
         row.food, row.logs, row.gold = delivered.food or 0, delivered.logs or 0, delivered.gold or 0
         local c = game.stats.counts
-        row.starved = (c.starved or 0) - (counts.starved or 0)
+        -- a death (free play since the danger story) counts as starved
+        row.starved = (c.starved or 0) + (c.died or 0) - (counts.starved or 0) - (counts.died or 0)
         row.left = (c.left or 0) - (counts.left or 0)
         row.trades = (c.trade or 0) - (counts.trade or 0)
         row.hardships = (c.hardship or 0) - (counts.hardship or 0)
@@ -117,8 +118,12 @@ function Bench.runOne(seed, strategy, years, difficulty)
             end
         elseif st == 'report' then
             local rep = game.report
-            cur.migrants = rep.hires
-            cur.popEnd = band() - rep.hires
+            -- free play lays eggs now: they are the season's newcomers
+            cur.migrants = rep.eggs or rep.hires or 0
+            cur.popEnd = band() - (rep.hires or 0)
+            local little = 0
+            for _, w in ipairs(game.workers) do if w.alive and (w.stage == 'egg' or w.stage == 'baby') then little = little + 1 end end
+            cur.babies = little
             cur.complaints = rep.complaints
             cur.fedPct = rep.fedPct
             closeRow(cur, rep)

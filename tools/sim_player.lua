@@ -49,7 +49,9 @@ end
 -- A nest for every morphi in the bunch, one per call, while the sticks,
 -- grass and leaves last.
 function Player.placeNests(game)
-    if Player.bedCount(game) < bandSize(game) and game.world:canAfford(costOf(game.world, 'bed')) then
+    -- a nest for every grown-up to nap in, and spare ones for eggs
+    local want = bandSize(game) + 2
+    if Player.bedCount(game) < want and game.world:canAfford(costOf(game.world, 'bed')) then
         return placeNearCamp(game, ABILITY_BED, SITE_BED, 1)
     end
     return 0
@@ -76,11 +78,21 @@ function Player.demand(game)
         for _, j in ipairs(game.jobs.items) do
             if types[j.type] and ((j.node and j.node.ready and w:nodeReachable(j.node))
                 or (j.site and not j.site.done and w:siteReachable(j.site))
-                or (j.area and w:areaReachable(j.area))) then
+                or (j.area and w:areaReachable(j.area))
+                or (j.baby and j.baby.alive)) then
                 n = n + 1
             end
         end
         out[job] = n
+    end
+    -- a sensible person keeps the bunch fed first: gathering only counts
+    -- while the pile is short of what nests and baskets need
+    local st = w.stock
+    if (st.logs or 0) >= 20 and (st.grass or 0) >= 10 and (st.leaves or 0) >= 6 then out[ROLE_LUMBERJACK] = 0 end
+    -- and food is always wanted while the stashes are not full
+    if w:storedCount(ITEM_FOOD) < w:storageCapacity() then
+        out[ROLE_FORAGER] = out[ROLE_FORAGER] * 2
+        out[ROLE_HUNTER] = out[ROLE_HUNTER] * 2
     end
     return out
 end
@@ -142,6 +154,39 @@ function Player.assignJobs(game)
     return changes
 end
 
+-- Shinies hide in the clay: now and then mark a small patch of clay next to
+-- open ground near home for the diggers, the way a person goes looking.
+function Player.digForShinies(game)
+    local w = game.world
+    for _, site in ipairs(w.sites) do
+        if site.kind == SITE_MINE and not site.done then return 0 end
+    end
+    local br = w.breakroom
+    local reach = w:reachableFromBreakroom()
+    for r = 2, 14 do
+        for dy = -r, r do
+            for dx = -r, r do
+                if math.max(math.abs(dx), math.abs(dy)) == r then
+                    local x, y = br.x + dx, br.y + dy
+                    local t = w:get(x, y)
+                    if t and (t.type == TILE_STONE or t.type == TILE_SNOW) and not t.site then
+                        local open = false
+                        for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
+                            if w:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then open = true end
+                        end
+                        if open then
+                            game.abilities:select(ABILITY_MINE)
+                            game.abilities:designateMine(x, y, x + 2, y + 2)
+                            return 1
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return 0
+end
+
 -- The players tools/bench.lua compares. Each act() is one look at the map;
 -- the bench calls it at the start and then every PLAYER_EVERY game seconds.
 --   active  opens routes to what is out of reach, keeps storage free, a
@@ -149,19 +194,20 @@ end
 --           the band's jobs (assignJobs)
 --   none    does nothing at all
 --   dig     only mines and bridges routes (no storage, no beds)
---   beds    only builds beds (no digging or bridging, no storage)
-Player.STRATEGIES = { 'active', 'none', 'dig', 'beds' }
+--   nests   only weaves nests (no digging or bridging, no storage)
+Player.STRATEGIES = { 'active', 'none', 'dig', 'nests' }
 Player.act = {
     active = function(game)
         Player.assignJobs(game)
         Player.clearRoutes(game, 4)
+        Player.digForShinies(game)
         Player.placeBeds(game)
         if Player.freeStorage(game) < 4 then Player.placeStorage(game, 3) end
         if game.world:canAfford(costOf(game.world, 'bin')) and (game.world.stock.grass or 0) >= 4 then Player.placeStorage(game, 1, true) end
     end,
     none = function() end,
     dig = function(game) Player.clearRoutes(game, 4) end,
-    beds = function(game) Player.placeBeds(game) end,
+    nests = function(game) Player.placeNests(game) end,
 }
 
 -- The route clearer: each season, for the nearest few things out of reach

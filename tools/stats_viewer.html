@@ -282,7 +282,7 @@ function renderSide() {
   for (const e of arr(run.events)) {
     if (e.day !== day) continue;
     if (e.kind === 'hardship') { const key = e.text || 'hardship'; hard[key] = (hard[key] || []).concat(e.who || '?'); continue; }
-    const words = { arrived: 'arrived', left: 'had enough and left', starved: 'starved and wandered off', trade: 'struck a deal' };
+    const words = { arrived: 'wandered in', left: 'packed a tiny bag and left', starved: 'got too hungry and toddled off', trade: 'swapped snacks', laid: 'was laid as an egg', hatched: 'hatched', grewUp: 'grew up', died: 'is gone', shiny: 'dug up a shiny' };
     list.push([e.kind, (e.who || 'Someone') + ' ' + (words[e.kind] || e.kind)]);
   }
   const HARD = { bored: 'nothing to do', slow: 'gave up a long walk', hungry: 'hungry, food walled off', unreachable: "couldn't reach work" };
@@ -293,6 +293,13 @@ function renderSide() {
   const bl = $('band'); bl.replaceChildren();
   const band = bandOn(day);
   if (!band.length) bl.append(el('li', 'empty', r.band ? 'Nobody left.' : 'This run was exported before builds recorded where each morphi stands (build 110).'));
+  // format 3: the eggs and babies, after the grown-ups
+  for (const m of arr(r.little)) {
+    const li = el('li'), dot = el('span', 'k');
+    dot.textContent = m.stage === 'egg' ? '\u25CB egg' : '\u25CF baby'; dot.style.color = '#f2c6d8';
+    li.append(dot, el('span', 't', m.name + '  hunger ' + m.hunger + (m.care != null ? '  care ' + m.care : '') + '  at ' + m.x + ',' + m.y));
+    bl.append(li);
+  }
   for (const m of band) {
     const li = el('li'), dot = el('span', 'k');
     const main = mainOf(m);

@@ -9,8 +9,10 @@ The players (tools/sim_player.lua, Player.act) look at the map at the start
 and every 30 game seconds: 'active' opens routes (marks mining and lays
 bridges to the nearest bushes, trees and ore out of reach), keeps storage
 free (floor spots, a bin when logs are spare) and builds a bed for every
-morphi; 'none' does nothing; 'dig' only mines and bridges; 'beds' only
-builds beds. Each run is one seed and one player, reproducible from the
+morphi (and since the hatchlings epic weaves nests, digs clay for shinies
+and lets the job manager set caretakers and hunters); 'none' does nothing;
+'dig' only digs and bridges; 'nests' only weaves nests. In free play the
+'migr' column counts new eggs, and deaths count with the starved. Each run is one seed and one player, reproducible from the
 seed, in its own process (LuaJIT through lupa when it has it, as in LOVE).
 For every player and year it aggregates over the seeds (mean, sd, min, max):
 survival, morphis lost (starved, left), band size at year end, migrants,
@@ -40,7 +42,7 @@ import time
 from multiprocessing import Pool
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STRATEGIES = ['active', 'none', 'dig', 'beds']
+STRATEGIES = ['active', 'none', 'dig', 'nests']
 
 
 LUA = os.environ.get('BENCH_LUA', 'luajit')
@@ -97,7 +99,7 @@ def main():
     procs = max(1, min(args.jobs, len(jobs)))
     # the longest runs first (bands that live longest), so no core waits at the end;
     # every run is its own Lua state, so the order and the process count change nothing
-    first = {'active': 0, 'dig': 1, 'beds': 2, 'none': 3}
+    first = {'active': 0, 'dig': 1, 'nests': 2, 'beds': 2, 'none': 3}
     order = sorted(range(len(jobs)), key=lambda i: first[jobs[i][1]])
     started = time.perf_counter()
     with Pool(procs) as pool:

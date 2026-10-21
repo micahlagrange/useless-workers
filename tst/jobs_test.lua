@@ -344,7 +344,7 @@ function TestJobsExport:test_the_run_export_carries_the_jobs()
     for _ = 1, math.floor(DAY_SECONDS * 2 / 0.1) do love.update(0.1) end
     local json = g.stats:export('jobs')
     lu.assertNotNil(json:find('"format":' .. STATS_FORMAT, 1, true))
-    lu.assertEquals(STATS_FORMAT, 2)
+    lu.assertEquals(STATS_FORMAT, 3)
     local w = g.workers[1]
     lu.assertNotNil(json:find('"main":"' .. w.jobSet.main .. '"', 1, true))
     lu.assertNotNil(json:find('"disliked":"' .. w.jobSet.disliked .. '"', 1, true))

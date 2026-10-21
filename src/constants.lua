@@ -305,7 +305,11 @@ DAY_SECONDS         = QUARTER_SECONDS / DAYS_PER_SEASON
 -- 2: every morphi in a day's band has main, neutral, disliked and job (what
 -- it is working at), and a day row has idleByMain. A format 1 run has only
 -- role, which is its main job.
-STATS_FORMAT        = 2
+-- 3: eggs and babies (stage, care score, nest) next to the grown-ups in a
+-- day's band, eggs/babies/died counts per day, grass and leaves stock;
+-- events laid, hatched, grewUp, died. Logs and gold keep their keys (sticks
+-- and shinies on screen).
+STATS_FORMAT        = 3
 STATS_BLURB_MAX     = 200
 MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 
