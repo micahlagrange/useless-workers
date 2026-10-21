@@ -92,6 +92,8 @@ ROLES = {
     miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
     hunter     = { label = 'Hunter',     jobType = 'hunt',   nodeKind = NODE_CRITTER, cargo = CARGO_FOOD, actionSeconds = HUNT_SECONDS, verb = 'hunting', sheets = { 'pupper', 'woofoof' } },
+    -- a baby has no job yet; this only names it on screen
+    baby       = { label = 'Baby',       jobType = nil,      nodeKind = nil,       cargo = nil,        actionSeconds = 1.0, verb = 'playing', sheets = { 'pupper' } },
     builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
@@ -149,6 +151,20 @@ HARVEST_SECONDS        = 0.8
 EAT_SECONDS            = 1.0
 WANDER_RADIUS          = 3
 MAX_WORKERS            = 12
+-- Babies. Free play starts with one, Morphi, in the home nest. A baby does
+-- no work: it eats, naps, toddles about near home and grows up after
+-- BABY_SECONDS. Its needs (0-100) run down and only care fills fun and
+-- clean; how well it was looked after (its care score) sets its mood when
+-- it grows up.
+START_BABIES       = 1
+FIRST_BABY_NAME    = 'Morphi'
+BABY_SECONDS       = 300
+BABY_NEED_DRAIN    = { fun = 0.2, clean = 0.12, sleep = 0.25 }  -- per second
+BABY_NAP_BELOW     = 40     -- sleep under this: off for a nap
+BABY_NAP_RATE      = 6      -- sleep regained per second napping
+BABY_WANDER        = 2      -- tiles from home a baby toddles
+BABY_SCALE         = 0.6    -- drawn this big
+BABY_MORALE_MIN    = 40     -- a neglected baby still grows up with this much morale
 
 -- Player tools (section 6). The player designates work; morphis do it.
 ABILITY_SELECT  = 'select'

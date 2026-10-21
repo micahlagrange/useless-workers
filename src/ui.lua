@@ -1116,7 +1116,9 @@ function UI:drawBottomBar(game)
             local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - fw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-            if w.arcade then
+            if w:isBaby() then
+                self:printLine(w:babySummary(), ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            elseif w.arcade then
                 self:printLine(w.ate and 'has eaten' or 'not eaten yet', ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             else
                 local word, color = hungerLook(w)
@@ -1159,7 +1161,7 @@ function UI:drawBottomBar(game)
                 if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
                 sx = sx + 30
             end
-            local under = w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
+            local under = w:isBaby() and w:babySummary() or w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
             self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)

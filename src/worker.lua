@@ -28,7 +28,13 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.world, self.jobs, self.scoring, self.rng = world, jobs, scoring, rng
     -- free play: main, neutral and disliked jobs (role mirrors the main one);
     -- elsewhere one job, the role. doing is the job of the task in hand.
-    if opts.jobs then
+    self.stage = opts.stage -- 'baby', or nil for a grown-up
+    if self.stage == 'baby' then
+        self.role = 'baby'
+        self.age = 0
+        self.needs = { fun = 100, clean = 100, sleep = 100 }
+        self.careSum, self.careTime = 0, 0
+    elseif opts.jobs then
         self.jobSet = { main = opts.jobs.main, neutral = opts.jobs.neutral, disliked = opts.jobs.disliked }
         self.role = self.jobSet.main
     else
@@ -157,7 +163,75 @@ function Worker:tile()
 end
 
 function Worker:isWorking()
-    return self.alive and self.state ~= 'quitting'
+    return self.alive and self.state ~= 'quitting' and self.stage ~= 'baby'
+end
+
+-- Babies ---------------------------------------------------------------------
+
+function Worker:isBaby()
+    return self.stage == 'baby'
+end
+
+-- How well it is looked after right now, 0-100: the mean of its needs.
+function Worker:careNow()
+    local n = self.needs
+    return (self.hunger + n.fun + n.clean + n.sleep) / 4
+end
+
+-- Its care score so far: the mean of careNow over its babyhood.
+function Worker:careScore()
+    if (self.careTime or 0) <= 0 then return self:careNow() end
+    return self.careSum / self.careTime
+end
+
+function Worker:updateBaby(dt)
+    self.age = self.age + dt
+    local n = self.needs
+    for k, rate in pairs(BABY_NEED_DRAIN) do n[k] = math.max(0, n[k] - rate * dt) end
+    if self.state == 'breaking' then n.sleep = math.min(100, n.sleep + BABY_NAP_RATE * dt) end
+    self.careSum = self.careSum + self:careNow() * dt
+    self.careTime = self.careTime + dt
+    if self.age >= BABY_SECONDS then self:emit('grewUp') end
+end
+
+-- Grown up: dealt its jobs (by the game), its mood from how it was cared for.
+function Worker:growUp(jobs)
+    self.morale = math.max(BABY_MORALE_MIN, math.min(MORALE_MAX, self:careScore()))
+    self.stage = nil
+    self.needs = nil
+    self.jobSet = { main = jobs.main, neutral = jobs.neutral, disliked = jobs.disliked }
+    self.role = self.jobSet.main
+    self.roleInfo = ROLES[self.role]
+    self.workTime = 0
+end
+
+-- A baby's needs in a line for the strip: 'fun 80 clean 70 sleep 90, grows up in 4:10'.
+function Worker:babySummary()
+    local n = self.needs
+    local left = math.max(0, math.ceil(BABY_SECONDS - self.age))
+    return string.format('fun %d clean %d sleep %d, grows up in %d:%02d', math.floor(n.fun + 0.5), math.floor(n.clean + 0.5), math.floor(n.sleep + 0.5), math.floor(left / 60), left % 60)
+end
+
+-- A baby's day: eat when hungry, nap when sleepy, toddle about near home.
+function Worker:decideBaby()
+    if self.hunger < HUNGER_EAT_THRESHOLD then
+        if self:eatSomething() then return end
+    end
+    if self.needs.sleep < BABY_NAP_BELOW then
+        if self:startBreak() then return end
+    end
+    local home = self.world.breakroom
+    local t = self:tile()
+    local cx, cy = home and home.x or t.x, home and home.y or t.y
+    local target = self.rng and self.world:randomNearbyPassable(self.rng, cx, cy, BABY_WANDER)
+    if target then
+        local path = self:pathTo(target.x, target.y)
+        if path then
+            self:setPath(path, 'wander')
+            return
+        end
+    end
+    self.decideTimer = DECIDE_INTERVAL * 3
 end
 
 function Worker:title()
@@ -777,6 +851,7 @@ end
 -- Decisions ---------------------------------------------------------------
 
 function Worker:decide()
+    if self.stage == 'baby' then return self:decideBaby() end
     -- 0. Somebody at camp wants to trade and I could use cheering up
     if self.wilds and self.morale < MORALE_MAX - 10 and self.world.openTrade and self:atCamp() and self:joinTrade() then return end
     -- 1. Survival beats output. In arcade: the one meal, once the level's
@@ -1285,6 +1360,7 @@ function Worker:update(dt, clock)
         end
         if self:updateMorale(dt) then return end
     end
+    if self.stage == 'baby' then self:updateBaby(dt) end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
@@ -1340,13 +1416,14 @@ function Worker:describeState()
             if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. siteWord(self.targetSite.kind) .. self:slotNote() end
             return 'Going ' .. self:doingInfo().verb .. self:slotNote()
         end
-        return 'Wandering'
+        return self.stage == 'baby' and 'Toddling about' or 'Wandering'
     end
     local c = self:carrying()
     if c then
         return 'Holding ' .. (CARGO_WORDS[c.kind] or c.kind) .. (c.kind == CARGO_FOOD and ', no stash free' or ', no way home')
     end
     if self.wilds and self.jobSet and self.idleSince then return 'Idle - ' .. self:idleSummary() end
+    if self.stage == 'baby' then return 'Toddling about' end
     return 'Idle'
 end
 

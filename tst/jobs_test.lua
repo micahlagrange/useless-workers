@@ -112,7 +112,7 @@ function TestDeal:test_a_separate_stream_leaves_old_seeds_unchanged()
             end
         end
         local sheets, jobs = {}, {}
-        for _, w in ipairs(g.workers) do sheets[#sheets + 1] = w.sheet; jobs[#jobs + 1] = w.jobSet.main end
+        for _, w in ipairs(g.workers) do sheets[#sheets + 1] = w.sheet; jobs[#jobs + 1] = w.jobSet and w.jobSet.main or 'baby' end
         return g.rng.state, h, table.concat(sheets, ','), table.concat(jobs, ',')
     end
     local real = JobSets.rngFor
@@ -127,7 +127,7 @@ function TestDeal:test_a_separate_stream_leaves_old_seeds_unchanged()
     end
     -- the species still come round in the old order: looks and tastes as before
     H.newGame('PUPPER', 1)
-    local sheets = { 'pupper', 'twins', 'cwab' }
+    local sheets = { 'pupper', 'twins', 'cwab', 'woofoof' }
     for i, w in ipairs(H.game().workers) do lu.assertEquals(w.sheet, sheets[i]) end
 end
 
@@ -136,10 +136,12 @@ function TestDeal:test_free_play_deals_jobs_and_immigrants_get_them_too()
     local g = H.game()
     local sets = {}
     for _, w in ipairs(g.workers) do
+      if not w:isBaby() then
         lu.assertNotNil(w.jobSet)
         lu.assertEquals(w.role, w.jobSet.main)
         lu.assertTrue(threeDifferent(w.jobSet))
         sets[#sets + 1] = w.jobSet
+      end
     end
     lu.assertTrue(JobSets.covered(sets))
     H.closeGoal()

@@ -532,7 +532,7 @@ function View:drawWorker(w, clock, selected)
         end
     -- hunger as a dot in its status colour: blue satiated, green fed, amber
     -- hungry, red (blinking) starving
-    elseif w:isWorking() then
+    elseif w:isWorking() or w.stage == 'baby' then
         local status = w:hungerStatus()
         local col = ({ satiated = { 0.5, 0.75, 1.0 }, fed = { 0.45, 0.8, 0.4 }, hungry = { 0.95, 0.72, 0.25 }, starving = { 0.95, 0.25, 0.2 } })[status]
         if status ~= 'starving' or math.floor(clock * 3) % 2 == 0 then
@@ -564,7 +564,8 @@ function View:drawWorkerBody(w, clock, sx, feetY)
     -- standing about, a little blob breathes: a soft squash and stretch
     local sy = 1
     if not w.moving then sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7) end
-    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx * (2 - sy), sy, 8, 16)
+    local size = w.stage == 'baby' and BABY_SCALE or 1
+    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx * (2 - sy) * size, sy * size, 8, 16)
     local tool = w:toolInHand()
     if tool then
         local swing = 0

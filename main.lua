@@ -161,6 +161,17 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'grewUp' then
+        -- dealt its jobs the way a newcomer is, favouring what the bunch lacks
+        local band = {}
+        for _, w in ipairs(game.workers) do
+            if w.jobSet and w:isWorking() then band[#band + 1] = w.jobSet end
+        end
+        worker:growUp(JobSets.dealOne(game.jobRng, band))
+        Audio.playSFX('hire')
+        local t = worker:tile()
+        announce(worker.name .. ' grew up! Now a little ' .. JobSets.label(worker.jobSet.main) .. '.', { x = t.x, y = t.y }, 'news')
+        if game.stats then game.stats:event('grewUp', game, worker.name, worker.jobSet.main) end
     elseif name == 'shiny' and game.mode == 'free' then
         Audio.playSFX('deliver')
         announce(worker.name .. ' dug up a shiny!', data, 'news')
@@ -240,6 +251,22 @@ local function hire(n, migrants)
     end
 end
 
+-- A baby (free play starts with one, Morphi) in the home nest.
+local function hireBaby(name)
+    local br = game.world.breakroom
+    game.hired = game.hired + 1
+    local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
+    local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+        x = br.x, y = br.y, stage = 'baby', sheet = sheet,
+        name = name or MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
+        drain = game.scoring.drain, hunger = HUNGER_MAX,
+        wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
+    })
+    table.insert(game.workers, worker)
+    if game.stats then game.stats:event('hatched', game, worker.name, 'baby') end
+    return worker
+end
+
 local function onReady(node)
     game.jobs:postNode(node)
 end
@@ -301,6 +328,8 @@ local function newGame(seedString, difficultyIndex)
     ui:clear()
     game.stats = Stats.new({ mode = 'free', seed = seedString, difficulty = DIFFICULTIES[difficultyIndex].name, build = Version.build })
     hire(DIFFICULTIES[difficultyIndex].workers)
+    -- and one baby in the home nest
+    for i = 1, START_BABIES do hireBaby(i == 1 and FIRST_BABY_NAME or nil) end
     game.log = {}
     announce('Mark a STASH (or a BASKET, 1 grass, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
     game.started = false
@@ -879,6 +908,10 @@ end
 -- The job screen for the picked morphi (free play: main, neutral, disliked).
 local function openJobs()
     local w = game.selectedWorker
+    if w and w.alive and w:isBaby() then
+        ui:toast(w.name .. ' is a baby: no jobs yet, it grows up in a season')
+        return
+    end
     if not (w and w.alive and w.jobSet) then
         ui:toast(game.mode == 'free' and 'Select a morphi first (SELECT tool, then tap one)' or 'Each morphi here has one fixed job')
         return

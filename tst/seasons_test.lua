@@ -55,14 +55,21 @@ function TestSeasons:test_free_play_starts_with_the_offered_wilds_band()
     lu.assertEquals(DIFFICULTIES[1].workers, 3)
     H.newGame('PUPPER', 1)
     local game = H.game()
-    lu.assertEquals(#game.workers, DIFFICULTIES[1].workers)
+    -- the grown-ups and one baby, Morphi
+    lu.assertEquals(#game.workers, DIFFICULTIES[1].workers + START_BABIES)
     -- the species come round in the old hire order's looks; the jobs are
     -- dealt (tst/jobs_test.lua checks how), the role is the main job
     for i, w in ipairs(game.workers) do
         lu.assertEquals(w.sheet, HIRE_SHEETS[(i - 1) % #HIRE_SHEETS + 1])
-        lu.assertNotNil(w.jobSet)
-        lu.assertEquals(w.role, w.jobSet.main)
+        if i <= DIFFICULTIES[1].workers then
+            lu.assertNotNil(w.jobSet)
+            lu.assertEquals(w.role, w.jobSet.main)
+        else
+            lu.assertTrue(w:isBaby())
+            lu.assertNil(w.jobSet)
+        end
     end
+    lu.assertEquals(game.workers[#game.workers].name, FIRST_BABY_NAME)
     -- the other wilds keep their own numbers
     lu.assertEquals(DIFFICULTIES[2].workers, 4)
     lu.assertEquals(DIFFICULTIES[3].workers, 3)
@@ -70,7 +77,7 @@ function TestSeasons:test_free_play_starts_with_the_offered_wilds_band()
     -- any band size works
     H.newGame('PUPPER', 2)
     game = H.game()
-    lu.assertEquals(#game.workers, DIFFICULTIES[2].workers)
+    lu.assertEquals(#game.workers, DIFFICULTIES[2].workers + START_BABIES)
     lu.assertEquals(game.workers[4].sheet, HIRE_SHEETS[4])
 end
 
