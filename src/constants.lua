@@ -86,11 +86,25 @@ BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break 
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
 ROLE_HUNTER = 'hunter'
+ROLE_CARETAKER = 'caretaker'
+-- Caretakers visit a baby that needs something (CARE_POST_BELOW): a visit
+-- of CARE_SECONDS plays with it, cleans it (with a tuft of grass, or not as
+-- well without), feeds it a stored meal it will eat when it is hungry, and
+-- tucks it in for a nap when it is sleepy. A baby feeds itself only when
+-- nobody has caretaker set, or when it is very hungry.
+CARE_SECONDS        = 4.0
+CARE_POST_BELOW     = 75
+CARE_FUN            = 45
+CARE_CLEAN          = 45
+CARE_FEED_BELOW     = 60
+CARE_TUCK_BELOW     = 50
+BABY_SELF_FEED_BELOW = 20
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
     lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
     miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
+    caretaker  = { label = 'Caretaker',  jobType = 'care',   nodeKind = nil,       cargo = nil,        actionSeconds = CARE_SECONDS, verb = 'looking after a baby', sheets = { 'woofoof', 'ribbit' } },
     hunter     = { label = 'Hunter',     jobType = 'hunt',   nodeKind = NODE_CRITTER, cargo = CARGO_FOOD, actionSeconds = HUNT_SECONDS, verb = 'hunting', sheets = { 'pupper', 'woofoof' } },
     -- a baby has no job yet; this only names it on screen
     baby       = { label = 'Baby',       jobType = nil,      nodeKind = nil,       cargo = nil,        actionSeconds = 1.0, verb = 'playing', sheets = { 'pupper' } },

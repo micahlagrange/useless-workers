@@ -212,12 +212,52 @@ function Worker:babySummary()
     return string.format('fun %d clean %d sleep %d, grows up in %d:%02d', math.floor(n.fun + 0.5), math.floor(n.clean + 0.5), math.floor(n.sleep + 0.5), math.floor(left / 60), left % 60)
 end
 
+-- Somebody in the bunch has caretaker as main or neutral job.
+function Worker:hasCaretaker()
+    for _, w in ipairs(self.band or {}) do
+        if w.jobSet and w:isWorking() and (w.jobSet.main == ROLE_CARETAKER or w.jobSet.neutral == ROLE_CARETAKER) then return true end
+    end
+    return false
+end
+
+-- A caretaker's visit: play, clean, feed when hungry, tuck in when sleepy.
+function Worker:careFor(b)
+    local n = b.needs
+    n.fun = math.min(100, n.fun + CARE_FUN)
+    local stock = self.world.stock
+    if (stock.grass or 0) >= 1 then
+        stock.grass = stock.grass - 1
+        n.clean = math.min(100, n.clean + CARE_CLEAN)
+    else
+        n.clean = math.min(100, n.clean + CARE_CLEAN / 3)
+    end
+    if b.hunger < CARE_FEED_BELOW then
+        for _, item in ipairs(self.world.items) do
+            if item.kind == ITEM_FOOD and b:willEat(item.food) then
+                self.world:takeItem(item.x, item.y, item)
+                b:mealOf(item.food)
+                break
+            end
+        end
+    end
+    if n.sleep < CARE_TUCK_BELOW then b.tuckedIn = true end
+    b:say('<3', 1.5)
+    self:emit('cared', b)
+end
+
+function Worker:releaseBaby()
+    if self.targetBaby and self.targetBaby.caredBy == self then self.targetBaby.caredBy = nil end
+    self.targetBaby = nil
+end
+
 -- A baby's day: eat when hungry, nap when sleepy, toddle about near home.
 function Worker:decideBaby()
-    if self.hunger < HUNGER_EAT_THRESHOLD then
+    local cared = self:hasCaretaker()
+    if self.hunger < (cared and BABY_SELF_FEED_BELOW or HUNGER_EAT_THRESHOLD) then
         if self:eatSomething() then return end
     end
-    if self.needs.sleep < BABY_NAP_BELOW then
+    if self.needs.sleep < BABY_NAP_BELOW or self.tuckedIn then
+        self.tuckedIn = nil
         if self:startBreak() then return end
     end
     local home = self.world.breakroom
@@ -349,6 +389,7 @@ function Worker:dropJob()
     end
     self:releaseNode()
     self:releaseSite()
+    self:releaseBaby()
     self:releaseArea()
     self:releaseItem()
     if self.restSpot then
@@ -558,7 +599,8 @@ function Worker:unstaffedJob()
             for _, j in ipairs(self.jobs.items) do
                 if types[j.type] and ((j.node and j.node.ready and self.world:nodeReachable(j.node))
                     or (j.site and not j.site.done and self.world:siteReachable(j.site))
-                    or (j.area and self.world:areaReachable(j.area))) then
+                    or (j.area and self.world:areaReachable(j.area))
+                    or (j.baby and j.baby.alive and j.baby:isBaby())) then
                     return job
                 end
             end
@@ -575,7 +617,7 @@ local WHY_TEXT = {
     none = 'none to do',
 }
 local NONE_TEXT = {
-    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build', hunter = 'no critters about',
+    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build', hunter = 'no critters about', caretaker = 'no baby needs anything',
 }
 
 -- The idle reason as a line for the player, naming the jobs.
@@ -880,6 +922,9 @@ function Worker:decide()
     --    food. The claim happens inside takeNearest, in the same step the job
     --    leaves the queue, so it cannot be shared.
     local function usable(j)
+        if j.baby then
+            return j.baby.alive and j.baby:isBaby() and j.baby.caredBy == nil
+        end
         if j.node then
             return j.node.ready and j.node.claimedBy == nil and not self:isIcked(j.x, j.y) and self.world:nodeReachable(j.node)
         end
@@ -893,6 +938,14 @@ function Worker:decide()
     local function claim(j)
         if j.area then
             j.area.claimedBy = self
+            return true
+        end
+        if j.baby then
+            local t = j.baby:tile()
+            local path = self:pathTo(t.x, t.y)
+            if not path then return false end
+            claimedPath = path
+            j.baby.caredBy = self
             return true
         end
         local spot = j.node and self.world:approachTile(j.node) or self.world:siteApproachTile(j.site)
@@ -926,6 +979,7 @@ function Worker:decide()
         self.job = job
         self.targetNode = job.node
         self.targetSite = job.site
+        self.targetBaby = job.baby
         self:setPath(claimedPath, 'work')
         return
     end
@@ -1020,6 +1074,14 @@ end
 function Worker:followPath(dt)
     if (self.goal == 'work' or self.goal == 'eat') and self.targetNode and not self.targetNode.ready then
         self:releaseNode()
+        self.job = nil
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        return
+    end
+    if self.goal == 'work' and self.targetBaby and not (self.targetBaby.alive and self.targetBaby:isBaby()) then
+        self:releaseBaby()
         self.job = nil
         self.path = nil
         self.goal = nil
@@ -1222,9 +1284,12 @@ function Worker:finishAction()
             local kind = self.world:harvestNode(node)
             cargo = { kind = kind, food = node.food }
             self:emit('work', node.kind)
+        elseif self.targetBaby and self.targetBaby.alive and self.targetBaby:isBaby() then
+            self:careFor(self.targetBaby)
         end
         self:releaseNode()
         self:releaseSite()
+        self:releaseBaby()
         self.job = nil
         if cargo then
             -- nowhere to take it yet: keep hold of it (decide tries again,

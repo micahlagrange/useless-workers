@@ -12,6 +12,8 @@ local H = TEST_HOOKS.main
 love.load()
 love.resize(1280, 720)
 
+local JobSets = require('src.jobsets')
+
 local function baby(g)
     for _, w in ipairs(g.workers) do if w:isBaby() then return w end end
 end
@@ -88,6 +90,46 @@ function TestBabies:test_care_sets_its_mood_when_it_grows_up()
     b.careSum, b.careTime = 95 * 100, 100
     b:growUp({ main = ROLE_FORAGER, neutral = ROLE_HUNTER, disliked = ROLE_MINER })
     lu.assertEquals(b.morale, 95)
+end
+
+
+TestCaretaker = {}
+
+function TestCaretaker:test_the_deal_covers_all_six_jobs()
+    lu.assertEquals(#JobSets.JOBS, 6)
+    for seed = 1, 1000 do
+        local sets = JobSets.dealStart(JobSets.rngFor(seed), 3)
+        lu.assertTrue(JobSets.covered(sets), 'seed ' .. seed)
+    end
+end
+
+function TestCaretaker:test_a_caretaker_visits_a_baby_that_needs_it()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    local b = baby(g)
+    -- one grown-up minds babies first; a stash of berries nearby
+    local carer = g.workers[1]
+    carer:setJob('main', ROLE_CARETAKER)
+    b.needs.fun, b.needs.clean = 10, 10
+    b.hunger = 50
+    g.world.stock.grass = 3
+    local visited = false
+    for _ = 1, 600 do
+        love.update(0.1)
+        if b.needs.fun > 40 then visited = true break end
+    end
+    lu.assertTrue(visited, 'the caretaker played with the baby')
+    lu.assertTrue(b.needs.clean > 40, 'and washed it, with a tuft of grass')
+    lu.assertEquals(g.world.stock.grass, 2)
+end
+
+function TestCaretaker:test_a_baby_knows_when_someone_minds_babies()
+    H.newGame('PUPPER', 1)
+    local g = H.game()
+    local b = baby(g)
+    g.workers[1]:setJob('main', ROLE_CARETAKER)
+    lu.assertTrue(b:hasCaretaker())
 end
 
 os.exit(lu.LuaUnit.run())

@@ -62,6 +62,19 @@ function Jobs.typeForSite(site)
     return 'build' -- floors, bins, walls, doors, bridges
 end
 
+-- A visit to a baby that needs looking after (caretaker work).
+function Jobs:postBaby(baby)
+    local t = baby:tile()
+    return self:post({ type = 'care', x = t.x, y = t.y, baby = baby })
+end
+
+function Jobs:hasJobForBaby(baby)
+    for _, job in ipairs(self.items) do
+        if job.baby == baby then return true end
+    end
+    return false
+end
+
 function Jobs:hasJobForSite(site)
     for _, job in ipairs(self.items) do
         if job.site == site then return true end
@@ -112,7 +125,8 @@ function Jobs:take(jobType, predicate)
     local i = 1
     while i <= #self.items do
         local job = self.items[i]
-        if (job.node and not job.node.ready) or (job.site and job.site.done) or (job.area and #job.area.sites == 0) then
+        if (job.node and not job.node.ready) or (job.site and job.site.done) or (job.area and #job.area.sites == 0)
+            or (job.baby and not (job.baby.alive and job.baby:isBaby())) then
             table.remove(self.items, i)
         elseif (jobType == nil or job.type == jobType) and (predicate == nil or predicate(job)) then
             table.remove(self.items, i)
@@ -149,6 +163,7 @@ function Jobs:takeNearest(jobTypes, fromX, fromY, predicate, claim, tries)
                 else
                     -- a critter hops about: its job is wherever it is now
                     if job.node then job.x, job.y = job.node.x, job.node.y end
+                    if job.baby then local t = job.baby:tile(); job.x, job.y = t.x, t.y end
                     d = math.abs(job.x - fromX) + math.abs(job.y - fromY)
                 end
                 candidates[#candidates + 1] = { job = job, d = d, order = i }

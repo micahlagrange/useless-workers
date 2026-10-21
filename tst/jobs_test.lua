@@ -80,7 +80,7 @@ function TestDeal:test_an_immigrant_favours_the_jobs_the_band_lacks()
     local band = {
         { main = ROLE_FORAGER, neutral = ROLE_MINER, disliked = ROLE_LUMBERJACK },
         { main = ROLE_MINER, neutral = ROLE_FORAGER, disliked = ROLE_LUMBERJACK },
-        { main = ROLE_HUNTER, neutral = ROLE_FORAGER, disliked = ROLE_MINER },
+        { main = ROLE_HUNTER, neutral = ROLE_CARETAKER, disliked = ROLE_MINER },
     }
     for seed = 1, 30 do
         local s = JobSets.dealOne(Rng.new(seed), band)

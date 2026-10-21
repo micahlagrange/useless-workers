@@ -10,7 +10,7 @@ carry it all home.
 Every morphi has three jobs: a main job it does first, a neutral job for when
 the main one has nothing, and a job it dislikes and does only when nothing else
 is left. You pick the first two (JOBS on a picked morphi); the disliked one is
-part of who it is. The jobs are forager, gatherer, digger, builder and hunter.
+part of who it is. The jobs are forager, gatherer, digger, builder, caretaker and hunter.
 
 ## The morphis
 
@@ -30,6 +30,7 @@ part of who it is. The jobs are forager, gatherer, digger, builder and hunter.
 | Digger | marked clay, and the shinies hidden in it | shinies |
 | Builder | anything marked to build | stashes, baskets, nests, bridges |
 | Hunter | critters hopping about the meadow | meat, the only way to get it |
+| Caretaker | babies that need something | play, a wash (with a tuft of grass), a meal, a nap |
 
 Food is a real thing on the ground: the closest free stash to the home nest,
 one per stash. Every morphi has two pockets: one for what it is carrying, one

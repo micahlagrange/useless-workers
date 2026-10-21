@@ -20,7 +20,7 @@ local Rng = require('src.rng')
 
 local JobSets = {}
 
-JobSets.JOBS = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER, ROLE_BUILDER, ROLE_HUNTER }
+JobSets.JOBS = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER, ROLE_BUILDER, ROLE_CARETAKER, ROLE_HUNTER }
 JobSets.SLOTS = { 'main', 'neutral', 'disliked' }
 -- how many times the start is redealt before giving up on covering all four
 -- (only a band of one cannot cover them: a morphi has three jobs)
@@ -39,7 +39,7 @@ end
 -- The job a queue type belongs to first (for whose action time a node or a
 -- site takes): forage to forager, gather to gatherer, mine to miner, build
 -- and nestwork to builder.
-JobSets.JOB_FOR_TYPE = { forage = ROLE_FORAGER, gather = ROLE_LUMBERJACK, mine = ROLE_MINER, build = ROLE_BUILDER, nestwork = ROLE_BUILDER, hunt = ROLE_HUNTER }
+JobSets.JOB_FOR_TYPE = { forage = ROLE_FORAGER, gather = ROLE_LUMBERJACK, mine = ROLE_MINER, build = ROLE_BUILDER, nestwork = ROLE_BUILDER, hunt = ROLE_HUNTER, care = ROLE_CARETAKER }
 
 -- A random stream of its own for the deal, from the game's seed.
 function JobSets.rngFor(seedNumber)

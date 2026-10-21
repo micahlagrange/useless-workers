@@ -161,6 +161,7 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'cared' then Audio.playSFX('click')
     elseif name == 'grewUp' then
         -- dealt its jobs the way a newcomer is, favouring what the bunch lacks
         local band = {}
@@ -257,7 +258,7 @@ local function hireBaby(name)
     game.hired = game.hired + 1
     local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
     local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
-        x = br.x, y = br.y, stage = 'baby', sheet = sheet,
+        x = br.x, y = br.y, stage = 'baby', sheet = sheet, band = game.workers,
         name = name or MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
         drain = game.scoring.drain, hunger = HUNGER_MAX,
         wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
@@ -566,6 +567,17 @@ local function updatePlaying(dt, substep)
     game.clock = game.clock + dt
     game.jobs:update(dt)
     game.world:update(dt, onReady)
+    -- babies that need looking after go on the queue for a caretaker
+    game.careTimer = (game.careTimer or 0) - dt
+    if game.careTimer <= 0 then
+        game.careTimer = 1
+        for _, w in ipairs(game.workers) do
+            if w.alive and w:isBaby() and not w.caredBy and (w:careNow() < CARE_POST_BELOW or w.hunger < CARE_FEED_BELOW)
+                and not game.jobs:hasJobForBaby(w) then
+                game.jobs:postBaby(w)
+            end
+        end
+    end
     for _, w in ipairs(game.workers) do
         w:update(dt, game.clock)
     end
