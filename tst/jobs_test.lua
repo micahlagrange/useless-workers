@@ -463,6 +463,17 @@ function TestJobsScreen:test_the_job_screen_sets_main_and_neutral_and_refuses_th
     lu.assertEquals(H.state(), 'jobs')
     love.keypressed('[')
     lu.assertTrue(g.selectedWorker == g.workers[1])
+    -- UNITS goes back to the units list
+    love.draw()
+    local ub
+    for _, pb in ipairs(ui.panelButtons) do if pb.id == 'units' then ub = pb end end
+    lu.assertNotNil(ub)
+    Stub.fingers = { 'u' }
+    love.touchpressed('u', (ub.x + ub.w / 2) * ui.scale, (ub.y + ub.h / 2) * ui.scale)
+    love.touchreleased('u')
+    Stub.fingers = {}
+    lu.assertEquals(H.state(), 'units')
+    H.openJobs()
     love.keypressed('escape')
     lu.assertEquals(H.state(), 'playing')
     H.ui().touch = false

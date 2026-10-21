@@ -1190,6 +1190,8 @@ local function pointerPressed(x, y, button, istouch)
             pressJob(pb)
         elseif pb == 'jobprev' or pb == 'jobnext' then
             followNext(pb == 'jobnext' and 1 or -1)
+        elseif pb == 'units' then
+            openUnits()
         elseif pb == 'close' or not ui:insideJobPanel(vx, vy) then
             closeJobs()
         end
@@ -1520,6 +1522,8 @@ function love.keypressed(key)
     elseif state == 'jobs' then
         if key == 'j' or key == 'escape' then
             closeJobs()
+        elseif key == 'u' then
+            openUnits()
         elseif key == ']' or key == '[' then
             followNext(key == ']' and 1 or -1)
             Audio.playSFX('click')

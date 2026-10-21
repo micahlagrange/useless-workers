@@ -1266,22 +1266,35 @@ function UI:drawJobs(game)
         return #lines * small:getHeight()
     end
     local stateH = small:getHeight() + 6
-    local ph = 52 + stateH + 6
+    -- the header: UNITS (back to the list), < >, CLOSE on the right; the
+    -- title beside them when it fits, else on a row of its own below
+    local btnW = 100
+    local unitsW = small:getWidth('UNITS') + 24
+    local navW = math.max(self.touch and 44 or 36, small:getWidth('<') + 24)
+    local buttonsW = unitsW + 2 * navW + btnW + 3 * 8
+    local title = w.name .. "'s jobs"
+    local titleRow = small:getWidth(title) > inner - buttonsW - 10
+    local top = titleRow and 52 + self.fonts.hud:getHeight() + 6 or 52
+    local ph = top + stateH + 6
         + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
         + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
         + wrapH(hints.disliked) + 6 + math.max(bh, wrapH(trait, inner - bw - 12)) + 12
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
     self.jobPanel = { x = x, y = y, w = pw, h = ph }
-    local btnW = 100
-    -- the previous and next morphi, beside CLOSE
-    local navW = math.max(self.touch and 44 or 36, small:getWidth('<') + 24)
+    -- the previous and next morphi, beside CLOSE, and UNITS before them
     local navX = x + pw - btnW - 18 - 2 * (navW + 8)
-    self:printLine(w.name .. "'s jobs", x + 18, y + 16, navX - x - 18 - 10, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    local unitsX = navX - 8 - unitsW
+    if titleRow then
+        self:printLine(title, x + 18, y + 52, inner, 'left', C.good, { self.fonts.hud, self.fonts.small })
+    else
+        self:printLine(title, x + 18, y + 16, unitsX - x - 18 - 10, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    end
+    self:panelButton('units', { x = unitsX, y = y + 12, w = unitsW, h = 30 }, 'UNITS', false)
     self:panelButton('jobprev', { x = navX, y = y + 12, w = navW, h = 30 }, '<', false)
     self:panelButton('jobnext', { x = navX + navW + 8, y = y + 12, w = navW, h = 30 }, '>', false)
     self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
-    local cy = y + 52
+    local cy = y + top
     self:printLine(w:describeState(), x + 18, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     cy = cy + stateH + 6
     -- one block of choices; choices[i] = false stands for NONE. The job in
