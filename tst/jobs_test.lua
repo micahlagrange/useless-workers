@@ -152,10 +152,23 @@ function TestJobRules:test_the_disliked_job_cannot_be_changed()
     local ok = JobSets.set(s, 'disliked', ROLE_LUMBERJACK)
     lu.assertFalse(ok)
     lu.assertEquals(s.disliked, ROLE_BUILDER)
-    -- nor can it be made the main or neutral job
-    lu.assertFalse((JobSets.set(s, 'main', ROLE_BUILDER)))
+    -- nor can it be the neutral job
     lu.assertFalse((JobSets.set(s, 'neutral', ROLE_BUILDER)))
     lu.assertEquals(s, { main = ROLE_FORAGER, neutral = ROLE_MINER, disliked = ROLE_BUILDER })
+end
+
+function TestJobRules:test_the_disliked_job_can_be_made_the_main_job()
+    local s = { main = ROLE_FORAGER, neutral = ROLE_MINER, disliked = ROLE_BUILDER }
+    lu.assertTrue((JobSets.set(s, 'main', ROLE_BUILDER)))
+    lu.assertEquals(s, { main = ROLE_BUILDER, neutral = ROLE_MINER, disliked = ROLE_BUILDER })
+    -- it is tried once, as the main job
+    local order = JobSets.order(s)
+    lu.assertEquals(#order, 2)
+    lu.assertEquals(order[1], { job = ROLE_BUILDER, slot = 'main' })
+    lu.assertEquals(order[2], { job = ROLE_MINER, slot = 'neutral' })
+    -- the neutral job back as main: the disliked one does not become the fallback
+    lu.assertTrue((JobSets.set(s, 'main', ROLE_MINER)))
+    lu.assertEquals(s, { main = ROLE_MINER, disliked = ROLE_BUILDER })
 end
 
 function TestJobRules:test_the_player_changes_main_and_neutral()
@@ -320,6 +333,25 @@ function TestJobsExport:test_the_run_export_carries_the_jobs()
     lu.assertNotNil(json:find('"idleByMain"', 1, true))
 end
 
+TestFollowNav = {}
+
+function TestFollowNav:test_next_morphi_is_there_without_following()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    g.follow = false
+    g.selectedWorker = nil
+    love.draw()
+    local ui = H.ui()
+    lu.assertEquals(#ui.followNav, 2, 'the < and > buttons show with nobody followed')
+    local r = ui.followNav[2]
+    love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
+    lu.assertEquals(g.selectedWorker, g.workers[1])
+    lu.assertFalse(g.follow, 'picking the next morphi does not start following')
+    love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
+    lu.assertEquals(g.selectedWorker, g.workers[2])
+end
+
 TestJobsScreen = {}
 
 function TestJobsScreen:test_the_job_screen_sets_main_and_neutral_and_refuses_the_dislike()
@@ -341,8 +373,10 @@ function TestJobsScreen:test_the_job_screen_sets_main_and_neutral_and_refuses_th
     H.pressJob('job:neutral:none')
     lu.assertNil(js.neutral)
     local dislike = js.disliked
+    H.pressJob('job:neutral:' .. dislike)
+    lu.assertNil(js.neutral, 'the disliked job is never the fallback')
     H.pressJob('job:main:' .. dislike)
-    lu.assertNotEquals(js.main, dislike)
+    lu.assertEquals(js.main, dislike, 'the disliked job can be the main job')
     lu.assertEquals(js.disliked, dislike)
     H.pressJob('job:main:' .. other)
     lu.assertEquals(js.main, other)

@@ -840,9 +840,16 @@ local function followNext(step)
     if at == 0 then at = step > 0 and 0 or 1 end
     local w = band[(at - 1 + step) % #band + 1]
     game.selectedWorker = w
-    game.follow = true
     game.abilities:select(ABILITY_SELECT)
-    ui:toast('Following ' .. w.name)
+    if game.follow then
+        ui:toast('Following ' .. w.name)
+    else
+        -- not following: pick it and look at it, the camera stays free
+        game.focus = nil
+        local t = w:tile()
+        game.camera:centerOn((t.x - 0.5) * TILE_SIZE, (t.y - 0.5) * TILE_SIZE)
+        ui:toast(w.name)
+    end
 end
 
 local function toggleFollow()

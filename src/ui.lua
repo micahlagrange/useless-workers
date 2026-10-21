@@ -893,7 +893,12 @@ end
 -- the bottom bar.
 function UI:drawFollowNav(game)
     self.followNav = {}
-    if not (game.follow and game.selectedWorker and game.selectedWorker.alive) then return end
+    -- shown whenever there is a morphi to go to, following or not
+    local any = false
+    for _, w in ipairs(game.workers or {}) do
+        if w.alive and w.state ~= 'quitting' then any = true break end
+    end
+    if not any then return end
     local prev = self.touch and '<' or '< ['
     local nxt = self.touch and '>' or '] >'
     local bw = math.max(self.touch and 64 or 0, self.fonts.hud:getWidth(prev) + 28)
@@ -1233,7 +1238,10 @@ function UI:drawJobs(game)
             local current = js[slot] == job
             local ok = current or JobSets.canSet(js, slot, job)
             local label = job and JobSets.label(job):upper() or 'NONE'
-            self:panelButton('job:' .. slot .. ':' .. (job or 'none'), rect, label, current, (not ok) and C.warn or nil)
+            -- not allowed: the warning colour; the disliked job as a main
+            -- job is allowed, in amber
+            local color = (not ok) and C.warn or (job and job == js.disliked and C.amber) or nil
+            self:panelButton('job:' .. slot .. ':' .. (job or 'none'), rect, label, current, color)
         end
         cy = cy + rowsFor(#choices) * (bh + gap) + 6
     end
@@ -1241,7 +1249,8 @@ function UI:drawJobs(game)
     local neutral = { false }
     for _, job in ipairs(JobSets.JOBS) do neutral[#neutral + 1] = job end
     grid('neutral', 'NEUTRAL: when the main job has nothing', neutral)
-    self:printLine('DISLIKED: ' .. JobSets.label(js.disliked) .. ', only when nothing else is left', x + 18, cy, inner, 'left', C.warn, { self.fonts.small, self.fonts.tiny })
+    local last = js.main == js.disliked and ', and it is the main job now' or ', only when nothing else is left'
+    self:printLine('DISLIKED: ' .. JobSets.label(js.disliked) .. last, x + 18, cy, inner, 'left', C.warn, { self.fonts.small, self.fonts.tiny })
     cy = cy + labelH
     self:printLine('It is part of who ' .. w.name .. ' is and cannot be changed.', x + 18, cy, inner, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
     love.graphics.setColor(1, 1, 1, 1)

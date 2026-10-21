@@ -166,8 +166,11 @@ function JobSets.dealOne(rng, band)
     return { main = main, neutral = neutral, disliked = disliked }
 end
 
--- Can this morphi's slot take this job? main and neutral only; never the
--- disliked job; the main never empty. Returns ok and, if not, why.
+-- Can this morphi's slot take this job? main and neutral only; the main
+-- never empty. The disliked job may be made the main job (Micah,
+-- 2026-10-21: the player can put a morphi on work it dislikes); it stays
+-- its disliked job all the same. The neutral job is never the disliked one.
+-- Returns ok and, if not, why.
 function JobSets.canSet(set, slot, job)
     if slot == 'disliked' then return false, 'the disliked job is part of who it is' end
     if slot ~= 'main' and slot ~= 'neutral' then return false, 'no such job slot' end
@@ -176,7 +179,7 @@ function JobSets.canSet(set, slot, job)
         return true
     end
     if not ROLES[job] or not contains(JobSets.JOBS, job) then return false, 'no such job' end
-    if job == set.disliked then return false, 'it dislikes ' .. ROLES[job].label:lower() .. ' work' end
+    if slot == 'neutral' and job == set.disliked then return false, 'it dislikes ' .. ROLES[job].label:lower() .. ' work' end
     if slot == 'neutral' and job == set.main then return false, 'that is already its main job' end
     return true
 end
@@ -188,8 +191,12 @@ function JobSets.set(set, slot, job)
     if not ok then return false, why end
     if slot == 'main' then
         if job == set.main then return true end
-        if job == set.neutral then set.neutral = set.main end
+        if job == set.neutral then
+            set.neutral = set.main
+        end
         set.main = job
+        -- the old main as neutral would be the disliked job: no fallback then
+        if set.neutral == set.disliked then set.neutral = nil end
     else
         set.neutral = job
     end
@@ -200,7 +207,7 @@ end
 function JobSets.order(set)
     local out = { { job = set.main, slot = 'main' } }
     if set.neutral then out[#out + 1] = { job = set.neutral, slot = 'neutral' } end
-    if set.disliked then out[#out + 1] = { job = set.disliked, slot = 'disliked' } end
+    if set.disliked and set.disliked ~= set.main then out[#out + 1] = { job = set.disliked, slot = 'disliked' } end
     return out
 end
 
