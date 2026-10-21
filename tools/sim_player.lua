@@ -3,24 +3,75 @@
 -- dofile('tools/sim_player.lua') after main.lua is loaded.
 local Player = {}
 
-function Player.placeStorage(game, n, bin)
+-- Up to n sites of one kind on open ground in rings round camp, nearest first.
+local function placeNearCamp(game, tool, siteKind, n)
     local w, ab = game.world, game.abilities
     local br = w.breakroom
     local placed = 0
-    ab:select(bin and ABILITY_BIN or ABILITY_STORAGE)
+    ab:select(tool)
     for r = 2, 8 do
         for dy = -r, r do
             for dx = -r, r do
                 if placed >= n then return placed end
                 if math.max(math.abs(dx), math.abs(dy)) == r then
                     local x, y = br.x + dx, br.y + dy
-                    if w:isReachable(x, y) and w:canSite(bin and SITE_BIN or SITE_STORAGE, x, y) and ab:use(x, y) then placed = placed + 1 end
+                    if w:isReachable(x, y) and w:canSite(siteKind, x, y) and ab:use(x, y) then placed = placed + 1 end
                 end
             end
         end
     end
     return placed
 end
+
+function Player.placeStorage(game, n, bin)
+    return placeNearCamp(game, bin and ABILITY_BIN or ABILITY_STORAGE, bin and SITE_BIN or SITE_STORAGE, n)
+end
+
+-- Beds, built and marked, and storage room still free (marked spots count).
+function Player.bedCount(game)
+    return #game.world.beds + #game.world:sitesOfKind(SITE_BED)
+end
+
+function Player.freeStorage(game)
+    local w, n = game.world, 0
+    for _, s in ipairs(w:storageTiles()) do n = n + math.max(0, w:freeSlots(s.x, s.y)) end
+    for _, site in ipairs(w.sites) do n = n + (SITE_CAPACITY[site.kind] or 0) end
+    return n
+end
+
+local function bandSize(game)
+    local n = 0
+    for _, wk in ipairs(game.workers) do if wk:isWorking() then n = n + 1 end end
+    return n
+end
+
+-- A bed for every morphi in the band, one per call, while the logs last.
+function Player.placeBeds(game)
+    if Player.bedCount(game) < bandSize(game) and game.world:canAfford(COSTS.bed) then
+        return placeNearCamp(game, ABILITY_BED, SITE_BED, 1)
+    end
+    return 0
+end
+
+-- The players tools/bench.lua compares. Each act() is one look at the map;
+-- the bench calls it at the start and then every PLAYER_EVERY game seconds.
+--   active  opens routes to what is out of reach, keeps storage free, a
+--           bin when logs are spare, and a bed for every morphi
+--   none    does nothing at all
+--   dig     only mines and bridges routes (no storage, no beds)
+--   beds    only builds beds (no digging or bridging, no storage)
+Player.STRATEGIES = { 'active', 'none', 'dig', 'beds' }
+Player.act = {
+    active = function(game)
+        Player.clearRoutes(game, 4)
+        Player.placeBeds(game)
+        if Player.freeStorage(game) < 4 then Player.placeStorage(game, 3) end
+        if game.world.stock.logs >= COSTS.bin.logs + COSTS.bed.logs + 4 then Player.placeStorage(game, 1, true) end
+    end,
+    none = function() end,
+    dig = function(game) Player.clearRoutes(game, 4) end,
+    beds = function(game) Player.placeBeds(game) end,
+}
 
 -- The route clearer: each season, for the nearest few things out of reach
 -- (bushes, trees, ore), the cheapest way through: grass is free, stone is
