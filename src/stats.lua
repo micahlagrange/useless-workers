@@ -139,8 +139,10 @@ function Stats:row(game, day)
         season = (not Stats.seasonal(game)) and scoring:seasonLabel() or Stats.seasonOfDay(day),
         pop = 0, hunger = 0, morale = 0, hungry = 0, starving = 0, lowMorale = 0,
         work = 0, foodTime = 0, rest = 0, sulk = 0, idle = 0,
-        roles = {},
-        band = {},      -- where each morphi is and how it is doing: name, role, x, y, hunger, morale, doing
+        roles = {},     -- morphis by main job
+        idleByMain = {}, -- idle morphis by main job (format 2)
+        band = {},      -- where each morphi is and how it is doing: name, role (= main), main, neutral,
+                        -- disliked, job (what it is working at, if working), x, y, hunger, morale, doing
         stockLogs = world.stock.logs, stockGold = world.stock.gold,
         storedFood = world:storedCount('food'),
         food = scoring.lifetimeDelivered.food or 0,
@@ -163,8 +165,15 @@ function Stats:row(game, day)
             if b == 'food' then b = 'foodTime' end
             r[b] = r[b] + 1
             r.roles[w.role] = (r.roles[w.role] or 0) + 1
+            local doing = bucket(w)
+            if doing == 'idle' then r.idleByMain[w.role] = (r.idleByMain[w.role] or 0) + 1 end
             local t = w:tile()
-            r.band[#r.band + 1] = { name = w.name, role = w.role, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5), morale = math.floor((w.morale or MORALE_MAX) + 0.5), doing = bucket(w) }
+            local js = w.jobSet
+            r.band[#r.band + 1] = {
+                name = w.name, role = w.role, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5), morale = math.floor((w.morale or MORALE_MAX) + 0.5), doing = doing,
+                main = w.role, neutral = js and js.neutral or nil, disliked = js and js.disliked or nil,
+                job = doing == 'work' and (w.doing or w.role) or nil,
+            }
         end
     end
     if r.pop > 0 then

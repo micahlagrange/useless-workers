@@ -148,7 +148,11 @@ const TILES = {
   'T': ['stump', '#7a5a34'], 'g': ['gold ore', '#e3b93c'], 's': ['floor spot', '#bba86e'], 'n': ['bin', '#6e3f22'],
   'z': ['bed', '#4a6fa8'], '+': ['being built', '#f1f1e6'],
 };
-const ROLE_COLOR = { forager: '#ff8fb0', lumberjack: '#9fe0ff', miner: '#ffd27a', builder: '#ffffff' };
+const ROLE_COLOR = { forager: '#ff8fb0', lumberjack: '#9fe0ff', miner: '#ffd27a', builder: '#c9a6ff' };
+// A morphi's main job. Exports before format 2 (build 141 and older) have
+// only role, the one job a morphi had then, which is its main job.
+const mainOf = m => m.main || m.role;
+const JOBS = ['forager', 'lumberjack', 'miner', 'builder'];
 // What a change from one character to another means, in words.
 function describe(a, b) {
   const n = c => (TILES[c] || ['?'])[0];
@@ -226,7 +230,7 @@ function drawMap() {
   if ($('showBand').checked) for (const m of band) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc((m.x - .5) * cell, (m.y - .5) * cell, cell * .62, 0, 7); ctx.fill();
-    ctx.fillStyle = ROLE_COLOR[m.role] || '#fff';
+    ctx.fillStyle = ROLE_COLOR[mainOf(m)] || '#fff';
     ctx.beginPath(); ctx.arc((m.x - .5) * cell, (m.y - .5) * cell, cell * .45, 0, 7); ctx.fill();
   }
 }
@@ -291,8 +295,12 @@ function renderSide() {
   if (!band.length) bl.append(el('li', 'empty', r.band ? 'Nobody left.' : 'This run was exported before builds recorded where each morphi stands (build 110).'));
   for (const m of band) {
     const li = el('li'), dot = el('span', 'k');
-    dot.textContent = '● ' + m.role.slice(0, 3); dot.style.color = ROLE_COLOR[m.role] || 'inherit';
-    li.append(dot, el('span', 't', m.name + '  ' + m.doing + '  hunger ' + m.hunger + '  morale ' + m.morale + '  at ' + m.x + ',' + m.y));
+    const main = mainOf(m);
+    dot.textContent = '● ' + main.slice(0, 3); dot.style.color = ROLE_COLOR[main] || 'inherit';
+    // jobs: main > neutral, x disliked (format 2); what it works at when working
+    const jobs = m.disliked ? '  [' + main + ' > ' + (m.neutral || 'no neutral') + ', dislikes ' + m.disliked + ']' : '';
+    const doing = m.doing === 'work' && m.job && m.job !== main ? 'work (' + m.job + ')' : m.doing;
+    li.append(dot, el('span', 't', m.name + jobs + '  ' + doing + '  hunger ' + m.hunger + '  morale ' + m.morale + '  at ' + m.x + ',' + m.y));
     bl.append(li);
   }
   $('dayname').textContent = 'Day ' + day + ' of ' + run.days.length;
@@ -306,7 +314,14 @@ const CHARTS = [
   ['Mood', [['hunger', 'hunger', '#ec7a5c'], ['morale', 'morale', '#b6d36a']]],
   ['Gathered', [['food', 'food', '#d2563f'], ['logs', 'logs', '#a3794a'], ['gold', 'gold', '#e3b93c']]],
   ['Comings and goings', [['arrived', 'arrived', '#b6d36a'], ['left', 'left', '#ec7a5c'], ['hardships', 'hardships', '#98a083']]],
+  ['Idle by main job', JOBS.map(j => ['idle_' + j, j, ROLE_COLOR[j]])],
 ];
+// idle_<job> for the chart above: from idleByMain (format 2), else counted
+// from the band (an older run's role is its main job)
+function idleByMain(r, job) {
+  if (r.idleByMain && !Array.isArray(r.idleByMain)) return r.idleByMain[job] || 0;
+  return arr(r.band).filter(m => mainOf(m) === job && m.doing === 'idle').length;
+}
 function drawCharts() {
   const box = $('charts');
   if (!box.children.length) {
@@ -365,6 +380,7 @@ function load(r, label) {
   if (!r || !Array.isArray(r.days) || !r.days.length) { $('meta').textContent = 'That file has no days in it. Pick a stats export (.json).'; return; }
   stop();
   run = r; grids = buildGrids(r);
+  for (const d of arr(r.days)) for (const j of JOBS) d['idle_' + j] = idleByMain(d, j);
   const m = r.meta || {};
   $('meta').replaceChildren(
     document.createTextNode([label, 'seed ' + m.seed, m.difficulty || m.level || m.mode, 'build ' + m.build, r.days.length + ' days', m.exportedAt ? 'exported ' + m.exportedAt : ''].filter(Boolean).join(' · ')),
@@ -381,7 +397,6 @@ for (const [c, [name, col]] of Object.entries(TILES)) {
   const s = el('span'), b = el('b'); b.style.background = col; s.append(b, name); $('legend').append(s);
 }
 for (const [role, col] of Object.entries(ROLE_COLOR)) {
-  if (role === 'builder') continue;
   const s = el('span'), b = el('b'); b.style.background = col; b.style.borderRadius = '50%'; s.append(b, role); $('legend').append(s);
 }
 

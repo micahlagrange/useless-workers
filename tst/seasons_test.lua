@@ -49,24 +49,27 @@ function TestSeasons:test_the_season_clock_runs_a_full_season()
     lu.assertEquals(Stats.dayOf(game), math.floor(DAYS_PER_SEASON / 2) + 1)
 end
 
-function TestSeasons:test_free_play_starts_with_the_offered_wilds_band_in_hire_order()
+function TestSeasons:test_free_play_starts_with_the_offered_wilds_band()
     lu.assertEquals(DIFFICULTIES[1].workers, 3)
-    lu.assertEquals(HIRE_ORDER, { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER })
     H.newGame('PUPPER', 1)
     local game = H.game()
     lu.assertEquals(#game.workers, DIFFICULTIES[1].workers)
+    -- the species come round in the old hire order's looks; the jobs are
+    -- dealt (tst/jobs_test.lua checks how), the role is the main job
     for i, w in ipairs(game.workers) do
-        lu.assertEquals(w.role, HIRE_ORDER[(i - 1) % #HIRE_ORDER + 1])
+        lu.assertEquals(w.sheet, HIRE_SHEETS[(i - 1) % #HIRE_SHEETS + 1])
+        lu.assertNotNil(w.jobSet)
+        lu.assertEquals(w.role, w.jobSet.main)
     end
     -- the other wilds keep their own numbers
     lu.assertEquals(DIFFICULTIES[2].workers, 4)
     lu.assertEquals(DIFFICULTIES[3].workers, 3)
     lu.assertEquals(DIFFICULTIES[4].workers, 2)
-    -- any band size works: migrants carry on the same order
+    -- any band size works
     H.newGame('PUPPER', 2)
     game = H.game()
     lu.assertEquals(#game.workers, DIFFICULTIES[2].workers)
-    lu.assertEquals(game.workers[4].role, HIRE_ORDER[1])
+    lu.assertEquals(game.workers[4].sheet, HIRE_SHEETS[4])
 end
 
 function TestSeasons:test_a_survival_level_counts_days_from_its_start_not_by_season()

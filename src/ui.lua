@@ -3,6 +3,7 @@ require('src.constants')
 local Util = require('src.util')
 local Scoring = require('src.scoring')
 local Campaign = require('src.campaign')
+local JobSets = require('src.jobsets')
 local Version = require('src.version')
 local Audio = require('src.audio')
 
@@ -972,6 +973,7 @@ end
 
 function UI:drawBottomBar(game)
     local abilities = game.abilities
+    self.jobsButton = nil
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
@@ -1031,7 +1033,19 @@ function UI:drawBottomBar(game)
     if self.portrait then
         -- the strip above the tools
         local ix, iy, iw = 16, self.vh - BOTTOM_BAR_H + 8, self.vw - 32
-        if w and w.alive then
+        if w and w.alive and w.jobSet then
+            -- free play: name (JOBS opens the job screen), its three jobs,
+            -- what it is doing, how it is
+            local lh = self.fonts.small:getHeight() + 6
+            local jw = 84
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species, ix, iy, iw - jw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
+            self:jobsButtonDraw({ x = ix + iw - jw, y = iy - 4, w = jw, h = 28 })
+            self:printLine(self:jobsSummary(w), ix, iy + lh + 6, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printLine(w:describeState(), ix, iy + 2 * lh + 6, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+            local word, color = hungerLook(w)
+            self:printLine(word .. ', ' .. w:mood(), ix, iy + 3 * lh + 6, iw, 'left', color, { self.fonts.small, self.fonts.tiny })
+        elseif w and w.alive then
             local lh = self.fonts.small:getHeight() + 8
             -- the name line, with what it eats at the end, as on the units list
             local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - 24, 'left', C.good, { self.fonts.hud, self.fonts.small })
@@ -1060,7 +1074,13 @@ function UI:drawBottomBar(game)
             setColor(C.good)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
-            self:printLine('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            if w.jobSet then
+                -- free play: JOBS where the arcade job would be named
+                self:printLine('the ' .. w.species .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+                self:jobsButtonDraw({ x = px + pw - 132, y = py - 4, w = 132, h = 22 })
+            else
+                self:printLine('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            end
             self:iconFoodKind(w.diet, px + pw - 160, py - 2, 18)
             self:printLine(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             local sx = px
@@ -1073,7 +1093,8 @@ function UI:drawBottomBar(game)
                 if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
                 sx = sx + 30
             end
-            self:printLine('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            local under = w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount)
+            self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
@@ -1120,7 +1141,12 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        self:printLine(line, 14, ty + 4, self.vw - 28, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        local room = self.vw - 28
+        if w.jobSet then
+            room = room - 70
+            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 })
+        end
+        self:printLine(line, 14, ty + 4, room, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     end
     if self.toastText then
         local f = self.fonts.tiny
@@ -1136,6 +1162,88 @@ function UI:drawBottomBar(game)
         self:printLine(self.toastText, tx + 10, ty + 6, tw - 20, 'left', C.warn, { f })
         love.graphics.setFont(self.fonts.hud)
     end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The JOBS button on the picked morphi's strip (free play only).
+function UI:jobsButtonDraw(r)
+    self:button(r, 'JOBS', false)
+    self.jobsButton = r
+end
+
+function UI:jobsButtonAt(mx, my)
+    return hit(self.jobsButton, mx, my)
+end
+
+function UI:insideJobPanel(mx, my)
+    return hit(self.jobPanel, mx, my)
+end
+
+-- A morphi's three jobs in a line: 'forager, then miner, dislikes builder'.
+-- short is for the tight desk strip.
+function UI:jobsSummary(w, short)
+    local js = w.jobSet
+    if not js then return w.roleInfo.label:lower() end
+    if short then
+        return JobSets.label(js.main) .. ' / ' .. (js.neutral and JobSets.label(js.neutral) or 'no fallback') .. ' / not ' .. JobSets.label(js.disliked)
+    end
+    -- 'lumberjack, then builder, dislikes miner': main, neutral, disliked
+    local neutral = js.neutral and ('then ' .. JobSets.label(js.neutral)) or 'no fallback'
+    return JobSets.label(js.main) .. ', ' .. neutral .. ', dislikes ' .. JobSets.label(js.disliked)
+end
+
+-- The job screen for the picked morphi: tap a MAIN job and a NEUTRAL job
+-- (or NONE); the DISLIKED job is shown and cannot be changed. A choice that
+-- is not allowed is drawn in the warning colour and says why when tapped.
+-- Buttons are panel buttons with ids 'job:<slot>:<job or none>'.
+function UI:drawJobs(game)
+    local w = game.selectedWorker
+    if not (w and w.alive and w.jobSet) then return end
+    local js = w.jobSet
+    local gap = 8
+    local bh = self.touch and 38 or 30
+    local labelH = self.fonts.small:getHeight() + 6
+    local pw = math.min(760, self.vw - 24)
+    local inner = pw - 36
+    local minW = self.fonts.small:getWidth('LUMBERJACK') + 16
+    local cols = Util.clamp(math.floor((inner + gap) / (minW + gap)), 1, 5)
+    local bw = math.floor((inner - (cols - 1) * gap) / cols)
+    local function rowsFor(n) return math.ceil(n / cols) end
+    local ph = 52 + labelH + 6
+        + labelH + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
+        + labelH + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
+        + 2 * labelH + 12
+    local x, y
+    x, y, pw, ph = self:panel(pw, ph)
+    self.jobPanel = { x = x, y = y, w = pw, h = ph }
+    local btnW = 100
+    self:printLine(w.name .. "'s jobs", x + 18, y + 16, pw - btnW - 52, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    local cy = y + 52
+    self:printLine(w:describeState(), x + 18, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+    cy = cy + labelH + 6
+    -- one row of choices; choices[i] = false stands for NONE
+    local function grid(slot, hint, choices)
+        self:printLine(hint, x + 18, cy, inner, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+        cy = cy + labelH
+        for i, choice in ipairs(choices) do
+            local job = choice or nil
+            local r, c = math.floor((i - 1) / cols), (i - 1) % cols
+            local rect = { x = x + 18 + c * (bw + gap), y = cy + r * (bh + gap), w = bw, h = bh }
+            local current = js[slot] == job
+            local ok = current or JobSets.canSet(js, slot, job)
+            local label = job and JobSets.label(job):upper() or 'NONE'
+            self:panelButton('job:' .. slot .. ':' .. (job or 'none'), rect, label, current, (not ok) and C.warn or nil)
+        end
+        cy = cy + rowsFor(#choices) * (bh + gap) + 6
+    end
+    grid('main', 'MAIN: does this first, whenever there is any', JobSets.JOBS)
+    local neutral = { false }
+    for _, job in ipairs(JobSets.JOBS) do neutral[#neutral + 1] = job end
+    grid('neutral', 'NEUTRAL: when the main job has nothing', neutral)
+    self:printLine('DISLIKED: ' .. JobSets.label(js.disliked) .. ', only when nothing else is left', x + 18, cy, inner, 'left', C.warn, { self.fonts.small, self.fonts.tiny })
+    cy = cy + labelH
+    self:printLine('It is part of who ' .. w.name .. ' is and cannot be changed.', x + 18, cy, inner, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
     love.graphics.setColor(1, 1, 1, 1)
 end
 

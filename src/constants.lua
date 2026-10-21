@@ -63,8 +63,8 @@ BREAK_AFTER_SECONDS = 45
 BREAK_SECONDS       = 8        -- resting on a break room tile or the ground
 BREAK_SECONDS_BED   = 4        -- resting in a bed
 BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break is due
--- Floor spots, bins and bridges are 'build' jobs anyone takes. A bed is
--- 'woodwork': only a lumberjack builds it.
+-- Floor spots, bins and bridges are 'build' jobs: the builder's, in free
+-- play and arcade alike. A bed is 'woodwork': a lumberjack or a builder.
 -- Every resting morphi claims its own spot: a bed, a break room tile, or a
 -- free tile next to the break room. Nobody naps on top of anybody.
 
@@ -75,13 +75,18 @@ ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
     lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
     miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
-    -- arcade only: building is a job of its own
+    -- building is a job of its own (in free play since the player-jobs epic)
     builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
 -- Nobody chops: the points a level starts with are all the logs there are.
 ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner', ribbit = 'builder' }
+-- The retired survival levels' hire order. Free play deals jobs instead
+-- (src/jobsets.lua) and a morphi's look no longer decides its job: arrivals
+-- come in this order of species, which is the order the old one-job hires
+-- gave, so a seed's band looks and eats as before.
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
+HIRE_SHEETS = { 'pupper', 'twins', 'cwab', 'woofoof', 'ribbit', 'blue' }
 -- Every morphi eats one thing and nothing else. Food grows on bushes of
 -- that kind; a forager picks any kind into storage, and everyone takes only
 -- their own from it, or eats straight off a bush of their kind when hungry.
@@ -205,7 +210,10 @@ GRADE_THRESHOLDS    = { { 'S', 53 }, { 'A', 37 }, { 'B', 20 }, { 'C', 7 } } -- b
 -- closer than MILESTONE_GAP_DAYS (three seasons), so about one a year.
 DAYS_PER_SEASON     = 9
 DAY_SECONDS         = QUARTER_SECONDS / DAYS_PER_SEASON
-STATS_FORMAT        = 1
+-- 2: every morphi in a day's band has main, neutral, disliked and job (what
+-- it is working at), and a day row has idleByMain. A format 1 run has only
+-- role, which is its main job.
+STATS_FORMAT        = 2
 STATS_BLURB_MAX     = 200
 MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 
@@ -213,7 +221,7 @@ MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 -- the first, so the band does not all get hungry at the same moment).
 -- Free play offers only the first for now (FREE_PLAY_DIFFICULTIES) while it
 -- is being tuned; the rest are kept for when there are more hardships.
--- Free play starts with three (forager, lumberjack, miner: HIRE_ORDER); the
+-- Free play starts with three, their jobs dealt at random (src/jobsets.lua); the
 -- other wilds keep their numbers until the ladder is redone.
 DIFFICULTIES = {
     { name = 'Mild wilds',   drain = 0.5, workers = 3, multiplier = 0.5, startHunger = 85 },

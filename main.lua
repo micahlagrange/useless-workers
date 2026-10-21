@@ -5,6 +5,7 @@ local Rng = require('src.rng')
 local World = require('src.world')
 local Jobs = require('src.jobs')
 local Worker = require('src.worker')
+local JobSets = require('src.jobsets')
 local Scoring = require('src.scoring')
 local Abilities = require('src.abilities')
 local Highscore = require('src.highscore')
@@ -125,24 +126,28 @@ local function announce(text, tile, kind)
 end
 
 local function onComplain(worker, reason, node)
-    local where = node and (NODE_WORDS[node.kind] .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
+    local where = node and ((NODE_WORDS[node.kind] or node.kind or 'work') .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
     local text
     if reason == 'hungry' then
         text = worker.name .. ' is hungry and the ' .. where .. ' is walled off'
     elseif reason == 'slow' then
         text = worker.name .. ' gave up walking to the ' .. where
     elseif reason == 'bored' then
-        local trade = ({ forager = 'bush', lumberjack = 'tree', miner = 'ore' })[worker.role] or 'work'
-        if worker.boredReason == 'storage' then
-            text = worker.name .. ' has nothing to do: nowhere to put food. Mark a FLOOR spot or a BIN'
-        elseif node then
-            text = worker.name .. ' has nothing to do: the nearest ' .. trade .. ' is out of reach at ' .. node.x .. ',' .. node.y
+        -- why, naming the jobs: the main one and the neutral one (the
+        -- disliked job is the last resort, not worth an alert)
+        local shown = {}
+        for _, r in ipairs(worker.idleWhy or {}) do
+            if r.slot ~= 'disliked' then shown[#shown + 1] = r end
+        end
+        if #shown > 0 then
+            text = worker.name .. ' has nothing to do. ' .. Worker.idleText(shown, worker.jobSet and not worker.jobSet.neutral, worker.unstaffed)
         else
             text = worker.name .. ' has nothing to do'
         end
     else
         text = worker.name .. " can't reach the " .. where
     end
+    -- a hardship pointing at a site (out of reach work to build or dig) has no node kind
     announce(text, node and { x = node.x, y = node.y } or nil, 'hardship')
     if game.stats then game.stats:event('hardship', game, worker.name, reason) end
     Audio.playSFX('complain')
@@ -174,7 +179,7 @@ local function onWorkerEvent(worker, name, data)
         else
             announce(worker.name .. ' starved and wandered off into the wilds.', { x = t.x, y = t.y }, 'left')
         end
-        if game.mode == 'level' and (state == 'playing' or state == 'units') then
+        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
             state = 'levelfailed'
             love.mouse.setVisible(true)
@@ -182,23 +187,39 @@ local function onWorkerEvent(worker, name, data)
     end
 end
 
--- migrants: true for arrivals after the start, which the stats count
+-- The job sets of the band as it stands, for dealing an immigrant's.
+local function bandJobSets()
+    local out = {}
+    for _, w in ipairs(game.workers) do
+        if w.jobSet and w:isWorking() then out[#out + 1] = w.jobSet end
+    end
+    return out
+end
+
+-- migrants: true for arrivals after the start, which the stats count. Free
+-- play deals each arrival's jobs (src/jobsets.lua) from a random stream of
+-- its own, so nothing else about the seed changes; the species comes round
+-- in HIRE_SHEETS order and decides only looks and tastes.
 local function hire(n, migrants)
     local spots = game.world:spawnTiles(3)
     if #spots == 0 then spots = { { x = game.world.breakroom.x, y = game.world.breakroom.y } } end
-    for _ = 1, n do
+    local free = game.mode == 'free'
+    local dealt = (free and not migrants) and JobSets.dealStart(game.jobRng, n) or nil
+    for i = 1, n do
         game.hired = game.hired + 1
         local spot = spots[(game.hired - 1) % #spots + 1]
-        local role = HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
-        local sheets = ROLES[role].sheets
-        game.roleHires[role] = (game.roleHires[role] or 0) + 1
+        local jobs = free and (dealt and dealt[i] or JobSets.dealOne(game.jobRng, bandJobSets())) or nil
+        local role = jobs and jobs.main or HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
+        local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
         -- arrivals come in a little less fed one after another, so the band
         -- does not all get hungry at once
         local start = (game.scoring.difficulty.startHunger or STARTING_HUNGER) - ((game.hired - 1) % 5) * 6
         local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
             x = spot.x, y = spot.y,
             role = role,
-            sheet = sheets[(game.roleHires[role] - 1) % #sheets + 1],
+            jobs = jobs,
+            band = game.workers,
+            sheet = sheet,
             name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
             hunger = start,
@@ -207,7 +228,9 @@ local function hire(n, migrants)
             onEvent = onWorkerEvent,
         })
         table.insert(game.workers, worker)
-        if migrants and game.stats then game.stats:event('arrived', game, worker.name, role) end
+        if migrants and game.stats then
+            game.stats:event('arrived', game, worker.name, jobs and (jobs.main .. '/' .. (jobs.neutral or 'none') .. '/' .. jobs.disliked) or role)
+        end
     end
 end
 
@@ -248,7 +271,7 @@ local function newGame(seedString, difficultyIndex)
     end
     game.workers = {}
     game.hired = 0
-    game.roleHires = {}
+    game.jobRng = JobSets.rngFor(game.seedNumber)
     game.clock = 0
     game.staffCount = 0
     game.averageHunger = 100
@@ -304,7 +327,6 @@ local function newLevel(index, set, difficulty)
     end
     game.workers = {}
     game.hired = #run.specs
-    game.roleHires = {}
     game.clock = 0
     game.staffCount = #run.specs
     game.averageHunger = run.def.hunger or HUNGER_MAX
@@ -576,7 +598,7 @@ function love.update(dt)
     debugClock = debugClock + dt
     Audio.update(dt)
     syncTouches()
-    if state == 'playing' or state == 'units' or state == 'log' then
+    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' then
         game.speed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
@@ -585,7 +607,7 @@ function love.update(dt)
         else
             for step = 1, simSpeed do
                 updatePlaying(dt, step > 1)
-                if state ~= 'playing' and state ~= 'units' and state ~= 'log' then break end
+                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' then break end
             end
         end
         ui:update(dt)
@@ -707,6 +729,8 @@ local function drawScene()
         ui:drawLevelFailed(game)
     elseif state == 'units' then
         ui:drawUnits(game, game.view)
+    elseif state == 'jobs' then
+        ui:drawJobs(game)
     elseif state == 'log' then
         ui:drawLog(game)
     end
@@ -833,6 +857,39 @@ end
 local function openUnits()
     state = 'units'
     love.mouse.setVisible(true)
+end
+
+-- The job screen for the picked morphi (free play: main, neutral, disliked).
+local function openJobs()
+    local w = game.selectedWorker
+    if not (w and w.alive and w.jobSet) then
+        ui:toast(game.mode == 'free' and 'Select a morphi first (SELECT tool, then tap one)' or 'Each morphi here has one fixed job')
+        return
+    end
+    state = 'jobs'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local function closeJobs()
+    state = 'playing'
+    hideCursor()
+end
+
+-- A tap on the job screen: 'job:<slot>:<job or none>'.
+local function pressJob(id)
+    local w = game.selectedWorker
+    if not (w and w.jobSet) then closeJobs() return end
+    local slot, job = id:match('^job:(%a+):(%a+)$')
+    if job == 'none' then job = nil end
+    local before = w.jobSet[slot]
+    local ok, why = w:setJob(slot, job)
+    if not ok then
+        ui:toast(w.name .. ': ' .. why)
+    elseif before ~= w.jobSet[slot] then
+        ui:toast(w.name .. "'s " .. slot .. ' job: ' .. (job and ROLES[job].label:lower() or 'none'))
+        if game.stats then game.stats:event('jobs', game, w.name, w.jobSet.main .. '/' .. (w.jobSet.neutral or 'none') .. '/' .. w.jobSet.disliked) end
+    end
 end
 
 local function openMenu()
@@ -1118,6 +1175,13 @@ local function pointerPressed(x, y, button, istouch)
             hideCursor()
         end
         return
+    elseif state == 'jobs' then
+        if pb and pb:sub(1, 4) == 'job:' then
+            pressJob(pb)
+        elseif pb == 'close' or not ui:insideJobPanel(vx, vy) then
+            closeJobs()
+        end
+        return
     elseif state == 'units' then
         local w = ui:unitButtonAt(vx, vy)
         if w then
@@ -1171,6 +1235,10 @@ local function pointerPressed(x, y, button, istouch)
     local alert = ui:alertAt(vx, vy)
     if alert then
         if alert.tile then lookAt(alert.tile) else openLog() end
+        return
+    end
+    if ui:jobsButtonAt(vx, vy) then
+        openJobs()
         return
     end
     if vy > ui.vh - BOTTOM_BAR_H then
@@ -1405,6 +1473,8 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'u' then
             openUnits()
+        elseif key == 'j' then
+            openJobs()
         elseif key == 'g' then
             openGoal()
         elseif key == 'l' then
@@ -1422,6 +1492,8 @@ function love.keypressed(key)
         if key == 'l' or key == 'escape' then state = 'playing'; hideCursor() end
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
+    elseif state == 'jobs' then
+        if key == 'j' or key == 'escape' then closeJobs() end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
@@ -1518,5 +1590,7 @@ if TEST_HOOKS then
         openSub = openSub,
         exportRun = exportRun,
         sub = sub,
+        openJobs = function() openJobs() end,
+        pressJob = function(id) pressJob(id) end,
     }
 end

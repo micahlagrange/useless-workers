@@ -162,6 +162,23 @@ local function playingScreens(tag)
     game.suggestRestart = false
     H.setState('units')
     frame(tag .. ' units')
+    -- the job screen, for each morphi (free play), and with no neutral job
+    for _, w in ipairs(game.workers) do
+        if w.jobSet then
+            game.selectedWorker = w
+            H.setState('jobs')
+            frame(tag .. ' jobs ' .. w.name)
+            local keep = w.jobSet.neutral
+            w.jobSet.neutral = nil
+            H.setState('playing')
+            frame(tag .. ' selected, no neutral ' .. w.name)
+            H.setState('jobs')
+            frame(tag .. ' jobs, no neutral ' .. w.name)
+            w.jobSet.neutral = keep
+        end
+    end
+    game.selectedWorker = nil
+    H.setState('playing')
     -- the log, with a season's worth of everything
     H.announce('Bartholomew gave up walking to the tree at 41,12', { x = 3, y = 3 }, 'hardship')
     H.announce('Fatima is hungry and the bush at 12,40 is walled off', { x = 4, y = 4 }, 'hardship')
