@@ -904,6 +904,12 @@ function UI:drawFollowNav(game)
     local bw = math.max(self.touch and 64 or 0, self.fonts.hud:getWidth(prev) + 28)
     local bh = self.quickH + 8
     local y = self.vh - BOTTOM_BAR_H - bh - 8
+    -- above the one-line strip a narrow screen shows for the picked morphi
+    local w = game.selectedWorker
+    if not self.portrait and self.panelW == 0 and w and w.alive then y = y - 26 end
+    -- a short screen whose floating arcade goals reach down this far: they win
+    local goals = self:goalBoxRect(game)
+    if goals and goals.y + goals.h > y - 4 then return end
     -- at the edges, clear of the toast in the middle
     local r1 = { id = -1, x = 8, y = y, w = bw, h = bh }
     local r2 = { id = 1, x = self.vw - 8 - bw, y = y, w = bw, h = bh }
@@ -1162,6 +1168,9 @@ function UI:drawBottomBar(game)
         local tx = self.vw / 2 - tw / 2
         local th = f:getHeight() + 12
         local ty = self.vh - BOTTOM_BAR_H - th - 14
+        -- above the < > buttons when they show
+        local nav = self.followNav and self.followNav[1]
+        if nav then ty = math.min(ty, nav.y - th - 6) end
         love.graphics.setColor(0, 0, 0, 0.75)
         love.graphics.rectangle('fill', tx, ty, tw, th)
         self:printLine(self.toastText, tx + 10, ty + 6, tw - 20, 'left', C.warn, { f })
@@ -1207,30 +1216,52 @@ function UI:drawJobs(game)
     local js = w.jobSet
     local gap = 8
     local bh = self.touch and 38 or 30
-    local labelH = self.fonts.small:getHeight() + 6
+    local small = self.fonts.small
     local pw = math.min(760, self.vw - 24)
     local inner = pw - 36
-    local minW = self.fonts.small:getWidth('LUMBERJACK') + 16
+    local minW = small:getWidth('LUMBERJACK') + 16
     local cols = Util.clamp(math.floor((inner + gap) / (minW + gap)), 1, 5)
     local bw = math.floor((inner - (cols - 1) * gap) / cols)
     local function rowsFor(n) return math.ceil(n / cols) end
-    local ph = 52 + labelH + 6
-        + labelH + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
-        + labelH + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
-        + 2 * labelH + 12
+    -- the explanations wrap in the small face (a phone held upright has no
+    -- room for them on one line, and the tiny face is hard to read)
+    local hints = {
+        main = 'MAIN JOB: done first, whenever there is any',
+        neutral = 'NEUTRAL JOB: done when the main job has nothing',
+    }
+    local disliked = 'DISLIKED: ' .. JobSets.label(js.disliked)
+        .. (js.main == js.disliked and ', and it is the main job now.' or ', done only when nothing else is left.')
+        .. ' It is part of who ' .. w.name .. ' is and never changes.'
+    local function wrapH(text)
+        local _, lines = small:getWrap(text, inner)
+        return #lines * small:getHeight()
+    end
+    local stateH = small:getHeight() + 6
+    local ph = 52 + stateH + 6
+        + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
+        + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
+        + wrapH(disliked) + 16
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
     self.jobPanel = { x = x, y = y, w = pw, h = ph }
     local btnW = 100
-    self:printLine(w.name .. "'s jobs", x + 18, y + 16, pw - btnW - 52, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    -- the previous and next morphi, beside CLOSE
+    local navW = math.max(self.touch and 44 or 36, small:getWidth('<') + 24)
+    local navX = x + pw - btnW - 18 - 2 * (navW + 8)
+    self:printLine(w.name .. "'s jobs", x + 18, y + 16, navX - x - 18 - 10, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    self:panelButton('jobprev', { x = navX, y = y + 12, w = navW, h = 30 }, '<', false)
+    self:panelButton('jobnext', { x = navX + navW + 8, y = y + 12, w = navW, h = 30 }, '>', false)
     self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
     local cy = y + 52
     self:printLine(w:describeState(), x + 18, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-    cy = cy + labelH + 6
-    -- one row of choices; choices[i] = false stands for NONE
-    local function grid(slot, hint, choices)
-        self:printLine(hint, x + 18, cy, inner, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-        cy = cy + labelH
+    cy = cy + stateH + 6
+    -- one block of choices; choices[i] = false stands for NONE. The job in
+    -- the slot is lit; the others are dimmed so it stands out, a choice that
+    -- is not allowed dimmer still in red, the disliked job (allowed as main)
+    -- in a dim amber.
+    local DIM_WARN, DIM_AMBER = { 0.55, 0.33, 0.28 }, { 0.68, 0.53, 0.25 }
+    local function grid(slot, choices)
+        cy = cy + self:printWrap(hints[slot], x + 18, cy, inner, C.text, { small }, 3) + 6
         for i, choice in ipairs(choices) do
             local job = choice or nil
             local r, c = math.floor((i - 1) / cols), (i - 1) % cols
@@ -1238,21 +1269,19 @@ function UI:drawJobs(game)
             local current = js[slot] == job
             local ok = current or JobSets.canSet(js, slot, job)
             local label = job and JobSets.label(job):upper() or 'NONE'
-            -- not allowed: the warning colour; the disliked job as a main
-            -- job is allowed, in amber
-            local color = (not ok) and C.warn or (job and job == js.disliked and C.amber) or nil
+            local color = nil
+            if not current then
+                color = (not ok) and DIM_WARN or (job and job == js.disliked and DIM_AMBER) or C.dim
+            end
             self:panelButton('job:' .. slot .. ':' .. (job or 'none'), rect, label, current, color)
         end
         cy = cy + rowsFor(#choices) * (bh + gap) + 6
     end
-    grid('main', 'MAIN: does this first, whenever there is any', JobSets.JOBS)
+    grid('main', JobSets.JOBS)
     local neutral = { false }
     for _, job in ipairs(JobSets.JOBS) do neutral[#neutral + 1] = job end
-    grid('neutral', 'NEUTRAL: when the main job has nothing', neutral)
-    local last = js.main == js.disliked and ', and it is the main job now' or ', only when nothing else is left'
-    self:printLine('DISLIKED: ' .. JobSets.label(js.disliked) .. last, x + 18, cy, inner, 'left', C.warn, { self.fonts.small, self.fonts.tiny })
-    cy = cy + labelH
-    self:printLine('It is part of who ' .. w.name .. ' is and cannot be changed.', x + 18, cy, inner, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+    grid('neutral', neutral)
+    self:printWrap(disliked, x + 18, cy, inner, C.warn, { small }, 4)
     love.graphics.setColor(1, 1, 1, 1)
 end
 

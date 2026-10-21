@@ -1185,6 +1185,8 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'jobs' then
         if pb and pb:sub(1, 4) == 'job:' then
             pressJob(pb)
+        elseif pb == 'jobprev' or pb == 'jobnext' then
+            followNext(pb == 'jobnext' and 1 or -1)
         elseif pb == 'close' or not ui:insideJobPanel(vx, vy) then
             closeJobs()
         end
@@ -1500,7 +1502,12 @@ function love.keypressed(key)
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
     elseif state == 'jobs' then
-        if key == 'j' or key == 'escape' then closeJobs() end
+        if key == 'j' or key == 'escape' then
+            closeJobs()
+        elseif key == ']' or key == '[' then
+            followNext(key == ']' and 1 or -1)
+            Audio.playSFX('click')
+        end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()

@@ -346,10 +346,10 @@ function TestFollowNav:test_next_morphi_is_there_without_following()
     lu.assertEquals(#ui.followNav, 2, 'the < and > buttons show with nobody followed')
     local r = ui.followNav[2]
     love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
-    lu.assertEquals(g.selectedWorker, g.workers[1])
+    lu.assertTrue(g.selectedWorker == g.workers[1])
     lu.assertFalse(g.follow, 'picking the next morphi does not start following')
     love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
-    lu.assertEquals(g.selectedWorker, g.workers[2])
+    lu.assertTrue(g.selectedWorker == g.workers[2])
 end
 
 TestJobsScreen = {}
@@ -381,8 +381,29 @@ function TestJobsScreen:test_the_job_screen_sets_main_and_neutral_and_refuses_th
     H.pressJob('job:main:' .. other)
     lu.assertEquals(js.main, other)
     lu.assertEquals(w.role, other)
+    -- the next morphi, without leaving the job screen (by finger: lay the
+    -- screen out for touch first, as the first touch would)
+    H.ui().touch = true
+    love.resize(1280, 720)
+    love.draw()
+    local ui = H.ui()
+    local nb
+    for _, pb in ipairs(ui.panelButtons) do if pb.id == 'jobnext' then nb = pb end end
+    lu.assertNotNil(nb)
+    Stub.fingers = {}
+    love.update(0) -- forget fingers an earlier test left down
+    Stub.fingers = { 'n' }
+    love.touchpressed('n', (nb.x + nb.w / 2) * ui.scale, (nb.y + nb.h / 2) * ui.scale)
+    love.touchreleased('n')
+    Stub.fingers = {}
+    lu.assertTrue(g.selectedWorker == g.workers[2], 'the > button picks the next morphi')
+    lu.assertEquals(H.state(), 'jobs')
+    love.keypressed('[')
+    lu.assertTrue(g.selectedWorker == g.workers[1])
     love.keypressed('escape')
     lu.assertEquals(H.state(), 'playing')
+    H.ui().touch = false
+    love.resize(1280, 720)
 end
 
 function TestJobsScreen:test_a_tap_on_jobs_and_a_job_button_works_on_a_phone()
