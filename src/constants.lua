@@ -273,13 +273,13 @@ TRADE_CHAT = {
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow
-GRASS_COLORS     = { '#94a35b', '#849151', '#737f47' }
-DIRT_COLORS      = { '#a38f5b', '#917f51', '#7f6f47' }
-STONE_COLORS     = { '#6d6a64', '#625f5a', '#58554f', '#77746d' }
-WATER_COLORS     = { '#5f8fa8', '#5786a0', '#4f7d97' }
-SNOW_COLORS      = { '#e9ecf0', '#dfe3e8', '#d3d8de' }
-BRIDGE_COLORS    = { '#8a6f3f', '#7d6437', '#96773f' }
-BREAKROOM_COLORS = { '#c9b27a', '#bfa870' }
+GRASS_COLORS     = { '#a9c97a', '#9dbf6f', '#b3d185' }
+DIRT_COLORS      = { '#d6bc8e', '#cdb184', '#dcc59b' }
+STONE_COLORS     = { '#a99c93', '#9f9289', '#b2a69d', '#988b83' }
+WATER_COLORS     = { '#8cc4dc', '#82bbd6', '#96cbe1' }
+SNOW_COLORS      = { '#f4f1f6', '#ece8f1', '#e5e0ec' }
+BRIDGE_COLORS    = { '#b48a5c', '#a87f53', '#bf9566' }
+BREAKROOM_COLORS = { '#e8d9a6', '#e0cf9a' }
 WALL_COLORS      = { '#6b4f2a', '#5e4524' }
 DOOR_COLORS      = { '#a6823f', '#9a7838' }
 TILE_PALETTE     = {

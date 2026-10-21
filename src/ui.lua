@@ -63,11 +63,10 @@ function UI.new()
     self.morphiQuad = love.graphics.newQuad(0, 0, 16, 16, self.morphiIcon:getWidth(), self.morphiIcon:getHeight())
     self.icons = {
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
-        mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
     }
     self.cursors = {
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
-        mine = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
+        mine = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bin = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
@@ -482,31 +481,31 @@ end
 
 -- A bin from above: wooden frame, dark open inside, lit from the top left.
 function UI:iconBin(x, y, s)
-    love.graphics.setColor(0.55, 0.42, 0.24)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84)
-    love.graphics.setColor(0.16, 0.12, 0.06)
-    love.graphics.rectangle('fill', x + s * 0.22, y + s * 0.22, s * 0.56, s * 0.56)
-    love.graphics.setColor(0.8, 0.64, 0.38)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.07)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.07, s * 0.84)
-    love.graphics.setColor(0.36, 0.26, 0.14)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.85, s * 0.84, s * 0.07)
-    love.graphics.rectangle('fill', x + s * 0.85, y + s * 0.08, s * 0.07, s * 0.84)
+    -- a woven grass basket with two berries in it
+    love.graphics.setColor(0.86, 0.72, 0.45)
+    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.3, s * 0.8, s * 0.58, s * 0.12, s * 0.12)
+    love.graphics.setColor(0.62, 0.46, 0.25)
+    for i = 0, 3 do
+        love.graphics.rectangle('fill', x + s * (0.18 + i * 0.18), y + s * 0.34, s * 0.05, s * 0.5)
+    end
+    love.graphics.setColor(0.72, 0.56, 0.32)
+    love.graphics.setLineWidth(math.max(1, s * 0.06))
+    love.graphics.arc('line', 'open', x + s * 0.5, y + s * 0.32, s * 0.3, math.pi, 2 * math.pi)
+    love.graphics.setLineWidth(1)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self.foodIcon, x + s * 0.26, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
-    love.graphics.draw(self.foodIcon, x + s * 0.52, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.24, y + s * 0.16, 0, s * 0.24 / 16, s * 0.24 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.52, y + s * 0.16, 0, s * 0.24 / 16, s * 0.24 / 16)
 end
 
 -- A floor storage spot: a chalked square with a corner mark.
 function UI:iconFloor(x, y, s)
-    love.graphics.setColor(0.35, 0.3, 0.2)
-    love.graphics.rectangle('fill', x + s * 0.12, y + s * 0.2, s * 0.76, s * 0.6)
-    love.graphics.setColor(0.85, 0.8, 0.6)
-    love.graphics.rectangle('line', x + s * 0.12 + 0.5, y + s * 0.2 + 0.5, s * 0.76 - 1, s * 0.6 - 1)
-    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.3, y + s * 0.2)
-    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.12, y + s * 0.38)
+    -- a stash: a big leaf laid flat with a berry on it
+    love.graphics.setColor(0.55, 0.8, 0.45)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.55, s * 0.42, s * 0.3)
+    love.graphics.setColor(0.4, 0.65, 0.33)
+    love.graphics.line(x + s * 0.12, y + s * 0.62, x + s * 0.88, y + s * 0.48)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self.foodIcon, x + s * 0.3, y + s * 0.3, 0, s * 0.4 / 16, s * 0.4 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.32, y + s * 0.3, 0, s * 0.36 / 16, s * 0.36 / 16)
 end
 
 -- Planks laid across water, seen from above.
@@ -527,14 +526,28 @@ function UI:iconBridge(x, y, s)
 end
 
 function UI:iconBed(x, y, s)
-    love.graphics.setColor(0.4, 0.28, 0.16)
-    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.8, s * 0.65)
-    love.graphics.setColor(0.93, 0.9, 0.8)
-    love.graphics.rectangle('fill', x + s * 0.16, y + s * 0.26, s * 0.68, s * 0.53)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.rectangle('fill', x + s * 0.2, y + s * 0.3, s * 0.2, s * 0.45)
-    love.graphics.setColor(0.3, 0.45, 0.75)
-    love.graphics.rectangle('fill', x + s * 0.44, y + s * 0.3, s * 0.4, s * 0.45)
+    -- a nest: a ring of twigs with a soft middle (and an egg, for later)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.62, s * 0.44, s * 0.28)
+    love.graphics.setColor(0.95, 0.88, 0.68)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.58, s * 0.28, s * 0.15)
+    love.graphics.setColor(0.97, 0.95, 0.88)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.44, s * 0.12, s * 0.16)
+    love.graphics.setColor(0.72, 0.55, 0.34)
+    love.graphics.line(x + s * 0.1, y + s * 0.62, x + s * 0.32, y + s * 0.82)
+    love.graphics.line(x + s * 0.68, y + s * 0.82, x + s * 0.9, y + s * 0.62)
+end
+
+-- DIG: a little round spade in a pile of dirt.
+function UI:iconSpade(x, y, s)
+    love.graphics.setColor(0.72, 0.55, 0.36)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.84, s * 0.4, s * 0.12)
+    love.graphics.setColor(0.62, 0.45, 0.28)
+    love.graphics.setLineWidth(math.max(1, s * 0.08))
+    love.graphics.line(x + s * 0.68, y + s * 0.12, x + s * 0.48, y + s * 0.5)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(0.86, 0.82, 0.74)
+    love.graphics.ellipse('fill', x + s * 0.42, y + s * 0.62, s * 0.16, s * 0.2)
 end
 
 -- A wall from above: dark timber with the mortar lines showing.
@@ -980,7 +993,8 @@ function UI:drawToolIcon(tool, x, y, size, affordable)
         love.graphics.draw(icon, x, y, 0, size / 16, size / 16)
         return
     end
-    if tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
+    if tool == ABILITY_MINE then self:iconSpade(x, y, size)
+    elseif tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
     elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
     elseif tool == ABILITY_BED then self:iconBed(x, y, size)
     elseif tool == ABILITY_WALL then self:iconWall(x, y, size)

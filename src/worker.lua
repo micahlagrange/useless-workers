@@ -1206,16 +1206,18 @@ end
 -- 'log' for floor spots, bins and bridges. Nil for foraging and the rest.
 function Worker:toolInHand()
     if not (self.state == 'working' or (self.state == 'walking' and self.goal == 'work')) then return nil end
+    -- little blobs, no axes or pickaxes: a twig bundle for sticks and
+    -- building, a little spade for digging, a leaf for weaving a nest
     if self.targetNode then
-        if self.targetNode.kind == NODE_TREE then return 'axe' end
-        if self.targetNode.kind == NODE_ORE then return 'pickaxe' end
+        if self.targetNode.kind == NODE_TREE then return 'twigs' end
+        if self.targetNode.kind == NODE_ORE then return 'spade' end
         return nil
     end
     local site = self.targetSite
     if not site then return nil end
-    if site.kind == SITE_MINE then return 'pickaxe' end
-    if site.kind == SITE_BED then return 'saw' end
-    return 'log'
+    if site.kind == SITE_MINE then return 'spade' end
+    if site.kind == SITE_BED then return 'leaf' end
+    return 'twigs'
 end
 
 function Worker:mood()
