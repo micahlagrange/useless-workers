@@ -68,6 +68,25 @@ function TestStats:test_departures_and_arrivals_are_counted()
     lu.assertEquals(s.events[2].day, DAYS_PER_SEASON + 3)
 end
 
+-- Fun together: who played with whom, when, and what kind of play, so the
+-- run export shows it.
+function TestStats:test_play_is_recorded_with_who_and_what_kind()
+    local game = play(QUARTER_SECONDS - 5)
+    local s = game.stats
+    local plays = {}
+    for _, e in ipairs(s.events) do if e.kind == 'play' then plays[#plays + 1] = e end end
+    lu.assertTrue(#plays >= 1, 'nobody played all spring')
+    lu.assertEquals(s.counts.play, #plays)
+    for _, e in ipairs(plays) do
+        lu.assertStrContains(e.who, ' and ')
+        lu.assertNotNil(e.text:match('^philosophize: ') or e.text:match('^socialize: '), e.text)
+        lu.assertNotNil(e.day)
+        lu.assertNotNil(e.x)
+    end
+    lu.assertStrContains(s:export('fun'), '"kind":"play"')
+    lu.assertNotNil(s.days[#s.days].plays)
+end
+
 function TestStats:test_milestones_wait_their_gap_and_the_biggest_wins()
     local s = Stats.new({})
     local base = { pop = 8, gold = 60, logs = 0, food = 0, quarter = 1, season = 'Spring' }

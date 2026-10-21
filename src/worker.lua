@@ -355,6 +355,201 @@ function Worker:endTrade(deal)
     if tr.b and deal then tr.a:emit('trade', { partner = tr.b, gifts = tr.gifts }) end
 end
 
+-- Play --------------------------------------------------------------------
+-- Fun together, free play only: once a season a morphi may play with
+-- another. One offers at camp and waits (world.openPlay, apart from the
+-- trade's offer), the next free one walks over and joins, and they talk a
+-- script out of PLAY_CHAT, a line each, turn about. No gold, no meals. At
+-- the end both cheer up by MORALE_PLAY. The one who offered (play.a) runs it.
+
+-- Still this season's chance to play?
+function Worker:hasPlayChance()
+    return self.wilds and self.playedSeason ~= (self.scoring and self.scoring.quarter or 1)
+end
+
+-- Free to play: here, fed enough to last the talk, hands empty, and not
+-- busy with a trade or another play.
+function Worker:freeToPlay()
+    return self.wilds and self:isWorking() and self.trade == nil and self.play == nil
+        and self.hunger >= PLAY_MIN_HUNGER and not self:carrying()
+end
+
+function Worker:isPlaying()
+    return self.play ~= nil and (self.state == 'playing' or (self.state == 'walking' and self.goal == 'play'))
+end
+
+-- Offer to play and wait at camp for somebody to join.
+function Worker:offerPlay()
+    if self.world.openPlay or not (self:hasPlayChance() and self:freeToPlay() and self:atCamp()) then return false end
+    if self.playRetryAt and self.clock < self.playRetryAt then return false end
+    self:dropJob()
+    self.play = { a = self, wait = PLAY_WAIT_SECONDS }
+    self.world.openPlay = self.play
+    self.state = 'playing'
+    self.moving = false
+    self:say('play?', 3)
+    return true
+end
+
+-- Join the offer waiting at camp, if it is near enough to walk to.
+function Worker:joinPlay()
+    local pl = self.world.openPlay
+    if not pl or pl.a == self or pl.b or not pl.a:isWorking() then return false end
+    if not (self:hasPlayChance() and self:freeToPlay()) then return false end
+    local at, here = pl.a:tile(), self:tile()
+    if Util.manhattan(at.x, at.y, here.x, here.y) > PLAY_JOIN_TILES then return false end
+    self.world.openPlay = nil
+    Worker.beginPlay(pl.a, self, pl)
+    return true
+end
+
+-- A tile next to (x, y) to stand on and talk: a free one if there is one
+-- (not the pantry, a bed or somebody's rest spot), else any open one.
+local function besideSpot(world, x, y)
+    local spot = world:freeNeighbour(x, y)
+    if spot then return spot end
+    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
+        if world:isPassable(c[1], c[2]) then return { x = c[1], y = c[2] } end
+    end
+    return nil
+end
+
+-- a and b play. Spends this season's chance for both, unless dev (the
+-- tester's PLAY NOW) says otherwise. A talk is picked with the game's rng,
+-- and b walks to stand beside a; the talk starts when b gets there.
+function Worker.beginPlay(a, b, pl, dev)
+    pl = pl or { a = a }
+    for _, w in ipairs({ a, b }) do
+        -- a site being worked on is let go, so cancelling it refunds as usual
+        if w.targetSite and w.targetSite.claimedBy == w then w.targetSite.working = nil end
+        w:dropJob()
+        w.eatingSlot = nil
+        w.play = pl
+        w.state = 'playing'
+        w.moving = false
+        w.idleSince = nil
+        if not dev then w.playedSeason = w.scoring and w.scoring.quarter or 1 end
+    end
+    pl.b = b
+    pl.dev = dev
+    local rng = a.rng or b.rng
+    pl.category = rng and rng:pick(PLAY_CATEGORIES) or PLAY_CATEGORIES[1]
+    local list = PLAY_CHAT[pl.category]
+    pl.convo = rng and rng:pick(list) or list[1]
+    pl.lines, pl.chat, pl.started = 0, 0, false
+    pl.walk = PLAY_WALK_SECONDS
+    b:say('sure!', 2)
+    local at, bt = a:tile(), b:tile()
+    local beside = math.abs(at.x - bt.x) <= 1 and math.abs(at.y - bt.y) <= 1 and not (at.x == bt.x and at.y == bt.y)
+    local spot = not beside and besideSpot(a.world, at.x, at.y)
+    local path = spot and b:pathTo(spot.x, spot.y)
+    if path then
+        b:setPath(path, 'play') -- arrive() starts the talk
+    else
+        Worker.startTalk(pl)
+    end
+    return pl
+end
+
+-- b is beside a (or gave up getting there): face each other and begin.
+function Worker.startTalk(pl)
+    if pl.started then return end
+    pl.started = true
+    local a, b = pl.a, pl.b
+    b:face(a.x - b.x, 0)
+    a:face(b.x - a.x, 0)
+end
+
+-- Still in it: here, fed, and playing (or walking over to).
+local function stillPlaying(w, pl)
+    return w.alive and w.state ~= 'quitting' and w.play == pl and w.hunger >= HUNGER_EAT_THRESHOLD
+        and (w.state == 'playing' or (w.state == 'walking' and w.goal == 'play'))
+end
+
+-- Run the play (called on the one who offered it): wait for a partner,
+-- wait for it to walk over, then a line every PLAY_LINE_SECONDS, A then B,
+-- and the lift once the last line has been said.
+function Worker:updatePlay(dt)
+    local pl = self.play
+    local a, b = pl.a, pl.b
+    if not stillPlaying(a, pl) then self:endPlay(false) return end
+    if not b then
+        pl.wait = pl.wait - dt
+        if pl.wait <= 0 then self:endPlay(false) end
+        return
+    end
+    if not stillPlaying(b, pl) then self:endPlay(false) return end
+    if not pl.started then
+        pl.walk = pl.walk - dt
+        if pl.walk > 0 then return end
+        Worker.startTalk(pl)
+    end
+    pl.chat = pl.chat - dt
+    if pl.chat <= 0 then
+        if pl.lines >= #pl.convo then self:endPlay(true) return end
+        pl.lines = pl.lines + 1
+        local speaker = (pl.lines % 2 == 1) and a or b
+        speaker:say(pl.convo[pl.lines], PLAY_BUBBLE_SECONDS)
+        -- added on, not set, so the lines keep time whatever the frame rate
+        pl.chat = pl.chat + PLAY_LINE_SECONDS
+    end
+end
+
+-- Over, on either morphi. done: the talk was had, and both cheer up.
+-- Otherwise somebody dropped out (or nobody came): no lift for anyone, and
+-- whoever is still standing there gets back to work.
+function Worker:endPlay(done)
+    local pl = self.play
+    if not pl then return end
+    if self.world.openPlay == pl then self.world.openPlay = nil end
+    local who = { pl.a }
+    if pl.b then who[2] = pl.b end
+    for _, w in ipairs(who) do
+        if w.play == pl then
+            local wasIn = stillPlaying(w, pl)
+            w.play = nil
+            if done then
+                w.morale = math.min(MORALE_MAX, w.morale + MORALE_PLAY)
+                w.idleSince = nil
+            end
+            if w.state == 'playing' or (w.state == 'walking' and w.goal == 'play') then
+                w.state = 'idle'
+                w.goal = nil
+                w.path = nil
+                w.moving = false
+                w.decideTimer = 0
+            end
+            if not done and pl.b and wasIn then w:say('oh. bye', 1.5) end
+        end
+    end
+    if not pl.b then pl.a.playRetryAt = pl.a.clock + PLAY_RETRY_SECONDS end
+    if done then
+        pl.a:emit('play', { partner = pl.b, category = pl.category, title = pl.convo.title, dev = pl.dev })
+    end
+end
+
+-- The tester's PLAY NOW: the two free morphis nearest each other start
+-- playing straight away, this season's chance or not. Free here means in
+-- the wilds, still here, not hungry and not already trading or playing.
+-- Returns the play, or nil when there are not two such morphis.
+function Worker.playNow(workers)
+    local free = {}
+    for _, w in ipairs(workers) do
+        if w.wilds and w:isWorking() and w.trade == nil and w.play == nil and w.hunger >= HUNGER_EAT_THRESHOLD then
+            free[#free + 1] = w
+        end
+    end
+    local best, bestD = nil, math.huge
+    for i = 1, #free do
+        for j = i + 1, #free do
+            local d = Util.dist(free[i].x, free[i].y, free[j].x, free[j].y)
+            if d < bestD then best, bestD = { free[i], free[j] }, d end
+        end
+    end
+    if not best then return nil end
+    return Worker.beginPlay(best[1], best[2], nil, true)
+end
+
 -- Nothing to do: a hardship, pointing at the nearest thing of my trade
 -- that nobody can get at (or nowhere to put food, for a forager).
 function Worker:bored()
@@ -393,6 +588,7 @@ end
 
 function Worker:quit(reason)
     if self.trade then self:endTrade(false) end
+    if self.play then self:endPlay(false) end
     self:dropJob()
     self.slots = {}
     self.scoring:addQuit()
@@ -683,6 +879,10 @@ function Worker:decide()
             self:bored()
             return
         end
+        -- with this season's chance: join somebody who wants to play, or
+        -- at camp offer to. Waiting for somebody is still standing about;
+        -- only playing itself is fun.
+        if self:joinPlay() or self:offerPlay() then return end
     end
     -- 4. Do not loiter on the pantry
     if self:stepOff() then return end
@@ -841,6 +1041,8 @@ function Worker:deliverHere()
     self.state = 'idle'
     self.decideTimer = 0
     if self.targetArea and self:continueArea() then return end
+    -- a natural break: play, if somebody is waiting or I am at camp with my chance
+    if self.wilds and (self:joinPlay() or self:offerPlay()) then return end
     if cargo.kind == CARGO_FOOD then self:stepOff() end
 end
 
@@ -896,6 +1098,15 @@ function Worker:arrive()
         end
     elseif self.goal == 'deliver' then
         self:deliverHere()
+    elseif self.goal == 'play' then
+        -- walked over to play: the talk starts
+        self.goal = nil
+        if self.play then
+            self.state = 'playing'
+            Worker.startTalk(self.play)
+        else
+            self.state = 'idle'
+        end
     else
         self.goal = nil
         self.state = 'idle'
@@ -916,6 +1127,11 @@ function Worker:finishAction()
         self.restSpot = nil
         -- feeling low with gold in the pile: talk somebody into a trade
         if self.wilds and self.morale < TRADE_BELOW and (self:joinTrade() or self:offerTrade()) then
+            self:emit('break', inBed and 'bed' or 'floor')
+            return
+        end
+        -- rested, at camp: a good moment to play
+        if self.wilds and (self:joinPlay() or self:offerPlay()) then
             self:emit('break', inBed and 'bed' or 'floor')
             return
         end
@@ -1072,6 +1288,8 @@ function Worker:update(dt, clock)
         end
         if self:updateMorale(dt) then return end
     end
+    -- the one who offered runs the play for both, whatever it is doing
+    if self.play and self.play.a == self then self:updatePlay(dt) end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
@@ -1102,6 +1320,13 @@ function Worker:describeState()
         local tr = self.trade
         if not tr.b then return 'Waiting at camp to trade' end
         return 'Trading with ' .. (tr.a == self and tr.b or tr.a).name
+    end
+    if self.play and self:isPlaying() then
+        local pl = self.play
+        if not pl.b then return 'Waiting at camp to play' end
+        local other = (pl.a == self and pl.b or pl.a).name
+        if self.state == 'walking' then return 'Going over to play with ' .. other end
+        return (pl.category == 'socialize' and 'Having a drink with ' or 'Philosophizing with ') .. other
     end
     if self.state == 'eating' then return 'Eating' end
     if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end

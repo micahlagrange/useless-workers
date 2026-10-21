@@ -1861,14 +1861,19 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
     self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
--- The tester's corner: FINGERS, and the run's audit log.
-function UI:drawTools(fingerDebug)
-    local x, y, pw, ph = self:panel(620, 300)
+-- The tester's corner: FINGERS, PLAY NOW (free play: the two nearest free
+-- morphis play straight away) and the run's audit log.
+function UI:drawTools(fingerDebug, canPlayNow)
+    local bh = self.touch and 44 or 36
+    local x, y, pw, ph = self:panel(620, canPlayNow and 300 + bh + 12 or 300)
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     self:centeredFit('For finding bugs and tuning the wilds.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
+    local bw = math.min(260, pw - 40)
     local bx = x + math.floor((pw - bw) / 2)
     self:panelButton('fingers', { x = bx, y = y + 110, w = bw, h = bh }, fingerDebug and 'FINGERS: ON' or 'FINGERS: OFF', fingerDebug)
+    if canPlayNow then
+        self:panelButton('playnow', { x = bx, y = y + 110 + bh + 12, w = bw, h = bh }, 'PLAY NOW', false)
+    end
     self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 

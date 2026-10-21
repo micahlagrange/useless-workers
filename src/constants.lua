@@ -245,6 +245,116 @@ TRADE_CHAT = {
     'nice day', 'lovely pebble', 'hmm...', 'how much?', 'too much!', 'meet me halfway',
     'deal?', 'not yet', 'shiny...', 'go on then', 'and a hug', 'fine, fine',
 }
+-- Fun together (free play only). Once a season every morphi gets one chance
+-- to play with another; a chance not used by the end of its season is lost.
+-- A morphi with its chance, fed, at a natural break at camp (a delivery or
+-- a rest just done, or nothing to do) offers and waits up to
+-- PLAY_WAIT_SECONDS; the next free, fed morphi with its chance within
+-- PLAY_JOIN_TILES walks over and joins. No gold, no meals. They talk, a
+-- line every PLAY_LINE_SECONDS, turn about (PLAY_CHAT below), and both get
+-- MORALE_PLAY at the end. An offer nobody took keeps the chance, but its
+-- morphi waits PLAY_RETRY_SECONDS before offering again. Fed means at least
+-- PLAY_MIN_HUNGER here, so the talk does not end the moment it starts: one
+-- that gets hungry mid-talk goes to eat, and nobody gets the lift.
+MORALE_PLAY          = 15
+PLAY_WAIT_SECONDS    = 20
+PLAY_RETRY_SECONDS   = 30
+PLAY_JOIN_TILES      = 12
+PLAY_WALK_SECONDS    = 8     -- longer than this walking over, and they talk from where they are
+PLAY_LINE_SECONDS    = 3.4
+PLAY_BUBBLE_SECONDS  = 2.6
+PLAY_MIN_HUNGER      = 40
+-- the kinds of play, in the order the rng picks from (dancing comes later)
+PLAY_CATEGORIES      = { 'philosophize', 'socialize' }
+-- the news for a finished talk: '<A> and <B> ' .. this, by title, else by kind
+PLAY_NEWS = {
+    ['What Gold Is For']     = 'talked about what gold is for',
+    ['Do Bushes Know']       = 'wondered whether bushes know they get eaten',
+    ['The Tree, This Big']   = 'shared a drink and a tall tale about a very big tree',
+    ['Psst, the Lumberjack'] = 'gossiped about the lumberjack over a drink',
+}
+PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a drink and a chat' }
+-- What two morphis say while they play together, once a season. Same shape
+-- as TRADE_CHAT: a line every few seconds, turn about. Odd lines are the
+-- first morphi's (A), even lines the second's (B). Every line fits a speech
+-- bubble: 18 characters at most, and no wider in the bubble font (C64, size
+-- 8) than the widest line the game says now, 'brought your fave!' (123 px).
+--
+--   PLAY_CHAT.philosophize  -- philosophizing
+--     1  What Gold Is For      deadpan riddle at the stockpile
+--     2  Do Bushes Know        earnest and tender, a thank-you to a bush
+--   PLAY_CHAT.socialize     -- drinking and socializing
+--     1  The Tree, This Big    a tall tale over berry cider and root beer
+--     2  Psst, the Lumberjack  break room gossip that turns into a toast
+--
+-- Pick one with world.rng:pick(PLAY_CHAT[category]); `title` is for the
+-- reader and for logs, #convo counts only the lines.
+PLAY_CHAT = {
+    philosophize = {
+        {
+            title = 'What Gold Is For',
+            'what is gold for?',
+            'for trading',
+            'trading for what?',
+            'happy thoughts',
+            'so gold is a mood',
+            'a heavy mood',
+            'so why dig it up?',
+            'it was lonely',
+            '...in the dark?',
+            'now it has us',
+            'and a nice pile',
+            'lucky gold',
+        },
+        {
+            title = 'Do Bushes Know',
+            'do bushes know?',
+            'know what?',
+            'that we eat them',
+            'even fish bushes?',
+            'ESPECIALLY those',
+            'i say thank you',
+            'out loud?',
+            'every picking',
+            'all eight?',
+            'all eight',
+            'does it answer?',
+            'it rustles',
+        },
+    },
+    socialize = {
+        {
+            title = 'The Tree, This Big',
+            'cheers!',
+            'what is in yours?',
+            'berry cider',
+            'root beer for me',
+            'once, in the wilds',
+            'here we go',
+            'a tree. THIS big',
+            'trees are all big',
+            'took two chops',
+            'only two?',
+            'two... hundred',
+            'to two hundred!',
+        },
+        {
+            title = 'Psst, the Lumberjack',
+            'psst. lumberjack',
+            'what about them',
+            'chops at dawn',
+            'chop chop chop',
+            'then naps in bed',
+            'built it itself',
+            '...fair enough',
+            'i nap on dirt',
+            'dirt is honest',
+            'dirt is lumpy',
+            'to the lumberjack!',
+            'may it build two',
+        },
+    },
+}
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow

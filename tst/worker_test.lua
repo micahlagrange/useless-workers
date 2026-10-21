@@ -5,6 +5,7 @@ local World = require('src.world')
 local Jobs = require('src.jobs')
 local Scoring = require('src.scoring')
 local Worker = require('src.worker')
+local Stats = require('src.stats')
 
 local function run(workers, world, jobs, seconds, dt)
     dt = dt or 0.05
@@ -738,6 +739,287 @@ function TestWilds:testNoTradeWithoutFood()
     run({ a, b }, self.world, self.jobs, TRADE_WAIT_SECONDS)
     lu.assertNil(self.world.openTrade, 'the offer lapses')
     lu.assertNotEquals(a.state, 'trading')
+end
+
+
+
+
+
+-- Fun together: once a season a morphi may play with another. Talk, no gold,
+-- no meals, and a lift for both at the end.
+TestPlay = {}
+function TestPlay:setUp()
+    self.world = World.fromGrid(GRID, Rng.new(1))
+    self.jobs = Jobs.new()
+    self.scoring = Scoring.new(1)
+    self.complaints, self.events = {}, {}
+    self.make = function(name, x, y, sheet)
+        return Worker.new(self.world, self.jobs, self.scoring, Rng.new(#name + (x or 5) * 7), {
+            x = x or 5, y = y or 4, role = ROLE_MINER, sheet = sheet or 'cwab', name = name, drain = 0.5, wilds = true, hunger = 90,
+            onComplain = function(_, reason) self.complaints[#self.complaints + 1] = reason end,
+            onEvent = function(w, ev, data) self.events[#self.events + 1] = { who = w, name = ev, data = data } end,
+        })
+    end
+    self.played = function()
+        local list = {}
+        for _, e in ipairs(self.events) do if e.name == 'play' then list[#list + 1] = e end end
+        return list
+    end
+end
+
+function TestPlay:testOneChanceASeasonAndItDoesNotCarryOver()
+    local a, b, c = self.make('Pip'), self.make('Dave', 6, 4), self.make('Gus', 6, 5)
+    lu.assertTrue(a:hasPlayChance())
+    lu.assertTrue(a:offerPlay())
+    lu.assertTrue(b:joinPlay())
+    lu.assertFalse(a:hasPlayChance(), 'joining spends the chance')
+    lu.assertFalse(b:hasPlayChance())
+    a:endPlay(true)
+    lu.assertFalse(a:offerPlay(), 'one chance a season')
+    lu.assertTrue(c:offerPlay())
+    lu.assertFalse(a:joinPlay(), 'nor can it join another')
+    lu.assertFalse(b:joinPlay())
+    c:endPlay(false)
+    lu.assertTrue(c:hasPlayChance(), 'an offer nobody took keeps the chance')
+    -- next season: one chance each again, and the unused one did not pile up
+    self.scoring:closeQuarter(3)
+    lu.assertTrue(a:hasPlayChance())
+    lu.assertTrue(c:hasPlayChance())
+    lu.assertTrue(a:offerPlay())
+    lu.assertTrue(c:joinPlay())
+    a:endPlay(true)
+    lu.assertFalse(c:hasPlayChance())
+    lu.assertFalse(c:offerPlay())
+end
+
+function TestPlay:testAnOfferIsJoinedByAFreeMorphiNotAHungryOne()
+    local a = self.make('Pip')
+    local hungry = self.make('Hank', 6, 4)
+    hungry.hunger = HUNGER_EAT_THRESHOLD - 5
+    -- a rest just over at camp: a natural break, and a has its chance
+    a.state = 'breaking'
+    a:finishAction()
+    lu.assertEquals(a.state, 'playing')
+    lu.assertEquals(self.world.openPlay, a.play)
+    lu.assertNil(self.world.openTrade, 'its own offer, not a trade')
+    lu.assertEquals(Stats.bucket(a), 'idle', 'waiting for somebody is still standing about')
+    lu.assertFalse(hungry:joinPlay())
+    run({ a, hungry }, self.world, self.jobs, 1)
+    lu.assertNil(hungry.play)
+    lu.assertNil(a.play.b)
+    -- a free, fed morphi standing about at camp joins
+    local b = self.make('Dave', 6, 5)
+    run({ a, hungry, b }, self.world, self.jobs, 1)
+    lu.assertEquals(a.play.b, b)
+    lu.assertEquals(b.play, a.play)
+    lu.assertNil(self.world.openPlay)
+    lu.assertNil(hungry.play)
+end
+
+function TestPlay:testAnOfferNobodyTakesLapses()
+    local a = self.make('Pip')
+    lu.assertTrue(a:offerPlay())
+    run({ a }, self.world, self.jobs, PLAY_WAIT_SECONDS + 1)
+    lu.assertNil(a.play)
+    lu.assertNil(self.world.openPlay)
+    lu.assertNotEquals(a.state, 'playing')
+    lu.assertTrue(a:hasPlayChance())
+    lu.assertEquals(#self.played(), 0)
+end
+
+function TestPlay:testATalkLineByLineThenALiftForBoth()
+    -- no gold and no food anywhere: playing needs neither
+    self.world.stock.gold = 0
+    lu.assertEquals(#self.world.items, 0)
+    local a, b = self.make('Pip'), self.make('Dave', 7, 6)
+    a.morale, b.morale = 35, 40
+    a.idleSince = -100 -- it had been standing about
+    lu.assertFalse(a:offerTrade(), 'a trade needs gold')
+    lu.assertTrue(a:offerPlay())
+    lu.assertTrue(b:joinPlay())
+    local pl = a.play
+    lu.assertEquals(#pl.convo, 12)
+    lu.assertNotNil(PLAY_CHAT[pl.category])
+    local said, last = {}, { [a] = a.bubble, [b] = b.bubble }
+    local dt, clock, endAt = 0.05, 0, nil
+    while clock < 70 and not endAt do
+        clock = clock + dt
+        local before = { [a] = a.morale, [b] = b.morale }
+        a:update(dt, clock)
+        b:update(dt, clock)
+        for _, w in ipairs({ a, b }) do
+            if w.bubble and w.bubble ~= last[w] and w.bubble.text ~= 'sure!' then
+                said[#said + 1] = { who = w, text = w.bubble.text, at = clock, ttl = w.bubble.ttl }
+            end
+            last[w] = w.bubble
+        end
+        if a.play then
+            -- playing is fun: not idle, not bored
+            lu.assertEquals(Stats.bucket(a), 'rest')
+            lu.assertEquals(Stats.bucket(b), 'rest')
+        else
+            endAt = clock
+            -- the lift, on top of the little a fed morphi recovers in a step
+            for _, w in ipairs({ a, b }) do
+                lu.assertAlmostEquals(w.morale - before[w], MORALE_PLAY + MORALE_RECOVER * dt, 0.01)
+            end
+        end
+    end
+    lu.assertNotNil(endAt, 'the talk never ended')
+    -- twelve lines, A then B, a line every few seconds
+    lu.assertEquals(#said, 12)
+    for i, s in ipairs(said) do
+        lu.assertEquals(s.text, pl.convo[i])
+        lu.assertIs(s.who, i % 2 == 1 and a or b)
+        lu.assertTrue(math.abs(s.ttl - PLAY_BUBBLE_SECONDS) < 0.1)
+        if i > 1 then lu.assertAlmostEquals(s.at - said[i - 1].at, PLAY_LINE_SECONDS, 0.06) end
+    end
+    lu.assertAlmostEquals(endAt - said[1].at, 12 * PLAY_LINE_SECONDS, 0.11)
+    -- both back to their day, with nobody grumbling and nothing spent
+    lu.assertNil(a.play)
+    lu.assertNil(b.play)
+    lu.assertNotEquals(a.state, 'playing')
+    lu.assertNotEquals(b.state, 'playing')
+    lu.assertEquals(#self.complaints, 0)
+    lu.assertEquals(self.world.stock.gold, 0)
+    lu.assertEquals(#self.world.items, 0)
+    -- and it is news: who, and what kind of play
+    local played = self.played()
+    lu.assertEquals(#played, 1)
+    lu.assertIs(played[1].who, a)
+    lu.assertIs(played[1].data.partner, b)
+    lu.assertEquals(played[1].data.category, pl.category)
+    lu.assertEquals(played[1].data.title, pl.convo.title)
+end
+
+function TestPlay:testTheJoinerWalksOverToTalk()
+    local a, b = self.make('Pip'), self.make('Dave', 9, 1)
+    lu.assertTrue(a:offerPlay())
+    lu.assertTrue(b:joinPlay())
+    lu.assertEquals(b.state, 'walking')
+    lu.assertEquals(b.goal, 'play')
+    lu.assertEquals(Stats.bucket(b), 'rest')
+    run({ a, b }, self.world, self.jobs, 4)
+    lu.assertEquals(b.state, 'playing')
+    local at, bt = a:tile(), b:tile()
+    lu.assertTrue(math.abs(at.x - bt.x) <= 1 and math.abs(at.y - bt.y) <= 1, 'beside each other')
+    lu.assertTrue(a.play.lines >= 1, 'the talk began')
+end
+
+function TestPlay:testAMorphiThatLeavesGetsNoLift()
+    local a, b = self.make('Pip'), self.make('Dave', 6, 5)
+    a.morale, b.morale = 50, 50
+    a:offerPlay()
+    b:joinPlay()
+    run({ a, b }, self.world, self.jobs, 10)
+    lu.assertNotNil(a.play)
+    -- b gets hungry: it goes to eat, the talk is over and nobody is lifted
+    b.hunger = HUNGER_EAT_THRESHOLD - 1
+    local aBefore, bBefore = a.morale, b.morale
+    run({ a, b }, self.world, self.jobs, 0.1)
+    lu.assertNil(a.play)
+    lu.assertNil(b.play)
+    lu.assertNil(self.world.openPlay)
+    lu.assertTrue(b.morale <= bBefore, 'no lift for the one who left')
+    lu.assertTrue(a.morale < aBefore + MORALE_PLAY)
+    lu.assertNotEquals(a.state, 'playing')
+    lu.assertNotEquals(b.state, 'playing')
+    -- one quits mid-talk: the same
+    local c, d = self.make('Gus', 5, 5), self.make('Rex', 6, 4)
+    c:offerPlay()
+    d:joinPlay()
+    run({ c, d }, self.world, self.jobs, 5)
+    lu.assertNotNil(c.play)
+    local cBefore = c.morale
+    d:quit('morale')
+    lu.assertNil(c.play)
+    lu.assertNil(d.play)
+    lu.assertEquals(c.morale, cBefore)
+    lu.assertEquals(c.state, 'idle')
+    lu.assertEquals(#self.played(), 0)
+end
+
+function TestPlay:testTradeAndPlayKeepTheirOwnOffers()
+    self.world:storeItem(ITEM_FOOD, 4, 4, 'steak')
+    self.world:storeItem(ITEM_FOOD, 7, 4, 'chili')
+    self.world.stock.gold = 1
+    local a, b, c = self.make('Pip', 5, 4, 'pupper'), self.make('Dave', 6, 4, 'cwab'), self.make('Gus', 5, 5)
+    lu.assertTrue(c:offerPlay())
+    lu.assertNil(self.world.openTrade)
+    a.morale = 30
+    a.state = 'breaking'
+    a:finishAction()
+    lu.assertEquals(a.state, 'trading', 'feeling low with gold about: a trade, as before')
+    lu.assertEquals(self.world.openTrade, a.trade)
+    lu.assertEquals(self.world.openPlay, c.play)
+    lu.assertTrue(b:joinTrade())
+    lu.assertEquals(self.world.stock.gold, 0)
+    lu.assertEquals(a.trade.gifts, 2)
+    lu.assertEquals(self.world.openPlay, c.play, 'the offer to play is still open')
+    lu.assertFalse(a:joinPlay(), 'busy trading')
+    lu.assertFalse(b:joinPlay())
+end
+
+function TestPlay:testPlayNowPairsTheNearestTwoWhateverTheSeason()
+    local a, b, c = self.make('Pip', 2, 3), self.make('Dave', 9, 3), self.make('Gus', 7, 3)
+    local hungry = self.make('Hank', 9, 3)
+    hungry.hunger = 5
+    for _, w in ipairs({ a, b, c, hungry }) do w.playedSeason = self.scoring.quarter end
+    lu.assertNil(Worker.playNow({ a, hungry }), 'one free morphi is not two')
+    local pl = Worker.playNow({ a, b, c, hungry })
+    lu.assertNotNil(pl, 'the season limit does not stop PLAY NOW')
+    lu.assertTrue((pl.a == b and pl.b == c) or (pl.a == c and pl.b == b))
+    lu.assertNil(a.play)
+    lu.assertNil(hungry.play)
+    lu.assertEquals(b.playedSeason, self.scoring.quarter)
+    run({ a, b, c, hungry }, self.world, self.jobs, 1)
+    lu.assertTrue(pl.lines >= 1)
+    lu.assertNotNil(pl.a.bubble or pl.b.bubble)
+end
+
+function TestPlay:testTheTalkComesFromTheSeededRng()
+    local function pick(seed)
+        local world = World.fromGrid(GRID, Rng.new(1))
+        local rng = Rng.new(seed)
+        local a = Worker.new(world, Jobs.new(), self.scoring, rng, { x = 5, y = 4, wilds = true, hunger = 90 })
+        local b = Worker.new(world, Jobs.new(), self.scoring, rng, { x = 6, y = 4, wilds = true, hunger = 90 })
+        a:offerPlay()
+        b:joinPlay()
+        return a.play.category .. '/' .. a.play.convo.title
+    end
+    lu.assertEquals(pick(42), pick(42))
+    local seen, n = {}, 0
+    for s = 1, 80 do
+        local k = pick(s)
+        if not seen[k] then seen[k] = true; n = n + 1 end
+    end
+    lu.assertEquals(n, 4, 'all four talks turn up')
+end
+
+function TestPlay:testNoPlayOutsideFreePlay()
+    local world = World.fromGrid(GRID, Rng.new(1))
+    world.arcade = true
+    local a = Worker.new(world, self.jobs, self.scoring, Rng.new(1), { x = 5, y = 4 })
+    local b = Worker.new(world, self.jobs, self.scoring, Rng.new(2), { x = 6, y = 4 })
+    lu.assertFalse(a:hasPlayChance())
+    lu.assertFalse(a:offerPlay())
+    lu.assertNil(Worker.playNow({ a, b }))
+    -- nor on a survival level
+    local s1 = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), { x = 5, y = 4, hunger = 90 })
+    local s2 = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), { x = 6, y = 4, hunger = 90 })
+    lu.assertFalse(s1:offerPlay())
+    lu.assertNil(Worker.playNow({ s1, s2 }))
+end
+
+function TestPlay:testEveryLineFitsTheBubble()
+    for _, cat in ipairs(PLAY_CATEGORIES) do
+        lu.assertTrue(#PLAY_CHAT[cat] >= 1)
+        for _, convo in ipairs(PLAY_CHAT[cat]) do
+            lu.assertNotNil(convo.title)
+            lu.assertEquals(#convo, 12)
+            for _, line in ipairs(convo) do lu.assertTrue(#line <= 18, line) end
+        end
+    end
 end
 
 os.exit(lu.LuaUnit.run())

@@ -162,6 +162,12 @@ local function onWorkerEvent(worker, name, data)
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
         announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
             .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'play' and game.mode == 'free' then
+        -- fun together: a talk had at camp, both cheered up
+        local t = worker:tile()
+        local who = worker.name .. ' and ' .. data.partner.name
+        if game.stats then game.stats:event('play', game, who, data.category .. ': ' .. tostring(data.title), t) end
+        announce(who .. ' ' .. (PLAY_NEWS[data.title] or PLAY_NEWS_KIND[data.category] or 'played together') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
         announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')
@@ -180,6 +186,11 @@ local function onWorkerEvent(worker, name, data)
             love.mouse.setVisible(true)
         end
     end
+end
+
+-- DEV's PLAY NOW is for free play, where morphis have morale to lift.
+local function canPlayNow()
+    return game ~= nil and game.mode == 'free' and game.workers ~= nil
 end
 
 -- migrants: true for arrivals after the start, which the stats count
@@ -692,7 +703,7 @@ local function drawScene()
     elseif state == 'annual' then
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh, game.stats)
     elseif state == 'tools' then
-        ui:drawTools(fingerDebug)
+        ui:drawTools(fingerDebug, canPlayNow())
     elseif state == 'export' then
         ui:drawExport(sub.text, sub.saved)
     elseif state == 'history' then
@@ -860,6 +871,22 @@ end
 
 local function closeSub()
     backTo(sub.back)
+end
+
+-- DEV, PLAY NOW: the two free morphis nearest each other play straight
+-- away, this season's chance or not, and the tester is taken back to the
+-- game to watch them.
+local function playNow()
+    if not canPlayNow() then return end
+    local pl = Worker.playNow(game.workers)
+    if not pl then
+        ui:toast('Nobody free: two fed morphis must be about')
+        return
+    end
+    backTo(sub.toolsBack)
+    game.selectedWorker = pl.a
+    ui:toast(pl.a.name .. ' and ' .. pl.b.name .. ' play')
+    if game.camera then game.camera:centerOn(pl.a.x, pl.a.y) end
 end
 
 -- The screen the run was exported from, under any tester screens.
@@ -1065,6 +1092,7 @@ local function pointerPressed(x, y, button, istouch)
         return
     elseif state == 'tools' then
         if pb == 'fingers' then fingerDebug = not fingerDebug
+        elseif pb == 'playnow' then playNow()
         elseif pb == 'back' then backTo(sub.toolsBack) end
         return
     elseif state == 'export' then

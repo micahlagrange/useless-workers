@@ -96,12 +96,12 @@ function TestInput:testAVanishedFingerLetsGo()
     love.touchreleased('b', 300, 200)
 end
 
--- A finger tap on a top bar or dropdown button, found by id after a frame.
+-- A finger tap on a top bar, dropdown or panel button, found by id after a frame.
 local function tapButton(id)
     love.draw()
     local ui = H.ui()
     local found
-    for _, list in ipairs({ ui.dropButtons or {}, ui.topButtons }) do
+    for _, list in ipairs({ ui.dropButtons or {}, ui.topButtons, ui.panelButtons or {} }) do
         for _, b in ipairs(list) do if b.id == id and not found then found = b end end
     end
     lu.assertNotNil(found, 'no ' .. id .. ' button')
@@ -157,6 +157,49 @@ function TestInput:testMixerSetsEachChannel()
     lu.assertEquals(ui.dropdown, 'sound')
     for _, c in ipairs(Audio.CHANNELS) do Audio.setVolume(c, 1) end
     ui.dropdown = nil
+end
+
+-- DEV, then PLAY NOW, by finger: the two nearest free morphis start to play
+-- straight away, and the game is back on screen to watch them talk.
+function TestInput:testPlayNowByTouch()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    for _ = 1, 30 do love.update(1 / 30) end
+    local game = H.game()
+    tapButton('dev')
+    lu.assertEquals(H.state(), 'tools')
+    tapButton('playnow')
+    lu.assertEquals(H.state(), 'playing')
+    -- (others may be playing already, of their own accord)
+    local playing = {}
+    for _, w in ipairs(game.workers) do if w.play and w.play.dev then playing[#playing + 1] = w end end
+    lu.assertEquals(#playing, 2)
+    local pl = playing[1].play
+    local bubbles = 0
+    for _ = 1, 30 * 50 do
+        love.update(1 / 30)
+        if pl.a.bubble and pl.a.bubble.text == pl.convo[1] then bubbles = bubbles + 1 end
+        if not pl.a.play then break end
+    end
+    lu.assertTrue(bubbles > 0, 'the first line was never said')
+    lu.assertNil(pl.a.play, 'the talk never ended')
+    -- it is in the run stats and the news
+    local who = pl.a.name .. ' and ' .. pl.b.name
+    local event, news
+    for _, e in ipairs(game.stats.events) do if e.kind == 'play' and e.who == who then event = e end end
+    for _, e in ipairs(game.log) do if e.text:find(who, 1, true) then news = e end end
+    lu.assertNotNil(event)
+    lu.assertEquals(event.text, pl.category .. ': ' .. pl.convo.title)
+    lu.assertNotNil(news)
+end
+
+-- PLAY NOW is a free play tool: an arcade level has no morale to lift.
+function TestInput:testNoPlayNowInArcade()
+    tapButton('dev')
+    lu.assertEquals(H.state(), 'tools')
+    love.draw()
+    for _, b in ipairs(H.ui().panelButtons) do lu.assertNotEquals(b.id, 'playnow') end
+    H.setState('playing')
 end
 
 os.exit(lu.LuaUnit.run())
