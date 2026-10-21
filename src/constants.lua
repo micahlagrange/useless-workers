@@ -73,13 +73,13 @@ ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Gatherer',   jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
+    lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
     miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
     builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
--- Nobody chops: the points a level starts with are all the logs there are.
+-- Nobody gathers: the points a level starts with are all the sticks there are.
 ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner', ribbit = 'builder' }
 -- The retired survival levels' hire order. Free play deals jobs instead
 -- (src/jobsets.lua) and a morphi's look no longer decides its job: arrivals

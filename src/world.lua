@@ -465,7 +465,8 @@ end
 
 -- Resource nodes ---------------------------------------------------------
 -- bush: grows food on grass, ripens again after it is picked
--- tree: stands on grass, a lumberjack cuts it for logs, regrows from a stump
+-- tree: stands on grass, a gatherer shakes sticks from it (logs, internally);
+-- it stays standing, bare, until its twigs grow back
 -- ore:  gold inside a stone tile, a miner works it from a neighbouring tile,
 --       the tile turns to dirt when it is mined out
 

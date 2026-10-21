@@ -271,7 +271,7 @@ function TestWorker:testLogsAndGoldGoToTheStockpile()
     lu.assertEquals(self.scoring.delivered.gold, 1)
 end
 
-function TestWorker:testLumberjackChopsTreeIntoStump()
+function TestWorker:testGathererShakesSticksAndTheTreeGrowsBack()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     self.jobs:postNode(self.bush)   -- not my job
     self.jobs:postNode(self.tree)
@@ -282,6 +282,12 @@ function TestWorker:testLumberjackChopsTreeIntoStump()
     lu.assertEquals(self.tree.timer > 0, true)
     lu.assertTrue(self.jobs:hasJobFor(self.bush)) -- still queued for a forager
     lu.assertEquals(self.events[2], 'deliver:logs')
+    -- the tree stays where it was, bare, and grows its twigs back
+    local still = false
+    for _, n in ipairs(self.world.nodes) do if n == self.tree then still = true end end
+    lu.assertTrue(still, 'a shaken tree stays standing')
+    self.world:update(TREE_REGROW_SECONDS + 1, function() end)
+    lu.assertTrue(self.tree.ready, 'its twigs grew back')
 end
 
 function TestWorker:testMinerWorksOreFromNextDoorAndOpensTheTile()

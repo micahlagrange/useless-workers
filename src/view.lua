@@ -182,13 +182,15 @@ function View:drawNodes(clock)
                 love.graphics.setColor(0.18, 0.32, 0.14)
                 love.graphics.circle('line', px + 8, py + 5, 7)
             else
-                -- stump
-                love.graphics.setColor(0.45, 0.32, 0.18)
-                love.graphics.rectangle('fill', px + 5, py + 9, 6, 5)
-                love.graphics.setColor(0.7, 0.55, 0.32)
-                love.graphics.ellipse('fill', px + 8, py + 9, 3.5, 2)
-                love.graphics.setColor(0.45, 0.32, 0.18)
-                love.graphics.ellipse('line', px + 8, py + 9, 2, 1)
+                -- shaken bare: the tree stays, its twigs grow back
+                love.graphics.setColor(0.42, 0.3, 0.16)
+                love.graphics.rectangle('fill', px + 7, py + 6, 2, 10)
+                love.graphics.line(px + 8, py + 8, px + 4, py + 3)
+                love.graphics.line(px + 8, py + 7, px + 12, py + 2)
+                love.graphics.line(px + 8, py + 10, px + 12, py + 7)
+                love.graphics.setColor(0.32, 0.56, 0.26, 0.6)
+                love.graphics.circle('fill', px + 4, py + 3, 1.5)
+                love.graphics.circle('fill', px + 12, py + 2, 1.5)
             end
         elseif node.kind == NODE_ORE then
             local glint = 0.75 + 0.25 * math.sin((clock or 0) * 3 + node.id)

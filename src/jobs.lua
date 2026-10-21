@@ -1,12 +1,12 @@
 -- First come, first served job queue. Jobs are typed by the node they point
--- at: 'forage' for bushes, 'chop' for trees, 'mine' for ore. Each role only
+-- at: 'forage' for bushes, 'gather' for trees, 'mine' for ore. Each role only
 -- takes its own type.
 require('src.constants')
 
 local Jobs = {}
 Jobs.__index = Jobs
 
-local TYPE_FOR_KIND = { bush = 'forage', tree = 'chop', ore = 'mine' }
+local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine' }
 
 function Jobs.typeForNode(node)
     return TYPE_FOR_KIND[node.kind]

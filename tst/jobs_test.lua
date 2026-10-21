@@ -236,7 +236,7 @@ function TestJobOrder:test_main_beats_neutral_beats_disliked()
     self.jobs:postNode(self.bush)
     self.jobs:postNode(self.tree)
     local w = self.make({ main = ROLE_LUMBERJACK, neutral = ROLE_FORAGER, disliked = ROLE_MINER }, 3)
-    -- the bush is nearer, but chopping is its main job
+    -- the bush is nearer, but gathering sticks is its main job
     lu.assertEquals(firstJob(w, { w }, self.world, self.jobs), ROLE_LUMBERJACK)
     lu.assertEquals(w:describeState():find('neutral'), nil)
 end
@@ -247,7 +247,7 @@ function TestJobOrder:test_falls_back_to_neutral_then_disliked()
     local w = self.make({ main = ROLE_MINER, neutral = ROLE_FORAGER, disliked = ROLE_LUMBERJACK })
     lu.assertEquals(firstJob(w, { w }, self.world, self.jobs), ROLE_FORAGER)
     lu.assertNotNil(w:describeState():find('neutral job'))
-    -- nothing to mine or forage, a tree to chop: the disliked job, last
+    -- nothing to mine or forage, a tree to shake: the disliked job, last
     self:setUp()
     self.bush.ready = false; self.bush.timer = 999
     self.jobs:postNode(self.tree)
@@ -257,18 +257,18 @@ function TestJobOrder:test_falls_back_to_neutral_then_disliked()
 end
 
 function TestJobOrder:test_never_takes_a_job_outside_its_three()
-    -- a builder's work and a tree to chop; this morphi does neither
+    -- a builder's work and a tree to shake; this morphi does neither
     self.bush.ready = false; self.bush.timer = 999
     self.jobs:postNode(self.tree)
     local site = assert(self.world:addSite(SITE_BIN, 8, 5))
     self.jobs:postSite(site)
     local w = self.make({ main = ROLE_MINER, neutral = ROLE_FORAGER, disliked = ROLE_BUILDER })
-    -- it builds (disliked), but never chops
+    -- it builds (disliked), but never gathers
     for _ = 1, 100 do
         run({ w }, self.world, self.jobs, 0.1)
         lu.assertNotEquals(w.doing, ROLE_LUMBERJACK)
     end
-    lu.assertTrue(self.tree.ready, 'nobody chopped the tree')
+    lu.assertTrue(self.tree.ready, 'nobody gathered sticks from the tree')
 end
 
 function TestJobOrder:test_only_a_builder_builds_in_free_play()

@@ -31,8 +31,8 @@ function TestJobs:testTakeByTypeSkipsStaleAndPredicate()
     local j = jobs:take('forage', function(job) return job.x == 3 end)
     lu.assertEquals(j.node, other)
     lu.assertEquals(jobs:count(), 2) -- stale dropped, good and the tree remain
-    lu.assertEquals(jobs:count('chop'), 1)
-    lu.assertEquals(jobs:take('chop').node, wood)
+    lu.assertEquals(jobs:count('gather'), 1)
+    lu.assertEquals(jobs:take('gather').node, wood)
     lu.assertEquals(jobs:take('forage').node, good)
     lu.assertNil(jobs:take('forage'))
 end
@@ -48,7 +48,7 @@ function TestJobs:testTakeNearestClaimsAtomically()
     lu.assertEquals(j.node, near)
     lu.assertEquals(jobs:count('forage'), 2)
     -- across types: the tree next door beats the bush further off
-    j = jobs:takeNearest({ 'forage', 'chop' }, 9, 9, nil, nil)
+    j = jobs:takeNearest({ 'forage', 'gather' }, 9, 9, nil, nil)
     lu.assertEquals(j.node, wood)
     -- a claim that refuses moves on to the next nearest; a refused job stays queued
     local refused = {}

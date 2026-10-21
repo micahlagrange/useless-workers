@@ -20,7 +20,7 @@ Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g' }
 Stats.LEGEND = {
     ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'stone', ['*'] = 'snow',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
-    t = 'tree (stump T)', g = 'gold ore', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
+    t = 'tree (shaken bare T)', g = 'shiny', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
 }
 
 local function tileChar(t)

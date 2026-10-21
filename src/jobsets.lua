@@ -26,7 +26,7 @@ JobSets.SLOTS = { 'main', 'neutral', 'disliked' }
 -- (only a band of one cannot cover them: a morphi has three jobs)
 JobSets.MAX_DEALS = 200
 
--- The job queue types a job takes, in the order given. A lumberjack chops
+-- The job queue types a job takes, in the order given. A gatherer gathers sticks
 -- and builds beds (woodwork); a builder builds floors, bins, bridges and beds.
 function JobSets.jobTypes(job)
     local info = ROLES[job]
@@ -37,9 +37,9 @@ function JobSets.jobTypes(job)
 end
 
 -- The job a queue type belongs to first (for whose action time a node or a
--- site takes): forage to forager, chop to lumberjack, mine to miner, build
+-- site takes): forage to forager, gather to gatherer, mine to miner, build
 -- and woodwork to builder.
-JobSets.JOB_FOR_TYPE = { forage = ROLE_FORAGER, chop = ROLE_LUMBERJACK, mine = ROLE_MINER, build = ROLE_BUILDER, woodwork = ROLE_BUILDER }
+JobSets.JOB_FOR_TYPE = { forage = ROLE_FORAGER, gather = ROLE_LUMBERJACK, mine = ROLE_MINER, build = ROLE_BUILDER, woodwork = ROLE_BUILDER }
 
 -- A random stream of its own for the deal, from the game's seed.
 function JobSets.rngFor(seedNumber)

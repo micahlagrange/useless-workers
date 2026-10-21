@@ -412,7 +412,7 @@ end
 -- are already doing) or 'none' (no work of that kind
 -- anywhere: nothing ripe, nothing marked). at is the work out of reach.
 local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'woodwork' }
-local NODE_JOB = { bush = 'forage', tree = 'chop', ore = 'mine' }
+local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine' }
 
 function Worker:whyNoWork(job, slot)
     local t = self:tile()
