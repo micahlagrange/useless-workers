@@ -73,8 +73,8 @@ ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
-    miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
+    lumberjack = { label = 'Gatherer',   jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
+    miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
     builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
 }
@@ -144,7 +144,9 @@ ABILITY_DOOR    = 'door'      -- place a door site (costs a log); walkable, coun
 TOOLS_SURVIVAL  = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
 TOOLS_ARCADE    = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_WALL, ABILITY_DOOR, ABILITY_BRIDGE }
 ABILITY_ORDER   = TOOLS_ARCADE
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
+-- the words on the tool buttons (the little-blob meadow voice: a STASH is a
+-- leaf mat for one thing, a BASKET holds four, a NEST is where they nap)
+ABILITY_LABEL   = { select = 'SELECT', mine = 'DIG', storage = 'STASH', bin = 'BASKET', bed = 'NEST', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
 -- Storage: a floor spot is free and holds one item. A bin costs logs and
 -- holds four, shown in the order they came in, quadrant by quadrant.
 STORAGE_FLOOR_CAPACITY = 1
@@ -181,7 +183,7 @@ ARCADE_NEED_ORDER = { 'bins', 'floors', 'enclosed', 'binsInside' }
 ARCADE_DIFFICULTIES = {
     { key = 'easy',   name = 'Easy',   blurb = 'points to burn, build it twice if you like' },
     { key = 'normal', name = 'Normal', blurb = 'room for a few mistakes' },
-    { key = 'hard',   name = 'Hard',   blurb = 'the obvious build and a log or two to spare' },
+    { key = 'hard',   name = 'Hard',   blurb = 'the obvious build and a stick or two to spare' },
 }
 DEFAULT_ARCADE_DIFFICULTY = 1
 
@@ -223,10 +225,10 @@ MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 -- Free play starts with three, their jobs dealt at random (src/jobsets.lua); the
 -- other wilds keep their numbers until the ladder is redone.
 DIFFICULTIES = {
-    { name = 'Mild wilds',   drain = 0.5, workers = 3, multiplier = 0.5, startHunger = 85 },
-    { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
-    { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
-    { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
+    { name = 'Sunny meadow', drain = 0.5, workers = 3, multiplier = 0.5, startHunger = 85 },
+    { name = 'Breezy meadow', drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
+    { name = 'Chilly meadow', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
+    { name = 'Stormy meadow', drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
 }
 FREE_PLAY_DIFFICULTIES = 1
 DEFAULT_DIFFICULTY = 1

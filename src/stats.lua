@@ -52,19 +52,19 @@ end
 -- between several that pass on the same day; the rest wait their turn.
 -- s is the stats, r the day's row.
 Stats.MILESTONES = {
-    { id = 'year1', weight = 9, text = 'The band saw out its first year in the wilds.', test = function(s, r) return r.quarter > 4 end },
-    { id = 'year2', weight = 9, text = 'Two years. The wilds are starting to feel like home.', test = function(s, r) return r.quarter > 8 end },
-    { id = 'year3', weight = 9, text = 'Three years and still standing.', test = function(s, r) return r.quarter > 12 end },
-    { id = 'year5', weight = 10, text = 'Five years. Morphis tell stories about this band.', test = function(s, r) return r.quarter > 20 end },
-    { id = 'band8', weight = 6, text = 'Eight morphis around one campfire.', test = function(s, r) return r.pop >= 8 end },
-    { id = 'band12', weight = 7, text = 'A dozen morphis. A proper village.', test = function(s, r) return r.pop >= 12 end },
-    { id = 'gold50', weight = 5, text = 'Fifty gold dug out of the rock.', test = function(s, r) return r.gold >= 50 end },
-    { id = 'gold200', weight = 7, text = 'Two hundred gold. The morphis are rich and have nothing to buy.', test = function(s, r) return r.gold >= 200 end },
-    { id = 'logs100', weight = 5, text = 'A hundred logs felled.', test = function(s, r) return r.logs >= 100 end },
-    { id = 'food200', weight = 5, text = 'Two hundred meals gathered.', test = function(s, r) return r.food >= 200 end },
-    { id = 'food1000', weight = 8, text = 'A thousand meals gathered. Nobody counted the crumbs.', test = function(s, r) return r.food >= 1000 end },
-    { id = 'trades10', weight = 4, text = 'Ten deals struck at camp.', test = function(s, r) return s.counts.trade >= 10 end },
-    { id = 'arrivals10', weight = 4, text = 'Ten migrants took a chance on this band.', test = function(s, r) return s.counts.arrived >= 10 end },
+    { id = 'year1', weight = 9, text = 'The bunch made it through a whole year in the meadow.', test = function(s, r) return r.quarter > 4 end },
+    { id = 'year2', weight = 9, text = 'Two years. The meadow really feels like home now.', test = function(s, r) return r.quarter > 8 end },
+    { id = 'year3', weight = 9, text = 'Three years and still bouncing.', test = function(s, r) return r.quarter > 12 end },
+    { id = 'year5', weight = 10, text = 'Five years. Little blobs tell stories about this bunch.', test = function(s, r) return r.quarter > 20 end },
+    { id = 'band8', weight = 6, text = 'Eight morphis snuggled round the home nest.', test = function(s, r) return r.pop >= 8 end },
+    { id = 'band12', weight = 7, text = 'A dozen morphis. A proper little crowd.', test = function(s, r) return r.pop >= 12 end },
+    { id = 'gold50', weight = 5, text = 'Fifty shinies dug up.', test = function(s, r) return r.gold >= 50 end },
+    { id = 'gold200', weight = 7, text = 'Two hundred shinies. Very sparkly, nothing to spend them on.', test = function(s, r) return r.gold >= 200 end },
+    { id = 'logs100', weight = 5, text = 'A hundred sticks gathered.', test = function(s, r) return r.logs >= 100 end },
+    { id = 'food200', weight = 5, text = 'Two hundred snacks gathered.', test = function(s, r) return r.food >= 200 end },
+    { id = 'food1000', weight = 8, text = 'A thousand snacks gathered. Nobody counted the crumbs.', test = function(s, r) return r.food >= 1000 end },
+    { id = 'trades10', weight = 4, text = 'Ten snack swaps at the home nest.', test = function(s, r) return s.counts.trade >= 10 end },
+    { id = 'arrivals10', weight = 4, text = 'Ten little blobs wandered in to join the bunch.', test = function(s, r) return s.counts.arrived >= 10 end },
 }
 
 -- meta: seed, mode, difficulty, build and anything else worth keeping
@@ -271,11 +271,11 @@ function Stats:history()
     for _, m in ipairs(self.milestones) do list[#list + 1] = { day = m.day, order = 0, text = m.text } end
     for _, e in ipairs(self.events) do
         if e.kind == 'arrived' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A migrant') .. ' arrived.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A little blob') .. ' wandered in.' }
         elseif e.kind == 'starved' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' starved and wandered off.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' got too hungry and toddled off.' }
         elseif e.kind == 'left' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' had enough and left.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' packed a tiny bag and left.' }
         end
     end
     table.sort(list, function(a, b)

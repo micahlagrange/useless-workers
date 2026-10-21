@@ -86,8 +86,8 @@ Levels[3] = {
 
 Levels[4] = {
     name = 'Picky',
-    blurb = 'Woofoof joins. From now on they only eat out of a BIN.',
-    intro = 'They have grown picky: nobody eats off a bush any more. Place a BIN (1 log); the foragers fill it and everyone eats from it. Look at what grows on your own bank before you build a bridge.',
+    blurb = 'Woofoof joins. From now on they only eat out of a BASKET.',
+    intro = 'They have grown picky: nobody eats off a bush any more. Place a BASKET (1 stick); the foragers fill it and everyone eats from it. Look at what grows on your own bank before you build a bridge.',
     morphis = { 'pupper', 'woofoof', 'twins' },
     points = { easy = 14, normal = 8, hard = 4 }, targets = { easy = 3, clever = 1 },
     needs = { bins = true },
@@ -107,8 +107,8 @@ Levels[4] = {
 
 Levels[5] = {
     name = 'Home',
-    blurb = 'Cwab is back to dig. Now they want a FLOOR tile each to live on.',
-    intro = 'A morphi needs somewhere to live: a FLOOR tile for each of them, anywhere, free. Cwab still MINES stone for nothing. The food is behind stone and across water; one of those is free to open.',
+    blurb = 'Cwab is back to dig. Now they want a STASH each to live on.',
+    intro = 'A morphi needs somewhere to live: a STASH for each of them, anywhere, free. Cwab still DIGS through rock for nothing. The food is behind rock and across water; one of those is free to open.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab' },
     points = { easy = 16, normal = 9, hard = 5 }, targets = { easy = 4, clever = 1 },
     needs = { bins = true, floors = true },
@@ -129,8 +129,8 @@ Levels[5] = {
 
 Levels[6] = {
     name = 'Walls',
-    blurb = 'Blob joins. The floors must be walled in, with a DOOR to get in.',
-    intro = 'Living space now means a house: WALLS all the way round the floors and a DOOR so they can get in. Stone and water count as walls. A wall or a door is 1 log. There is a nook in the stone.',
+    blurb = 'Blob joins. The stashes must be walled in, with a DOOR to get in.',
+    intro = 'Living space now means a den: WALLS all the way round the stashes and a DOOR so they can get in. Rock and water count as walls. A wall or a door is 1 stick. There is a nook in the rock.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue' },
     points = { easy = 36, normal = 24, hard = 17 }, targets = { easy = 15, clever = 4 },
     needs = { bins = true, floors = true, enclosed = true },
@@ -163,7 +163,7 @@ Levels[6] = {
 Levels[7] = {
     name = 'Inside',
     blurb = 'Ribbit is back to build with Twins. The bins go inside the walls too.',
-    intro = 'Ribbit the frog comes back to build alongside Twins, and the whole band is here. The last straw: every BIN must stand inside the house with the floors, and six morphis need six floors. The old stone room has a gap in it.',
+    intro = 'Ribbit the frog comes back to build alongside Twins, and the whole bunch is here. The last straw: every BASKET must stand inside the den with the stashes, and six morphis need six stashes. The old rock den has a gap in it.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit' },
     points = { easy = 38, normal = 26, hard = 19 }, targets = { easy = 17, clever = 3 },
     needs = { bins = true, floors = true, enclosed = true, binsInside = true },

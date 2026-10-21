@@ -111,7 +111,7 @@ end
 
 -- Game setup ---------------------------------------------------------------
 
-local NODE_WORDS = { bush = 'bush', tree = 'tree', ore = 'gold' }
+local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny' }
 
 -- Everything announced goes into the log (LOG up top), with when, what
 -- kind and where, so it can be read later and looked at on the map. Only
@@ -132,7 +132,7 @@ local function onComplain(worker, reason, node)
     local where = node and ((NODE_WORDS[node.kind] or node.kind or 'work') .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
     local text
     if reason == 'hungry' then
-        text = worker.name .. ' is hungry and the ' .. where .. ' is walled off'
+        text = worker.name .. ' is hungry and the ' .. where .. ' is out of reach'
     elseif reason == 'slow' then
         text = worker.name .. ' gave up walking to the ' .. where
     elseif reason == 'bored' then
@@ -168,19 +168,19 @@ local function onWorkerEvent(worker, name, data)
         local t = worker:tile()
         Audio.playSFX('hire')
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
-        announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
-            .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' swapped snacks at the home nest'
+            .. (data.gifts > 0 and (', ' .. data.gifts .. ' favourite treat' .. (data.gifts == 1 and '' or 's') .. ' sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
-        announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')
+        announce(worker.name .. ' is very grumpy and thinking about leaving.', { x = t.x, y = t.y }, 'warning')
     elseif name == 'quit' then
         Audio.playSFX('quit')
         local t = worker:tile()
         if game.stats then game.stats:event(data == 'morale' and 'left' or 'starved', game, worker.name, nil, t) end
         if data == 'morale' then
-            announce(worker.name .. ' left the band. Too many hardships, too little care.', { x = t.x, y = t.y }, 'left')
+            announce(worker.name .. ' packed a tiny bag and left. Too many grumbles, not enough cuddles.', { x = t.x, y = t.y }, 'left')
         else
-            announce(worker.name .. ' starved and wandered off into the wilds.', { x = t.x, y = t.y }, 'left')
+            announce(worker.name .. ' got far too hungry and toddled off to find snacks elsewhere.', { x = t.x, y = t.y }, 'left')
         end
         if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
@@ -244,7 +244,7 @@ end
 local function onEffect(name, data)
     if name == 'mine' then
         Audio.playSFX('click')
-        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for mining')
+        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for digging')
     elseif name == 'unmark' then
         Audio.playSFX('click')
         if data.kind then
@@ -299,7 +299,7 @@ local function newGame(seedString, difficultyIndex)
     game.stats = Stats.new({ mode = 'free', seed = seedString, difficulty = DIFFICULTIES[difficultyIndex].name, build = Version.build })
     hire(DIFFICULTIES[difficultyIndex].workers)
     game.log = {}
-    announce('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
+    announce('Mark a STASH (or a BASKET, 1 stick, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)
@@ -432,7 +432,7 @@ local function continueFromReport()
     else
         state = 'playing'
         hideCursor()
-        announce(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
+        announce(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' little blob' .. (game.report.hires == 1 and '' or 's') .. ' wandered in to join the bunch.')
     end
 end
 

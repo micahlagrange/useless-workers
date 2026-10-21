@@ -130,7 +130,7 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     self.world.stock.logs = 0
     ok, why = self.abilities:use(9, 1)
     lu.assertFalse(ok)
-    lu.assertStrContains(why, 'logs')
+    lu.assertStrContains(why, 'stick')
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
     lu.assertFalse(ok)
 end
@@ -143,7 +143,7 @@ function TestAbilities:testDragLaysOnReleaseInTheToolsShape()
     self.abilities:select(ABILITY_WALL)
     local ok, why = self.abilities:useDrag(10, 1, 15, 1)
     lu.assertTrue(ok)
-    lu.assertStrContains(why, 'logs')
+    lu.assertStrContains(why, 'stick')
     lu.assertEquals(#self.world:sitesOfKind(SITE_WALL), 4)
     lu.assertEquals(self.world.stock.logs, 0)
     -- a bin goes where the drag ends, not where it started

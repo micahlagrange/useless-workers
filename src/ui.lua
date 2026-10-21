@@ -883,7 +883,7 @@ function UI:drawRestartCall(game)
     love.graphics.setFont(self.fonts.hud)
     love.graphics.setColor(0.08, 0.05, 0.04, 1)
     love.graphics.print(label, r.x + 14, r.y + 12)
-    local why = 'Out of logs and nobody can reach food.'
+    local why = 'Out of sticks and nobody can reach food.'
     local f = self.fonts.small:getWidth(why) <= self.vw - 16 and self.fonts.small or self.fonts.tiny
     self:printLine(why, 8, r.y + r.h + 6, self.vw - 16, 'right', C.warn, { f })
     self.restartButton = r
@@ -1120,7 +1120,7 @@ function UI:drawBottomBar(game)
                 if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
                 sx = sx + 30
             end
-            local under = w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount)
+            local under = w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
             self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
@@ -1134,7 +1134,7 @@ function UI:drawBottomBar(game)
                 local word, color = hungerLook(w)
                 self:printLine(word, bx, py + 34, 140, 'left', color, { self.fonts.small, self.fonts.tiny })
                 setColor(C.dim)
-                love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
+                love.graphics.print('MOOD ' .. w:mood(), bx, py + 50)
                 love.graphics.setColor(0, 0, 0, 0.6)
                 love.graphics.rectangle('fill', bx, py + 61, 140, 6)
                 if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
@@ -1450,7 +1450,7 @@ function UI:drawUnits(game, view)
     if not stacked then self:printLine('TASK', cTask, y + 56, (compact and right or cHunger) - cTask - 8, 'left', C.dim, { self.fonts.tiny }) end
     if not compact then
         self:printLine(arcade and 'MEAL' or 'HUNGER', cHunger, y + 56, (wide and not arcade and cMorale or right) - cHunger - 8, 'left', C.dim, { self.fonts.tiny })
-        if wide and not arcade then self:printLine('MORALE', cMorale, y + 56, right - cMorale - 8, 'left', C.dim, { self.fonts.tiny }) end
+        if wide and not arcade then self:printLine('MOOD', cMorale, y + 56, right - cMorale - 8, 'left', C.dim, { self.fonts.tiny }) end
     end
     self.unitButtons = {}
     local ry = y + 70
@@ -1525,7 +1525,7 @@ end
 -- a LOOK button for anything that happened somewhere. At the top, this
 -- season's hardships by kind.
 local LOG_KIND = {
-    hardship = { 'HARDSHIP', 'warn' }, warning = { 'FED UP', 'warn' }, left = { 'LEFT', 'warn' }, news = { 'NEWS', 'dim' },
+    hardship = { 'GRUMBLE', 'warn' }, warning = { 'GRUMPY', 'warn' }, left = { 'LEFT', 'warn' }, news = { 'NEWS', 'dim' },
 }
 function UI:drawLog(game)
     local log = game.log or {}
@@ -1543,16 +1543,16 @@ function UI:drawLog(game)
     local counts, order = {}, {}
     for _, e in ipairs(log) do
         if e.season == season and e.kind ~= 'news' then
-            local key = e.kind == 'hardship' and (e.text:find('gave up walking') and 'gave up a long walk' or e.text:find('walled off') and 'hungry, food walled off'
+            local key = e.kind == 'hardship' and (e.text:find('is hungry and') and 'hungry, food out of reach'
                 or e.text:find('nothing to do') and 'nothing to do' or 'could not reach')
-                or (e.kind == 'left' and 'left the band' or 'fed up')
+                or (e.kind == 'left' and 'left' or 'very grumpy')
             if not counts[key] then order[#order + 1] = key end
             counts[key] = (counts[key] or 0) + 1
         end
     end
     if game.mode == 'arcade' then season = '' end -- arcade has no seasons
     local summary = (season ~= '' and season or 'So far') .. ': '
-    if #order == 0 then summary = summary .. 'no hardships yet'
+    if #order == 0 then summary = summary .. 'no grumbles yet'
     else
         local parts = {}
         for _, k in ipairs(order) do parts[#parts + 1] = counts[k] .. ' ' .. k end
@@ -1569,7 +1569,7 @@ function UI:drawLog(game)
     end
     local small, tiny = self.fonts.small, self.fonts.tiny
     local lookW = self.touch and 78 or 70
-    local kindW = tiny:getWidth('HARDSHIP') + 10
+    local kindW = tiny:getWidth('GRUMBLE') + 10
     for i = #log, 1, -1 do
         local e = log[i]
         local textX = x + 18 + kindW
@@ -1629,12 +1629,12 @@ function UI:drawReport(report, scoring)
     local rows = {
         { 'Hauled in', tostring(report.output) },
         { 'Food stored', tostring(report.food), UI.iconFood },
-        { 'Logs', tostring(report.logs), UI.iconLog },
-        { 'Gold', tostring(report.gold), UI.iconGold },
+        { 'Sticks', tostring(report.logs), UI.iconLog },
+        { 'Shinies', tostring(report.gold), UI.iconGold },
         { 'Fed', report.fedPct .. '%' },
-        { 'Hardships', tostring(report.complaints), UI.iconComplaint },
-        { 'Lost to the wilds', tostring(report.attrition) },
-        { 'Migrants arriving', '+' .. report.hires, UI.iconMorphi },
+        { 'Grumbles', tostring(report.complaints), UI.iconComplaint },
+        { 'Wandered off', tostring(report.attrition) },
+        { 'Little blobs arriving', '+' .. report.hires, UI.iconMorphi },
     }
     local rs = math.min(30, math.floor((ph - 130) / #rows))
     local ry = y + 70
@@ -1670,7 +1670,7 @@ function UI:drawTitle(title, highScore)
     local _, th = self:centered('MORPHIS', y, self.fonts.title, C.text, self.vw - 2 * 100)
     y = y + th + gap(14)
     if not short then
-        y = y + self:centeredFit('A small band settling the harsh wilds.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + 2
+        y = y + self:centeredFit('A bunch of little blobs in a big meadow.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + 2
         y = y + self:centeredFit('They will look after themselves. Badly.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + gap(36)
     else
         y = y + 6
@@ -1728,7 +1728,7 @@ function UI:drawTitle(title, highScore)
             local _, dh = self:centered(diff.name:upper(), y, self.fonts.hud, C.text)
             y = y + dh + 8
         end
-        y = y + self:centeredFit(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
+        y = y + self:centeredFit(diff.workers .. ' little blobs, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and newcomers', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
         local seedText = 'SEED: ' .. title.seed
         if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
         local sw = self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
@@ -1757,7 +1757,7 @@ function UI:drawTitle(title, highScore)
     y = y + 54 + gap(14)
     -- the small print, as much of it as there is room for
     local notes = {
-        'ARCADE: every morphi wants one meal. Give the band what it insists on, spend as few points as you can.',
+        'ARCADE: every morphi wants one meal. Give the bunch what it insists on, spend as few points as you can.',
         'SURVIVAL (retired): keep everyone fed to the clock. You never control a morphi.',
     }
     if not self.touch then table.insert(notes, 1, 'arrow keys pick the level and the difficulty') end
@@ -1859,14 +1859,14 @@ function UI:drawGoal(game)
         lines = {
             { def.intro, C.text },
             { 'Keep everyone fed until the clock runs out. Nobody may be lost.', C.text },
-            { def.points .. ' points to spend, par ' .. def.par .. '. Bridges, bins and beds cost points. Mining is free. Logs are points.', C.dim },
+            { def.points .. ' points to spend, par ' .. def.par .. '. Bridges, baskets and nests cost points. Digging is free. Sticks are points.', C.dim },
         }
     else
         title = 'FREE PLAY'
         lines = {
-            { 'A random map, four seasons, migrants when the haul is good. Hardships and hunger wear morale down; at zero a morphi leaves.', C.text },
-            { 'Bushes wear out and new growth comes up out of reach. A morphi with nothing it can get at grows bored: MINE and BRIDGE to open the way, and mark FLOOR spots or BINS for the food.', C.text },
-            { 'Each morphi loves one food (a big meal and a better mood) and hates one. Gold from the miners buys happy thoughts at camp.', C.dim },
+            { 'A random meadow, four seasons, newcomers when the haul is good. Grumbles and hunger wear their mood down; at zero a morphi leaves.', C.text },
+            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored: DIG and BRIDGE to open the way, and lay a STASH or a BASKET for the berries.', C.text },
+            { 'Each morphi loves one food (a big meal and a better mood) and hates one. Shinies from the diggers buy happy thoughts at the home nest.', C.dim },
         }
     end
     local eaters, seen = {}, {}
@@ -2019,7 +2019,7 @@ function UI:drawLevelFailed(game)
     local lv = game.level
     local x, y, pw, ph = self:panel(720, 260)
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
+    self:centeredFit(game.failReason or 'Somebody wandered off.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
@@ -2051,7 +2051,7 @@ end
 
 function UI:drawGameOver(scoring, highScore, isNew, stats)
     local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0))
-    self:centeredFit('The wilds took them all.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('Everyone wandered off.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 80, pw - 40, C.dim)
     self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + math.floor(ph * 0.42), pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if isNew then
@@ -2073,7 +2073,7 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
         setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
         love.graphics.print(Scoring.seasonName(r.quarter):sub(1, 3):upper(), x + 30, ry)
-        self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  logs ' .. r.logs .. '  gold ' .. r.gold .. '  hard ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
+        self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  sticks ' .. r.logs .. '  shinies ' .. r.gold .. '  grumbles ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
             x + 90, ry + 2, pw - 110, 'left', C.text, { self.fonts.small, self.fonts.tiny })
         ry = ry + rs
     end
@@ -2091,7 +2091,7 @@ end
 function UI:drawTools(fingerDebug)
     local x, y, pw, ph = self:panel(620, 300)
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('For finding bugs and tuning the wilds.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    self:centeredFit('For finding bugs and tuning the meadow.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
     local bx = x + math.floor((pw - bw) / 2)
     self:panelButton('fingers', { x = bx, y = y + 110, w = bw, h = bh }, fingerDebug and 'FINGERS: ON' or 'FINGERS: OFF', fingerDebug)

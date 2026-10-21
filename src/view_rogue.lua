@@ -132,7 +132,7 @@ function Rogue:drawBreakroom()
     self:glyph(self.GLYPH.fire, px + TILE_SIZE / 2, py + TILE_SIZE / 2, 1, 0.55 * flick + 0.2, 0.1)
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
-    local label = 'CAMP'
+    local label = 'HOME'
     local w = self.bubbleFont:getWidth(label) + 4
     love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
     love.graphics.rectangle('fill', px + TILE_SIZE - w / 2, py - 11, w, 10)

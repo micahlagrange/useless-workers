@@ -150,7 +150,7 @@ function TestWorker:testPickedFoodWithNowhereToGoIsKept()
     lu.assertEquals(w.state, 'idle')
     run({ w }, world, self.jobs, 5)
     lu.assertNotNil(w:carrying())
-    lu.assertStrContains(w:describeState(), 'no storage')
+    lu.assertStrContains(w:describeState(), 'no stash')
     -- a bin goes up: the food goes into it
     world.stock.logs = 2
     local site = world:addSite(SITE_STORAGE, 3, 4)
@@ -382,7 +382,7 @@ function TestWorker:testBedIsAShorterBetterBreak()
         run({ w }, self.world, self.jobs, 0.1)
         if w.state == 'breaking' then
             napStart = i
-            lu.assertEquals(w:describeState(), 'Napping in a bed')
+            lu.assertEquals(w:describeState(), 'Napping in a nest')
             lu.assertEquals({ w:tile().x, w:tile().y }, { 7, 2 })
             break
         end

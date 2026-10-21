@@ -301,7 +301,7 @@ function Worker:offerTrade()
     self.trade = { a = self, timer = TRADE_WAIT_SECONDS }
     self.world.openTrade = self.trade
     self.state = 'trading'
-    self:say('trade?', 3)
+    self:say('swap?', 3)
     return true
 end
 
@@ -341,7 +341,7 @@ function Worker:joinTrade()
     -- turn to face each other
     self:face(tr.a.x - self.x, 0)
     tr.a:face(self.x - tr.a.x, 0)
-    self:say('trade!', 2)
+    self:say('swap!', 2)
     return true
 end
 
@@ -397,7 +397,7 @@ function Worker:endTrade(deal)
     for _, w in ipairs(who) do
         if deal then
             w.morale = math.min(MORALE_MAX, w.morale + MORALE_TRADE_BASE + MORALE_GIFT * tr.gifts)
-            w:say('deal!', 2.5)
+            w:say('yay!', 2.5)
         end
         w.trade = nil
         if w.state == 'trading' then w.state = 'idle'; w.decideTimer = 0 end
@@ -494,14 +494,14 @@ function Worker:unstaffedJob()
 end
 
 local WHY_TEXT = {
-    storage = 'nowhere to put food (mark a FLOOR or a BIN)',
+    storage = 'nowhere to put berries (lay a STASH or a BASKET)',
     water = 'the nearest is across water (BRIDGE it)',
-    walled = 'the nearest is cut off (MINE a way)',
+    walled = 'the nearest is cut off (DIG a way)',
     taken = 'others have it all in hand',
     none = 'none to do',
 }
 local NONE_TEXT = {
-    forager = 'no ripe bushes', lumberjack = 'no trees or beds to make', miner = 'no ore or marked rock', builder = 'nothing marked to build',
+    forager = 'no ripe bushes', lumberjack = 'no trees or nests to make', miner = 'no shinies or marked rock', builder = 'nothing marked to build',
 }
 
 -- The idle reason as a line for the player, naming the jobs.
@@ -521,7 +521,7 @@ end
 
 -- Idle, in a few words for the strip and the units list: the main job's
 -- reason (looked at again at most once a second).
-local SHORT_WHY = { storage = 'nowhere to put food', water = 'work across water', walled = 'work cut off', taken = 'all taken' }
+local SHORT_WHY = { storage = 'nowhere to put berries', water = 'work across water', walled = 'work cut off', taken = 'all taken' }
 function Worker:idleSummary()
     if not self.jobSet then return nil end
     if not self.idleLook or self.clock - self.idleLook.at >= 1 or self.idleLook.main ~= self.jobSet.main or self.idleLook.neutral ~= self.jobSet.neutral then
@@ -572,7 +572,7 @@ function Worker:quit(reason)
     self:dropJob()
     self.slots = {}
     self.scoring:addQuit()
-    self:say('I AM DONE', 6)
+    self:say('bye bye', 6)
     self:emit('quit', reason or 'starved')
     self.state = 'quitting'
     local t = self:tile()
@@ -1009,7 +1009,7 @@ function Worker:goDeliver()
     if cargo.kind == CARGO_FOOD then
         local spot = self.world:nearestFreeStorageTile(self)
         if not spot then
-            self:say('no storage', 1.5)
+            self:say('no stash', 1.5)
             return false
         end
         self.world:reserveTile(spot.x, spot.y, self)
@@ -1219,7 +1219,7 @@ function Worker:toolInHand()
 end
 
 function Worker:mood()
-    if self.morale < MORALE_LOW then return 'fed up' end
+    if self.morale < MORALE_LOW then return 'very grumpy' end
     if self.morale < 65 then return 'grumpy' end
     return 'fine'
 end
@@ -1304,39 +1304,44 @@ function Worker:update(dt, clock)
     end
 end
 
+-- What things are called on screen (the keys stay as they were).
+local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny' }
+local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
+local function siteWord(kind) return SITE_WORDS[kind] or kind end
+
 function Worker:describeState()
-    if self.state == 'quitting' then return 'Leaving the band' end
+    if self.state == 'quitting' then return 'Toddling off' end
     if self.arcade and self.state == 'idle' and self:wantsMeal() and not self.world:arcadeReady() then return 'Waiting to eat' end
     if self.state == 'sulking' then return 'Grumbling' end
     if self.state == 'trading' and self.trade then
         local tr = self.trade
-        if not tr.b then return 'Waiting at camp to trade' end
-        return 'Trading with ' .. (tr.a == self and tr.b or tr.a).name
+        if not tr.b then return 'Waiting at the home nest to swap' end
+        return 'Swapping snacks with ' .. (tr.a == self and tr.b or tr.a).name
     end
     if self.state == 'eating' then return 'Eating' end
-    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end
+    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a nest' or 'Resting at the home nest' end
     if self.state == 'working' then
-        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind .. self:slotNote() end
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. siteWord(self.targetSite.kind) .. self:slotNote() end
         local verb = self:doingInfo().verb
         return verb:sub(1, 1):upper() .. verb:sub(2) .. self:slotNote()
     end
     if self.state == 'walking' then
         if self.goal == 'deliver' then
             local c = self:carrying()
-            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to camp')
+            return 'Carrying ' .. (c and (CARGO_WORDS[c.kind] or c.kind) or 'things') .. (c and c.kind == CARGO_FOOD and ' to a stash' or ' home')
         end
         if self.goal == 'eat' then return 'Going to eat' end
-        if self.goal == 'fetch' then return 'Fetching a snack from storage' end
-        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to camp' end
+        if self.goal == 'fetch' then return 'Fetching a snack from a stash' end
+        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to a nest' or 'Heading home' end
         if self.goal == 'work' then
-            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind .. self:slotNote() end
+            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. siteWord(self.targetSite.kind) .. self:slotNote() end
             return 'Going ' .. self:doingInfo().verb .. self:slotNote()
         end
         return 'Wandering'
     end
     local c = self:carrying()
     if c then
-        return 'Holding ' .. c.kind .. (c.kind == CARGO_FOOD and ', no storage free' or ', no way to camp')
+        return 'Holding ' .. (CARGO_WORDS[c.kind] or c.kind) .. (c.kind == CARGO_FOOD and ', no stash free' or ', no way home')
     end
     if self.wilds and self.jobSet and self.idleSince then return 'Idle - ' .. self:idleSummary() end
     return 'Idle'

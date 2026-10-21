@@ -133,7 +133,7 @@ function View:drawBreakroom()
     -- sign
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
-    local label = 'CAMP'
+    local label = 'HOME'
     local w = self.bubbleFont:getWidth(label) + 4
     love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
     love.graphics.rectangle('fill', px + TILE_SIZE - w / 2, py - 11, w, 10)

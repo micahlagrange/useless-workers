@@ -101,8 +101,8 @@ function TestStats:test_history_reads_oldest_first()
     s:event('starved', { scoring = { quarter = 1, quarterTimer = QUARTER_SECONDS - DAY_SECONDS - 1 } }, 'Priya')
     s:event('arrived', { scoring = { quarter = 1, quarterTimer = QUARTER_SECONDS } }, 'Dave')
     local h = s:history()
-    lu.assertEquals(h[1], 'Day 1 (Spring): Dave arrived.')
-    lu.assertEquals(h[2], 'Day 2 (Spring): Priya starved and wandered off.')
+    lu.assertEquals(h[1], 'Day 1 (Spring): Dave wandered in.')
+    lu.assertEquals(h[2], 'Day 2 (Spring): Priya got too hungry and toddled off.')
 end
 
 function TestStats:test_an_arcade_level_counts_days_from_its_start()
