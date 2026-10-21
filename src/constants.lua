@@ -34,7 +34,9 @@ NODE_TREE = 'tree'
 NODE_ORE  = 'ore'
 NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
 NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
-NODES_PER_QUARTER  = { bush = 4, tree = 2, ore = 3 }
+-- New growth each season. Tuned as 4 / 2 / 3 for 90 s seasons; times 300/90
+-- for 300 s seasons, so as much grows per minute as before.
+NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 10 }
 MAX_NODES_PER_KIND = 16
 NODE_ENCLOSED_FRACTION = 0.4    -- share of nodes placed where morphis cannot reach yet
 NODE_ENCLOSED_LATER    = 0.75   -- the share for nodes that grow after the start (free play)
@@ -181,14 +183,23 @@ DEFAULT_ARCADE_DIFFICULTY = 1
 
 -- Seasons and the tally. A year is four seasons; the wilds grade each one.
 -- Internally a season is still a 'quarter' and migrants are 'hires'.
-QUARTER_SECONDS     = 90
+-- A season is five minutes (it was 90 s). What happens per second (hunger,
+-- morale, work, boredom, trades) is unchanged; what comes once a season
+-- (new growth, migrants, the endless drain step, the grade) is rescaled
+-- below so a season plays about as before, only longer.
+QUARTER_SECONDS     = 300
 QUARTERS_PER_GAME   = 4
 SEASON_NAMES        = { 'Spring', 'Summer', 'Autumn', 'Winter' }
 HIRE_OUTPUT_DIVISOR = 5
 QUIT_PENALTY        = 3
 FED_SAMPLE_SECONDS  = 1
-ENDLESS_DRAIN_STEP  = 0.1
-GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
+-- After the first year hunger drains faster each season. 0.1 with 90 s
+-- seasons; at 300 s a season holds 3.3 times the hunger, and 0.05 keeps the
+-- year the bands begin to fall where it was (tools/bench.py).
+ENDLESS_DRAIN_STEP  = 0.05
+-- Season grades score output - complaints - 3 x quits, which pile up per
+-- second: 16 / 11 / 6 / 2 for 90 s seasons, times 300/90.
+GRADE_THRESHOLDS    = { { 'S', 53 }, { 'A', 37 }, { 'B', 20 }, { 'C', 7 } } -- below the last one is an F
 -- The run's audit log (src/stats.lua): a day is a slice of a season, and
 -- the player's note on an export is kept short. Milestones are never two
 -- closer than MILESTONE_GAP_DAYS (three seasons), so about one a year.
@@ -202,8 +213,10 @@ MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 -- the first, so the band does not all get hungry at the same moment).
 -- Free play offers only the first for now (FREE_PLAY_DIFFICULTIES) while it
 -- is being tuned; the rest are kept for when there are more hardships.
+-- Free play starts with three (forager, lumberjack, miner: HIRE_ORDER); the
+-- other wilds keep their numbers until the ladder is redone.
 DIFFICULTIES = {
-    { name = 'Mild wilds',   drain = 0.5, workers = 5, multiplier = 0.5, startHunger = 85 },
+    { name = 'Mild wilds',   drain = 0.5, workers = 3, multiplier = 0.5, startHunger = 85 },
     { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
     { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
     { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
@@ -212,7 +225,10 @@ FREE_PLAY_DIFFICULTIES = 1
 DEFAULT_DIFFICULTY = 1
 -- Migrants are capped per season, by year: a rush of new mouths, each with
 -- its own food, starved year one.
-MIGRANTS_PER_SEASON = { 2, 3, 4 }
+-- 2 / 3 / 4 with 90 s seasons; one more each at 300 s so a newcomer still
+-- turns up every couple of minutes and a band that loses morphis over a
+-- long season can make it up (more than this did not help, tools/bench.py).
+MIGRANTS_PER_SEASON = { 3, 4, 5 }
 -- Free play tastes. Every species loves one food (MORPHI_DIET), hates one,
 -- and will eat the rest. A meal is worth more hunger the better it is
 -- liked; a loved meal cheers a morphi up and a hated one, eaten only when

@@ -24,6 +24,12 @@ How a played run gets to the archive:
 Without playing: `python tools/stats_sim.py` plays free play headless with a
 simple player and writes `stats/sim-<seed>-<player>.json`.
 
+The sim bench, `python tools/bench.py --seeds 24 --years 8 --out stats/bench-<label>`,
+plays many seeds for several years with four players (active, none, dig,
+beds) on all cores but one, and writes `report.txt` (a table per player,
+tipping points, outliers), `seasons.csv` and `years.csv` there. About 20 s
+at 90 s seasons, a minute at 300 s. Read the header of `tools/bench.py`.
+
 A run file holds one row per day (9 days a season: band size, hunger, morale,
 time working / eating / resting / idle / sulking, stock, everything gathered,
 arrivals and departures, where each morphi stands), the map at the start of

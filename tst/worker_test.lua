@@ -591,8 +591,10 @@ local function simulateQuarter(difficultyIndex)
     local dt = 1 / 30
     local ended = false
     local start = os.clock()
+    local quitsEarly = nil -- quits in the first 90 s, the season length this test was written for
     while clock < QUARTER_SECONDS + 1 and not ended do
         clock = clock + dt
+        if not quitsEarly and clock >= 90 then quitsEarly = scoring.quits end
         jobs:update(dt)
         world:update(dt, function(n) jobs:postNode(n) end)
         local count, sum = 0, 0
@@ -614,6 +616,7 @@ local function simulateQuarter(difficultyIndex)
         DIFFICULTIES[difficultyIndex].name, DEFAULT_SEED, report.food, report.logs, report.gold, report.complaints, rs,
         report.attrition, report.fedPct, world:storedCount(ITEM_FOOD), report.grade, elapsed))
     print(string.format('    stockpile: logs %d gold %d', world.stock.logs, world.stock.gold))
+    report.quitsEarly = quitsEarly
     return report
 end
 function TestSimulation:testFullQuarterOnGeneratedWorld()
@@ -623,7 +626,8 @@ function TestSimulation:testFullQuarterOnGeneratedWorld()
             lu.assertTrue(report.output >= 6, 'morphis delivered only ' .. report.output)
             lu.assertTrue(report.logs >= 1 and report.gold >= 1 and report.food >= 1, 'every role should deliver')
             lu.assertTrue(report.complaints <= 14, 'complaint spam: ' .. report.complaints)
-            lu.assertTrue(report.attrition == 0, 'quits with nobody helping: ' .. report.attrition)
+            -- a five-minute season unaided may cost a morphi; the first 90 s must not
+            lu.assertTrue(report.quitsEarly == 0, 'quits in 90 s with nobody helping: ' .. tostring(report.quitsEarly))
         end
     end
 end

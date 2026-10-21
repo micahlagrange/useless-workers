@@ -9,11 +9,15 @@ local Highscore = require('src.highscore')
 
 TestScoring = {}
 function TestScoring:testGrades()
-    lu.assertEquals(Scoring.grade(16, 0, 0), 'S')
-    lu.assertEquals(Scoring.grade(12, 1, 0), 'A')
-    lu.assertEquals(Scoring.grade(10, 1, 1), 'B')
-    lu.assertEquals(Scoring.grade(5, 3, 0), 'C')
-    lu.assertEquals(Scoring.grade(2, 3, 1), 'F')
+    -- score = output - complaints - QUIT_PENALTY x quits, against GRADE_THRESHOLDS
+    local S, A, B, C = GRADE_THRESHOLDS[1][2], GRADE_THRESHOLDS[2][2], GRADE_THRESHOLDS[3][2], GRADE_THRESHOLDS[4][2]
+    lu.assertEquals(Scoring.grade(S, 0, 0), 'S')
+    lu.assertEquals(Scoring.grade(S, 1, 0), 'A')
+    lu.assertEquals(Scoring.grade(A + 1, 1, 0), 'A')
+    lu.assertEquals(Scoring.grade(A + QUIT_PENALTY, 1, 1), 'B')
+    lu.assertEquals(Scoring.grade(B + 3, 3, 0), 'B')
+    lu.assertEquals(Scoring.grade(C + 3, 3, 0), 'C')
+    lu.assertEquals(Scoring.grade(C + 3, 3, 1), 'F')
 end
 function TestScoring:testSeasonNames()
     lu.assertEquals(Scoring.seasonName(1), 'Spring')
@@ -42,7 +46,7 @@ function TestScoring:testQuarterCloseAndHires()
     lu.assertEquals(s:lifetimeValue(), 10 + 2 + 3)
     lu.assertEquals(r.fedPct, 60)
     lu.assertEquals(r.complaints, 1)
-    lu.assertEquals(r.grade, 'A')
+    lu.assertEquals(r.grade, Scoring.grade(12, 1, 0))
     lu.assertEquals(r.hires, 2)
     lu.assertEquals(s.quarter, 2)
     lu.assertEquals(s.output, 0)
@@ -70,9 +74,9 @@ end
 function TestScoring:testTimerAndFedSampling()
     local s = Scoring.new(1)
     local ended = false
-    for _ = 1, 100 do if s:update(1, 80) then ended = true end end
+    for _ = 1, QUARTER_SECONDS + 10 do if s:update(1, 80) then ended = true end end
     lu.assertTrue(ended)
-    lu.assertTrue(s.fedCount >= 89)
+    lu.assertTrue(s.fedCount >= QUARTER_SECONDS - 1)
 end
 
 TestAbilities = {}

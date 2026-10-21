@@ -3,7 +3,7 @@
 for many seeds and several years (a year is four seasons) with each of four
 players, and reports what their bands do year by year.
 
-    python tools/bench.py --seeds 12 --years 6 --out stats/bench-mylabel
+    python tools/bench.py --seeds 24 --years 8 --out stats/bench-mylabel
 
 The players (tools/sim_player.lua, Player.act) look at the map at the start
 and every 30 game seconds: 'active' opens routes (marks mining and lays
@@ -21,11 +21,16 @@ working / eating / resting / sulking / idle, goods delivered per season
 stockpile at year end, fed %, hunger drain and score. It prints a short
 report (a table per player, the tipping points, per-seed outliers) and
 writes into --out: report.txt, seasons.csv (every season of every run, raw
-counts in morphi-seconds) and years.csv (the aggregates). 12 seeds x 6 years
-x 4 players takes about a minute at 90 s seasons and a few minutes at 300 s
-on a 12 core machine. --set runs Lua after the constants load, for trying
-numbers without editing them, e.g. --set "QUARTER_SECONDS = 300" --set
-"DAY_SECONDS = QUARTER_SECONDS / DAYS_PER_SEASON". Needs lupa, like the tests.
+counts in morphi-seconds) and years.csv (the aggregates), and says how fast
+it ran. Runs are spread over all cores but one (--jobs), longest first; the
+numbers do not depend on how many processes run them. 24 seeds x 8 years x 4
+players takes about 20 s at 90 s seasons and under a minute at 300 s on a
+12-thread machine (some 700-800 game seconds per real second per process).
+The step is 1/30 s (Bench.DT in tools/bench.lua says why; --dt to change).
+--set runs Lua after the constants load, for trying numbers without editing
+them, e.g. --set "QUARTER_SECONDS = 90" --set "DAY_SECONDS = QUARTER_SECONDS
+/ DAYS_PER_SEASON". --strategies runs only some players. Needs lupa, like
+the tests (BENCH_LUA=plain uses lupa's plain Lua instead of LuaJIT).
 Bench output goes in stats/, which is never committed.
 """
 import argparse

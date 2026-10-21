@@ -85,12 +85,18 @@ function Stats.new(meta)
     return self
 end
 
+-- Is the clock a free play season? A level's clock is not a season, even
+-- when it runs shorter than one (survival levels run 90 s).
+function Stats.seasonal(game)
+    return (game.mode == nil or game.mode == 'free') and game.scoring.quarterTimer <= QUARTER_SECONDS
+end
+
 -- Days follow the season clock, so day 10 is always the first of Summer.
 -- A level's clock is not a season (arcade has none): its days just count
 -- up from the start.
 function Stats.dayOf(game)
     local scoring = game.scoring
-    if scoring.quarterTimer > QUARTER_SECONDS then
+    if not Stats.seasonal(game) then
         return math.floor((game.clock or 0) / DAY_SECONDS) + 1
     end
     local into = math.floor((QUARTER_SECONDS - scoring.quarterTimer) / DAY_SECONDS)
@@ -130,7 +136,7 @@ function Stats:row(game, day)
         day = day, clock = round(game.clock or 0),
         quarter = scoring.quarter,
         -- named from the day: the season label stops at Winter once the year is over
-        season = scoring.quarterTimer > QUARTER_SECONDS and scoring:seasonLabel() or Stats.seasonOfDay(day),
+        season = (not Stats.seasonal(game)) and scoring:seasonLabel() or Stats.seasonOfDay(day),
         pop = 0, hunger = 0, morale = 0, hungry = 0, starving = 0, lowMorale = 0,
         work = 0, foodTime = 0, rest = 0, sulk = 0, idle = 0,
         roles = {},
