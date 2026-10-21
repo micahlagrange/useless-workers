@@ -4,3 +4,6 @@ build_output.log
 # run exports, sims and graphs are working files, never committed
 stats/*
 !stats/README.md
+
+# itch devlog post sources are scratch; the posts live on itch as drafts
+devlog/
