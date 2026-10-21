@@ -670,12 +670,18 @@ function TestWilds:testTastes()
 end
 
 function TestWilds:testNothingToDoIsAHardship()
-    -- a forager with nothing posted to pick stands about, gets bored and says why
+    -- a forager with nothing posted to pick stands about, gets bored, marks a
+    -- way out, and when that route sits undug it says why
     -- (this map has storage, so it is the bushes that are out of reach)
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
     w.hunger = HUNGER_MAX
     local before = w.morale
-    run({ w }, self.world, self.jobs, BORED_SECONDS + 4)
+    -- first it marks a way out to the bushes itself, no grumbling; nobody
+    -- here can dig that route, so the next time it is bored it says why
+    run({ w }, self.world, self.jobs, 2 * BORED_SECONDS + 6)
+    lu.assertNotNil(self.world.selfRouteSites, 'a bored morphi marks its own route')
+    lu.assertTrue(#self.world.selfRouteSites > 0)
+    lu.assertEquals(self.world.selfRouteSites[1].kind, SITE_MINE)
     lu.assertTrue(#self.complaints >= 1)
     lu.assertEquals(self.complaints[1].reason, 'bored')
     lu.assertEquals(self.complaints[1].why, 'reach')

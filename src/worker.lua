@@ -10,6 +10,7 @@
 require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
+local Routes = require('src.routes')
 
 local Worker = {}
 Worker.__index = Worker
@@ -369,6 +370,16 @@ function Worker:bored()
         end
     end
     self.boredReason = (self.role == ROLE_FORAGER and self.world:nearestFreeStorageTile(self) == nil) and 'storage' or 'reach'
+    -- Before grumbling, mark the way there: the band digs and bridges its
+    -- own route to the nearest thing of my trade, one route at a time.
+    if self.wilds and kind and self.boredReason == 'reach' then
+        local target = Routes.open(self.world, self.jobs, kind, SELF_ROUTE_MAX_COST)
+        if target then
+            self:say('THIS WAY')
+            self:emit('route', target)
+            return
+        end
+    end
     self:complain('bored', best)
 end
 

@@ -162,6 +162,11 @@ local function onWorkerEvent(worker, name, data)
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
         announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
             .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'route' then
+        local what = ({ bush = 'the berries', tree = 'the trees', ore = 'the gold' })[data.kind] or 'work'
+        local text = worker.name .. ' got bored and marked a way out to ' .. what .. '.'
+        if game.stats then game.stats:event('news', game, worker.name, text, { x = data.x, y = data.y }) end
+        announce(text, { x = data.x, y = data.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
         announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')

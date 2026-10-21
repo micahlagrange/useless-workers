@@ -224,6 +224,7 @@ MORALE_HATED_MEAL = 10
 -- Free play: a specialist with nothing it can get at to work on gets bored,
 -- and that is a hardship. The game is opening the way for them.
 BORED_SECONDS     = 20
+SELF_ROUTE_MAX_COST = 40     -- how far (in route cost: stone 4, water 6, grass 1) a bored morphi will mark its own way
 MORALE_BORED_HIT  = 18
 -- Free play: a bush gives this many pickings, then withers. New ones grow
 -- mostly where nobody can get at them yet.
