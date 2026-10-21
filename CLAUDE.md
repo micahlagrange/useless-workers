@@ -36,3 +36,7 @@ There are two kinds, bug and epic.
 ## Voice
 
 Morphis are little blobs in a meadow: whimsical, soft and a bit silly, never fantasy, frontier or grim. Every player-facing string (labels, news, alerts, hints, milestones, the README, devlogs) uses the meadow words: little blobs, the bunch, the home nest, stash, basket, nest, sticks, leaves, grass, shinies, digging, gatherer, digger, caretaker, grumbles, newcomers. Never use: dwarf, wilds, settler, migrant, lumber, chop, fell, log(s), stone, gold, ore, mine/mining/miner, camp, hardship, quit, the band. Internal identifiers (ROLE_LUMBERJACK, CARGO_LOGS, 'mine', world.breakroom, hires, quarter) may keep their old names until a story renames them; only what the player reads must change. `tst/words_test.lua` scans the string tables and a scripted free play log for the banned words.
+
+## Old levels
+
+The arcade and survival levels are kept for the coming hunting events (epic-hunting): `tst/arcade_test.lua` and `tst/levels_test.lua` play them with the real AI and must keep passing even after arcade leaves the title screen. Free play bests are saved as `meadowN.highscore` since the little blobs epic; the old `difficultyN.highscore` files are left unread.

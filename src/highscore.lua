@@ -4,8 +4,11 @@
 local Highscore = {}
 local memory = {}
 
+-- Free play bests are kept as meadowN.highscore since the little blobs came
+-- (eggs, nests, hunting and six jobs score differently); the old
+-- difficultyN.highscore files stay on disk, unread. Campaign keys are as before.
 local function fileName(key)
-    if type(key) == 'number' then return 'difficulty' .. key .. '.highscore' end
+    if type(key) == 'number' then return 'meadow' .. key .. '.highscore' end
     return tostring(key) .. '.highscore'
 end
 

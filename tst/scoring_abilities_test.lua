@@ -322,4 +322,5 @@ function TestHighscore:testMemoryFallback()
     lu.assertEquals(Highscore.load(2), 40)
 end
 
+
 os.exit(lu.LuaUnit.run())
