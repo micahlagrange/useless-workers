@@ -18,7 +18,7 @@ Stats.TILE_CHARS = {
 }
 Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l' }
 Stats.LEGEND = {
-    ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'stone', ['*'] = 'snow',
+    ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'clay', ['*'] = 'hard dirt',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
     t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
 }

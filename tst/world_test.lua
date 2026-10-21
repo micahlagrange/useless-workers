@@ -37,8 +37,10 @@ end
 
 function TestWorldGen:testNodesLandInTheRightPlaces()
     local world = World.generate(987, Rng.new(987))
-    local planted = world:spawnAllNodes(NODES_INITIAL)
-    lu.assertEquals(#planted, NODES_INITIAL.bush + NODES_INITIAL.tree + NODES_INITIAL.ore + NODES_INITIAL.grass + NODES_INITIAL.leaves)
+    -- hand built levels still have ore; free play plants none
+    local counts = { bush = 8, tree = 8, ore = 6, grass = 10, leaves = 6 }
+    local planted = world:spawnAllNodes(counts)
+    lu.assertEquals(#planted, counts.bush + counts.tree + counts.ore + counts.grass + counts.leaves)
     local reachable, enclosed = {}, {}
     for _, node in ipairs(planted) do
         local t = world:get(node.x, node.y)
@@ -333,7 +335,7 @@ function TestGrassLeaves:test_grass_and_leaves_leave_the_old_map_alone()
     -- the same seed plants the same bushes, trees and ore with or without them
     local a = World.generate(55, Rng.new(55))
     local b = World.generate(55, Rng.new(55))
-    a:spawnAllNodes({ bush = 8, tree = 8, ore = 6 })
+    a:spawnAllNodes({ bush = NODES_INITIAL.bush, tree = NODES_INITIAL.tree, ore = NODES_INITIAL.ore })
     b:spawnAllNodes(NODES_INITIAL)
     local function spots(w)
         local out = {}
@@ -344,6 +346,46 @@ function TestGrassLeaves:test_grass_and_leaves_leave_the_old_map_alone()
         return out
     end
     lu.assertEquals(spots(a), spots(b))
+end
+
+
+TestShinies = {}
+
+function TestShinies:test_shinies_hide_in_the_clay_and_turn_up_when_dug()
+    local world = World.generate(987, Rng.new(987))
+    lu.assertTrue(world.hiddenShinies > 10, 'some shinies hidden: ' .. world.hiddenShinies)
+    local found, total = nil, 0
+    for x = 1, world.w do for y = 1, world.h do
+        local t = world.tiles[x][y]
+        if t.shiny then
+            total = total + 1
+            lu.assertTrue(t.type == TILE_STONE or t.type == TILE_SNOW, 'only in clay or hard dirt')
+            found = found or { x = x, y = y }
+        end
+    end end
+    lu.assertEquals(total, world.hiddenShinies)
+    -- no ore lies about in free play
+    world:spawnAllNodes(NODES_INITIAL)
+    lu.assertEquals(#world:nodesOfKind(NODE_ORE), 0)
+    -- digging the tile turns it up
+    local site = world:addSite(SITE_MINE, found.x, found.y)
+    lu.assertEquals(world:completeSite(site), CARGO_GOLD)
+    lu.assertNil(world:get(found.x, found.y).shiny)
+    lu.assertEquals(world.hiddenShinies, total - 1)
+    -- a plain clay tile gives nothing
+    for x = 1, world.w do for y = 1, world.h do
+        local t = world.tiles[x][y]
+        if t.type == TILE_STONE and not t.shiny and not t.site then
+            lu.assertNil(world:completeSite(world:addSite(SITE_MINE, x, y)))
+            return
+        end
+    end end
+end
+
+function TestShinies:test_the_same_seed_hides_the_same_shinies()
+    local a = World.generate(4242, Rng.new(4242))
+    local b = World.generate(4242, Rng.new(4242))
+    for x = 1, a.w do for y = 1, a.h do lu.assertEquals(a.tiles[x][y].shiny, b.tiles[x][y].shiny) end end
 end
 
 os.exit(lu.LuaUnit.run())

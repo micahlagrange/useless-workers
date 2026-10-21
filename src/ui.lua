@@ -1904,7 +1904,7 @@ function UI:drawGoal(game)
         title = 'FREE PLAY'
         lines = {
             { 'A random meadow, four seasons, newcomers when the haul is good. Grumbles and hunger wear their mood down; at zero a morphi leaves.', C.text },
-            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored: DIG and BRIDGE to open the way, and lay a STASH or a BASKET for the berries.', C.text },
+            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored: DIG through the clay (shinies hide in it) and BRIDGE to open the way, and lay a STASH or a BASKET for the berries.', C.text },
             { 'Each morphi loves one food (a big meal and a better mood) and hates one. Shinies from the diggers buy happy thoughts at the home nest.', C.dim },
         }
     end

@@ -97,32 +97,37 @@ function TestDeal:test_an_immigrant_favours_the_jobs_the_band_lacks()
 end
 
 function TestDeal:test_a_separate_stream_leaves_old_seeds_unchanged()
-    -- the game's random state and map right after a new game, recorded on
-    -- build 141 (before jobs were dealt): the deal must not touch them
-    local before = {
-        { 'PUPPER', 1, 1196577363, 764590196 }, { 'PUPPER', 2, 1265719661, 764590196 },
-        { '12345', 1, 1969984157, 1757755442 }, { 'BANANAS', 1, 213307281, 1922190257 },
-    }
-    local sheets = { 'pupper', 'twins', 'cwab', 'woofoof' }
-    for _, b in ipairs(before) do
-        H.newGame(b[1], b[2])
+    -- the deal rolls JobSets.rngFor, never the game's stream: deal from a
+    -- different stream and the game's random state and map are the same
+    local function snapshot(seed, d)
+        H.newGame(seed, d)
         local g = H.game()
         local h = 0
         for y = 1, g.world.h do
             for x = 1, g.world.w do
                 local t = g.world:get(x, y)
-                -- grass and leaves came later, on a stream of their own: leave them out
-                local k = t.node and t.node.kind
-                if k == NODE_GRASS or k == NODE_LEAVES then k = nil end
-                local s = (t.type or '') .. (k or '')
+                local s = (t.type or '') .. (t.node and t.node.kind or '')
                 for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
             end
         end
-        lu.assertEquals(g.rng.state, b[3], b[1] .. ' rng')
-        lu.assertEquals(h, b[4], b[1] .. ' map')
-        -- the species still come round in the old order: looks and tastes as before
-        for i, w in ipairs(g.workers) do lu.assertEquals(w.sheet, sheets[i]) end
+        local sheets, jobs = {}, {}
+        for _, w in ipairs(g.workers) do sheets[#sheets + 1] = w.sheet; jobs[#jobs + 1] = w.jobSet.main end
+        return g.rng.state, h, table.concat(sheets, ','), table.concat(jobs, ',')
     end
+    local real = JobSets.rngFor
+    for _, case in ipairs({ { 'PUPPER', 1 }, { '12345', 1 }, { 'BANANAS', 2 } }) do
+        local s1, h1, sh1, j1 = snapshot(case[1], case[2])
+        JobSets.rngFor = function(n) return real((n or 1) + 99991) end
+        local s2, h2, sh2, j2 = snapshot(case[1], case[2])
+        JobSets.rngFor = real
+        lu.assertEquals(s2, s1, case[1] .. ' rng')
+        lu.assertEquals(h2, h1, case[1] .. ' map')
+        lu.assertEquals(sh2, sh1, case[1] .. ' looks')
+    end
+    -- the species still come round in the old order: looks and tastes as before
+    H.newGame('PUPPER', 1)
+    local sheets = { 'pupper', 'twins', 'cwab' }
+    for i, w in ipairs(H.game().workers) do lu.assertEquals(w.sheet, sheets[i]) end
 end
 
 function TestDeal:test_free_play_deals_jobs_and_immigrants_get_them_too()

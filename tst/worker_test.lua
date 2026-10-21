@@ -630,7 +630,8 @@ function TestSimulation:testFullQuarterOnGeneratedWorld()
         local report = simulateQuarter(d)
         if d == 2 then
             lu.assertTrue(report.output >= 6, 'morphis delivered only ' .. report.output)
-            lu.assertTrue(report.logs >= 1 and report.gold >= 1 and report.food >= 1, 'every role should deliver')
+            -- (nobody marks clay here, so no shinies: they are found only by digging)
+            lu.assertTrue(report.logs >= 1 and report.food >= 1, 'gatherers and foragers should deliver')
             lu.assertTrue(report.complaints <= 14, 'complaint spam: ' .. report.complaints)
             -- a five-minute season unaided may cost a morphi; the first 90 s must not
             lu.assertTrue(report.quitsEarly == 0, 'quits in 90 s with nobody helping: ' .. tostring(report.quitsEarly))

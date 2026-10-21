@@ -2,7 +2,7 @@
 
 A bunch of little blobs in a big meadow. They will look after themselves. Sort of.
 
-A LÖVE2D game. You never steer a morphi. You mark rock to dig, lay bridges
+A LÖVE2D game. You never steer a morphi. You mark clay to dig, lay bridges
 over the streams and set out stashes, baskets and nests around the home nest,
 and the morphis do the rest: pick berries, gather sticks, dig up shinies and
 carry it all home.
@@ -27,7 +27,7 @@ part of who it is. The jobs are forager, gatherer, digger and builder.
 |---|---|---|
 | Forager | berry bushes, ripe every 20 s | food, put down on a stash or in a basket |
 | Gatherer | trees | sticks; the tree regrows |
-| Digger | marked rock, and shinies hidden in it | shinies |
+| Digger | marked clay, and the shinies hidden in it | shinies |
 | Builder | anything marked to build | stashes, baskets, nests, bridges |
 
 Food is a real thing on the ground: the closest free stash to the home nest,
@@ -63,9 +63,10 @@ Uses luajit when installed, otherwise `pip install lupa` and the Python runner i
 You never steer a morphi. You mark work and pay for building; idle morphis
 do the rest.
 
-- **Dig**: drag a rectangle over rock or snow. A digger digs each marked tile
-  once a tile next to it can be reached, so tunnels grow inward. Shinies under
-  a mark come home with the digger. Drag from a marked tile to clear marks.
+- **Dig**: drag a rectangle over clay or hard dirt. A digger digs each marked
+  tile once a tile next to it can be reached, so tunnels grow inward. Shinies
+  are hidden in the clay, a few in every patch, and only turn up when dug: go
+  looking. Drag from a marked tile to clear marks.
 - **Stash**: tap open ground for a free leaf-mat stash. It holds one thing.
   Food can only be put down on a stash or in a basket, so this comes first.
 - **Basket**: 1 stick, holds four things.

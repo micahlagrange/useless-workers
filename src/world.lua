@@ -95,8 +95,27 @@ function World.generate(seedNumber, rng, w, h)
     end
     self:carveRivers(rng)
     self:placeBreakroom()
+    self:hideShinies(seedNumber)
     self.version = self.version + 1
     return self
+end
+
+-- Shinies hide in the clay and hard dirt (stone and snow, internally), on a
+-- random stream of their own so the map is what it was. Nothing shows until
+-- a digger digs the tile.
+function World:hideShinies(seedNumber)
+    local rng = Rng.new((tonumber(seedNumber) or 1) * 31 + 999)
+    self.hiddenShinies = 0
+    for x = 1, self.w do
+        for y = 1, self.h do
+            local t = self.tiles[x][y]
+            local diggable = t.type == TILE_STONE or t.type == TILE_SNOW
+            if diggable and rng:random() < SHINY_CHANCE then
+                t.shiny = true
+                self.hiddenShinies = self.hiddenShinies + 1
+            end
+        end
+    end
 end
 
 -- Rivers wander from one edge to the opposite one. The first runs top to
@@ -1170,6 +1189,11 @@ function World:completeSite(site)
         if node and node.kind == NODE_ORE then
             self:removeNode(node)
             node.ready = false
+            cargo = CARGO_GOLD
+        elseif t.shiny then
+            -- dug up a hidden shiny
+            t.shiny = nil
+            self.hiddenShinies = (self.hiddenShinies or 1) - 1
             cargo = CARGO_GOLD
         end
         self:setType(site.x, site.y, TILE_DIRT)

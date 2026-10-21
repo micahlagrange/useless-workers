@@ -116,7 +116,7 @@ function Abilities:designateMine(x1, y1, x2, y2)
         end
     end
     if count == 0 then
-        return false, clearing and nil or 'Drag over rock to mark it for digging'
+        return false, clearing and nil or 'Drag over clay to mark it for digging'
     end
     if area then self.jobs:postArea(area) end
     self:effect(clearing and 'unmark' or 'mine', { count = count, clearing = clearing })

@@ -37,10 +37,13 @@ NODE_ORE  = 'ore'
 NODE_GRASS  = 'grass'
 NODE_LEAVES = 'leaves'
 NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE, NODE_GRASS, NODE_LEAVES }
-NODES_INITIAL      = { bush = 8, tree = 8, ore = 6, grass = 10, leaves = 6 }
+-- free play has no ore lying about: shinies are hidden in the clay
+-- (SHINY_CHANCE) and found by digging. Hand built levels keep their ore.
+NODES_INITIAL      = { bush = 8, tree = 8, ore = 0, grass = 10, leaves = 6 }
 -- New growth each season. Tuned as 4 / 2 / 3 for 90 s seasons; times 300/90
 -- for 300 s seasons, so as much grows per minute as before.
-NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 10, grass = 6, leaves = 5 }
+NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 0, grass = 6, leaves = 5 }
+SHINY_CHANCE       = 0.08 -- share of clay and hard dirt tiles with a shiny hidden in them
 LEAVES_AUTUMN      = 2    -- leaf piles blowing in at the start of Autumn, times this
 GRASS_REGROW_SECONDS = 40
 MAX_NODES_PER_KIND = 16
@@ -282,9 +285,9 @@ DEFAULT_SEED       = 'PUPPER'
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow
 GRASS_COLORS     = { '#a9c97a', '#9dbf6f', '#b3d185' }
 DIRT_COLORS      = { '#d6bc8e', '#cdb184', '#dcc59b' }
-STONE_COLORS     = { '#a99c93', '#9f9289', '#b2a69d', '#988b83' }
+STONE_COLORS     = { '#c98f6e', '#bf8566', '#d19a79', '#b87e60' }
 WATER_COLORS     = { '#8cc4dc', '#82bbd6', '#96cbe1' }
-SNOW_COLORS      = { '#f4f1f6', '#ece8f1', '#e5e0ec' }
+SNOW_COLORS      = { '#a67c5b', '#9d7354', '#ae8562' }
 BRIDGE_COLORS    = { '#b48a5c', '#a87f53', '#bf9566' }
 BREAKROOM_COLORS = { '#e8d9a6', '#e0cf9a' }
 WALL_COLORS      = { '#6b4f2a', '#5e4524' }

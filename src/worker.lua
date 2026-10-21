@@ -501,7 +501,7 @@ local WHY_TEXT = {
     none = 'none to do',
 }
 local NONE_TEXT = {
-    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no shinies or marked rock', builder = 'nothing marked to build',
+    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build',
 }
 
 -- The idle reason as a line for the player, naming the jobs.
@@ -1139,6 +1139,7 @@ function Worker:finishAction()
             local site = self.targetSite
             local kind = self.world:completeSite(site)
             if kind then cargo = { kind = kind } end
+            if kind == CARGO_GOLD and site.kind == SITE_MINE then self:emit('shiny', { x = site.x, y = site.y }) end
             if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
             self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
         elseif self.targetNode and self.targetNode.ready then
