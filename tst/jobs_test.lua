@@ -111,7 +111,10 @@ function TestDeal:test_a_separate_stream_leaves_old_seeds_unchanged()
         for y = 1, g.world.h do
             for x = 1, g.world.w do
                 local t = g.world:get(x, y)
-                local s = (t.type or '') .. (t.node and t.node.kind or '')
+                -- grass and leaves came later, on a stream of their own: leave them out
+                local k = t.node and t.node.kind
+                if k == NODE_GRASS or k == NODE_LEAVES then k = nil end
+                local s = (t.type or '') .. (k or '')
                 for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
             end
         end

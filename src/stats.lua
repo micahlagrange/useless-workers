@@ -16,11 +16,11 @@ Stats.TILE_CHARS = {
     water = '~', grass = '.', dirt = ',', stone = '#', snow = '*', bridge = '=',
     breakroom = 'C', wall = 'W', door = 'D',
 }
-Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g' }
+Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l' }
 Stats.LEGEND = {
     ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'stone', ['*'] = 'snow',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
-    t = 'tree (shaken bare T)', g = 'shiny', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
+    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
 }
 
 local function tileChar(t)
@@ -28,6 +28,7 @@ local function tileChar(t)
         local c = Stats.NODE_CHARS[t.node.kind] or '?'
         if t.node.ready and t.node.kind == NODE_BUSH then return 'B' end
         if not t.node.ready and t.node.kind == NODE_TREE then return 'T' end
+        if not t.node.ready and t.node.kind == NODE_GRASS then return 'V' end
         return c
     end
     if t.site and not t.site.done then return '+' end
@@ -143,7 +144,7 @@ function Stats:row(game, day)
         idleByMain = {}, -- idle morphis by main job (format 2)
         band = {},      -- where each morphi is and how it is doing: name, role (= main), main, neutral,
                         -- disliked, job (what it is working at, if working), x, y, hunger, morale, doing
-        stockLogs = world.stock.logs, stockGold = world.stock.gold,
+        stockLogs = world.stock.logs, stockGold = world.stock.gold, stockGrass = world.stock.grass or 0, stockLeaves = world.stock.leaves or 0,
         storedFood = world:storedCount('food'),
         food = scoring.lifetimeDelivered.food or 0,
         logs = scoring.lifetimeDelivered.logs or 0,

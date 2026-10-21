@@ -442,6 +442,25 @@ function UI:iconLog(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.86, y + s * 0.42, s * 0.08, s * 0.16)
 end
 
+-- A tuft of grass.
+function UI:iconGrass(x, y, s)
+    love.graphics.setColor(0.42, 0.72, 0.34)
+    love.graphics.setLineWidth(math.max(1, s * 0.08))
+    for i = 0, 4 do
+        local gx = x + s * (0.22 + i * 0.14)
+        love.graphics.line(gx, y + s * 0.85, gx + s * (i - 2) * 0.06, y + s * (0.2 + (i % 2) * 0.15))
+    end
+    love.graphics.setLineWidth(1)
+end
+
+-- Two fallen leaves.
+function UI:iconLeaves(x, y, s)
+    love.graphics.setColor(0.92, 0.62, 0.3)
+    love.graphics.ellipse('fill', x + s * 0.38, y + s * 0.55, s * 0.26, s * 0.15)
+    love.graphics.setColor(0.8, 0.42, 0.24)
+    love.graphics.ellipse('fill', x + s * 0.62, y + s * 0.42, s * 0.26, s * 0.15)
+end
+
 function UI:iconGold(x, y, s)
     love.graphics.setColor(0.95, 0.8, 0.2)
     love.graphics.rectangle('fill', x + s * 0.15, y + s * 0.25, s * 0.7, s * 0.55)
@@ -581,6 +600,8 @@ end
 function UI:iconForKind(kind, x, y, s)
     if kind == ITEM_FOOD or kind == CARGO_FOOD then self:iconFood(x, y, s)
     elseif kind == CARGO_LOGS then self:iconLog(x, y, s)
+    elseif kind == CARGO_GRASS then self:iconGrass(x, y, s)
+    elseif kind == CARGO_LEAVES then self:iconLeaves(x, y, s)
     elseif kind == CARGO_GOLD then self:iconGold(x, y, s)
     end
 end
@@ -629,6 +650,10 @@ function UI:topValues(game)
         key = 1
     end
     icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
+    if not arcade then
+        icon(UI.iconGrass, tostring(game.world.stock.grass or 0), C.good)
+        icon(UI.iconLeaves, tostring(game.world.stock.leaves or 0), C.good)
+    end
     local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
     icon(UI.iconFood, stored .. '/' .. cap, (cap == 0 and not arcade) and C.warn or C.text)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))

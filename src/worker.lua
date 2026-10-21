@@ -412,7 +412,7 @@ end
 -- are already doing) or 'none' (no work of that kind
 -- anywhere: nothing ripe, nothing marked). at is the work out of reach.
 local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'woodwork' }
-local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine' }
+local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather' }
 
 function Worker:whyNoWork(job, slot)
     local t = self:tile()
@@ -501,7 +501,7 @@ local WHY_TEXT = {
     none = 'none to do',
 }
 local NONE_TEXT = {
-    forager = 'no ripe bushes', lumberjack = 'no trees or nests to make', miner = 'no shinies or marked rock', builder = 'nothing marked to build',
+    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no shinies or marked rock', builder = 'nothing marked to build',
 }
 
 -- The idle reason as a line for the player, naming the jobs.
@@ -1307,7 +1307,7 @@ function Worker:update(dt, clock)
 end
 
 -- What things are called on screen (the keys stay as they were).
-local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny' }
+local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny', grass = 'grass', leaves = 'leaves' }
 local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
 local function siteWord(kind) return SITE_WORDS[kind] or kind end
 

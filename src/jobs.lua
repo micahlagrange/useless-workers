@@ -6,7 +6,7 @@ require('src.constants')
 local Jobs = {}
 Jobs.__index = Jobs
 
-local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine' }
+local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather' }
 
 function Jobs.typeForNode(node)
     return TYPE_FOR_KIND[node.kind]

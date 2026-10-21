@@ -32,11 +32,17 @@ RIVER_WIDTH_MAX = 3
 NODE_BUSH = 'bush'
 NODE_TREE = 'tree'
 NODE_ORE  = 'ore'
-NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
-NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
+-- the gatherer's other two: tufts of grass (they grow back) and leaf piles
+-- (gone once gathered, more blow in each season, most in Autumn)
+NODE_GRASS  = 'grass'
+NODE_LEAVES = 'leaves'
+NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE, NODE_GRASS, NODE_LEAVES }
+NODES_INITIAL      = { bush = 8, tree = 8, ore = 6, grass = 10, leaves = 6 }
 -- New growth each season. Tuned as 4 / 2 / 3 for 90 s seasons; times 300/90
 -- for 300 s seasons, so as much grows per minute as before.
-NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 10 }
+NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 10, grass = 6, leaves = 5 }
+LEAVES_AUTUMN      = 2    -- leaf piles blowing in at the start of Autumn, times this
+GRASS_REGROW_SECONDS = 40
 MAX_NODES_PER_KIND = 16
 NODE_ENCLOSED_FRACTION = 0.4    -- share of nodes placed where morphis cannot reach yet
 NODE_ENCLOSED_LATER    = 0.75   -- the share for nodes that grow after the start (free play)
@@ -47,7 +53,8 @@ BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX = 2, 10
 TREE_REGROW_SECONDS = 45
 -- ore never regrows; a mined tile turns to dirt and opens the tunnel further
 CARGO_FOOD, CARGO_LOGS, CARGO_GOLD = 'food', 'logs', 'gold'
-CARGO_VALUE = { food = 1, logs = 2, gold = 3 }   -- weight in the final score
+CARGO_GRASS, CARGO_LEAVES = 'grass', 'leaves'
+CARGO_VALUE = { food = 1, logs = 2, gold = 3, grass = 1, leaves = 1 }   -- weight in the final score
 
 -- Storage: delivered food is a real item on a built storage tile, one per
 -- tile, closest to the break room first. Logs and gold go to the stockpile.
@@ -160,7 +167,7 @@ COSTS = {
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
 }
-STARTING_STOCK  = { logs = 4, gold = 0 }
+STARTING_STOCK  = { logs = 4, gold = 0, grass = 0, leaves = 0 }
 BUILD_SECONDS   = 3.0
 LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs

@@ -91,7 +91,7 @@ function Campaign.load(index, rng, set, difficulty)
     rng = rng or Rng.new(index)
     local world = World.fromGrid(def.grid, rng)
     local points = Campaign.points(def, set, difficulty)
-    world.stock = { logs = points, gold = 0 }
+    world.stock = { logs = points, gold = 0, grass = 0, leaves = 0 }
     world.spent = 0
     if set == 'arcade' then
         world.arcade = true

@@ -111,7 +111,7 @@ end
 
 -- Game setup ---------------------------------------------------------------
 
-local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny' }
+local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny', grass = 'grass tuft', leaves = 'leaf pile' }
 
 -- Everything announced goes into the log (LOG up top), with when, what
 -- kind and where, so it can be read later and looked at on the map. Only
@@ -266,7 +266,7 @@ local function newGame(seedString, difficultyIndex)
     game.scoring = Scoring.new(difficultyIndex)
     game.world = World.generate(game.seedNumber, game.rng)
     game.jobs = Jobs.new()
-    game.world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold }
+    game.world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold, grass = STARTING_STOCK.grass, leaves = STARTING_STOCK.leaves }
     game.world:spawnAllNodes(NODES_INITIAL)
     -- everything standing at the start is already workable
     for _, node in ipairs(game.world.nodes) do
@@ -412,7 +412,11 @@ local function closeQuarter()
     local count = staffStats()
     game.report = game.scoring:closeQuarter(count)
     -- new growth comes up mostly where nobody can get at it yet
-    for _, node in ipairs(game.world:spawnAllNodes(NODES_PER_QUARTER, game.mode == 'free' and NODE_ENCLOSED_LATER or nil)) do
+    -- leaves blow in most at the start of Autumn (the third season)
+    local counts = {}
+    for k, v in pairs(NODES_PER_QUARTER) do counts[k] = v end
+    if (game.scoring.quarter - 1) % 4 + 1 == 3 then counts.leaves = counts.leaves * LEAVES_AUTUMN end
+    for _, node in ipairs(game.world:spawnAllNodes(counts, game.mode == 'free' and NODE_ENCLOSED_LATER or nil)) do
         if node.ready then game.jobs:postNode(node) end
     end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end

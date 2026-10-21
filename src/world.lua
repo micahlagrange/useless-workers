@@ -1,6 +1,7 @@
 require('src.constants')
 local Util = require('src.util')
 local Noise = require('src.noise')
+local Rng = require('src.rng')
 
 local World = {}
 World.__index = World
@@ -13,6 +14,9 @@ function World.new(w, h, rng)
     local self = setmetatable({}, World)
     self.w, self.h = w or WORLD_W, h or WORLD_H
     self.rng = rng
+    -- grass and leaves plant from a stream of their own, so a seed's map,
+    -- bushes, trees and ore are what they were before they existed
+    self.plantRng = Rng.new(((rng and rng.state) or 1) % 1000003 + 4242)
     self.tiles = {}
     self.nodes = {}
     self.nextNodeId = 1
@@ -30,7 +34,7 @@ function World.new(w, h, rng)
     self.arcadePopulation = 0
     self.enclosureCache = nil
     self.enclosureCacheVersion = -1
-    self.stock = { logs = 0, gold = 0 }
+    self.stock = { logs = 0, gold = 0, grass = 0, leaves = 0 }
     self.spent = 0 -- logs and gold spent on designations, net of refunds
     self.version = 0
     self.breakroom = nil
@@ -567,7 +571,7 @@ end
 -- and most of that share sits across water so bridges are worth building.
 function World:spawnNodes(kind, count, enclosedFraction)
     enclosedFraction = enclosedFraction or NODE_ENCLOSED_FRACTION
-    local rng = self.rng
+    local rng = (kind == NODE_GRASS or kind == NODE_LEAVES) and self.plantRng or self.rng
     local reach = self:reachableFromBreakroom()
     local reachable, enclosed, island = {}, {}, {}
     for x = 1, self.w do
@@ -664,6 +668,14 @@ function World:harvestNode(node)
         node.ready = false
         node.timer = TREE_REGROW_SECONDS
         return CARGO_LOGS
+    elseif node.kind == NODE_GRASS then
+        node.ready = false
+        node.timer = GRASS_REGROW_SECONDS
+        return CARGO_GRASS
+    elseif node.kind == NODE_LEAVES then
+        self:removeNode(node)
+        node.ready = false
+        return CARGO_LEAVES
     else
         self:removeNode(node)
         node.ready = false

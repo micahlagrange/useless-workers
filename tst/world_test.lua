@@ -38,7 +38,7 @@ end
 function TestWorldGen:testNodesLandInTheRightPlaces()
     local world = World.generate(987, Rng.new(987))
     local planted = world:spawnAllNodes(NODES_INITIAL)
-    lu.assertEquals(#planted, NODES_INITIAL.bush + NODES_INITIAL.tree + NODES_INITIAL.ore)
+    lu.assertEquals(#planted, NODES_INITIAL.bush + NODES_INITIAL.tree + NODES_INITIAL.ore + NODES_INITIAL.grass + NODES_INITIAL.leaves)
     local reachable, enclosed = {}, {}
     for _, node in ipairs(planted) do
         local t = world:get(node.x, node.y)
@@ -308,6 +308,42 @@ function TestStorageOrder:testBinsFillBeforeFloorSpots()
     -- eat one out of the bin and it is first again
     w:takeItem(9, 3)
     lu.assertEquals(w:nearestFreeStorageTile(), { x = 9, y = 3 })
+end
+
+
+TestGrassLeaves = {}
+
+function TestGrassLeaves:test_grass_grows_back_and_leaf_piles_are_gathered_away()
+    local world = World.generate(987, Rng.new(987))
+    world:spawnAllNodes(NODES_INITIAL)
+    local grass, leaves = world:nodesOfKind(NODE_GRASS)[1], world:nodesOfKind(NODE_LEAVES)[1]
+    lu.assertNotNil(grass)
+    lu.assertNotNil(leaves)
+    lu.assertEquals(world:get(grass.x, grass.y).type, TILE_GRASS)
+    lu.assertEquals(world:harvestNode(grass), CARGO_GRASS)
+    lu.assertFalse(grass.ready)
+    world:update(GRASS_REGROW_SECONDS + 1, function() end)
+    lu.assertTrue(grass.ready, 'the tuft grew back')
+    local before = #world:nodesOfKind(NODE_LEAVES)
+    lu.assertEquals(world:harvestNode(leaves), CARGO_LEAVES)
+    lu.assertEquals(#world:nodesOfKind(NODE_LEAVES), before - 1, 'a gathered leaf pile is gone')
+end
+
+function TestGrassLeaves:test_grass_and_leaves_leave_the_old_map_alone()
+    -- the same seed plants the same bushes, trees and ore with or without them
+    local a = World.generate(55, Rng.new(55))
+    local b = World.generate(55, Rng.new(55))
+    a:spawnAllNodes({ bush = 8, tree = 8, ore = 6 })
+    b:spawnAllNodes(NODES_INITIAL)
+    local function spots(w)
+        local out = {}
+        for _, n in ipairs(w.nodes) do
+            if n.kind ~= NODE_GRASS and n.kind ~= NODE_LEAVES then out[#out + 1] = n.kind .. n.x .. ',' .. n.y end
+        end
+        table.sort(out)
+        return out
+    end
+    lu.assertEquals(spots(a), spots(b))
 end
 
 os.exit(lu.LuaUnit.run())

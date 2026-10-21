@@ -25,7 +25,7 @@ end
 
 function TestSeasons:test_per_season_growth_and_grades_follow_the_season_length()
     -- 4 / 2 / 3 new nodes and grades of 16 / 11 / 6 / 2 were set for 90 s
-    lu.assertEquals(NODES_PER_QUARTER, { bush = scaled(4), tree = scaled(2), ore = scaled(3) })
+    lu.assertEquals({ NODES_PER_QUARTER.bush, NODES_PER_QUARTER.tree, NODES_PER_QUARTER.ore }, { scaled(4), scaled(2), scaled(3) })
     local was = { 16, 11, 6, 2 }
     for i, g in ipairs(GRADE_THRESHOLDS) do lu.assertEquals(g[2], scaled(was[i])) end
     -- the endless drain step and migrants are tuned with tools/bench.py; a

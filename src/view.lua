@@ -192,6 +192,18 @@ function View:drawNodes(clock)
                 love.graphics.circle('fill', px + 4, py + 3, 1.5)
                 love.graphics.circle('fill', px + 12, py + 2, 1.5)
             end
+        elseif node.kind == NODE_GRASS then
+            local h = node.ready and 7 or 2
+            love.graphics.setColor(0.36, 0.62, 0.3)
+            for i = 0, 4 do
+                local gx = px + 4 + i * 2
+                love.graphics.line(gx, py + 13, gx + (i - 2) * 0.8, py + 13 - h - (i % 2) * 2)
+            end
+        elseif node.kind == NODE_LEAVES then
+            for i, c in ipairs({ { 6, 10, 0.86, 0.55, 0.3 }, { 10, 11, 0.93, 0.72, 0.32 }, { 8, 8, 0.78, 0.42, 0.25 } }) do
+                love.graphics.setColor(c[3], c[4], c[5])
+                love.graphics.ellipse('fill', px + c[1], py + c[2], 3, 1.8)
+            end
         elseif node.kind == NODE_ORE then
             local glint = 0.75 + 0.25 * math.sin((clock or 0) * 3 + node.id)
             love.graphics.setColor(0.95 * glint, 0.8 * glint, 0.2)
@@ -564,10 +576,17 @@ function View:drawWorkerCargo(w, clock, sx, feetY)
                 love.graphics.draw(img, w.x, cy, 0, 0.7, 0.7, 8, 8)
             end
         elseif cargo.kind == CARGO_LOGS then
-            love.graphics.setColor(0.5, 0.35, 0.18)
-            love.graphics.rectangle('fill', w.x - 6, cy - 2, 12, 4)
-            love.graphics.setColor(0.75, 0.58, 0.32)
-            love.graphics.rectangle('fill', w.x + 4, cy - 2, 2, 4)
+            love.graphics.setColor(0.62, 0.45, 0.28)
+            love.graphics.line(w.x - 5, cy + 1, w.x + 5, cy - 2)
+            love.graphics.line(w.x - 5, cy - 1, w.x + 5, cy + 1)
+        elseif cargo.kind == CARGO_GRASS then
+            love.graphics.setColor(0.42, 0.7, 0.34)
+            for i = -2, 2 do love.graphics.line(w.x + i, cy + 2, w.x + i * 2, cy - 3) end
+        elseif cargo.kind == CARGO_LEAVES then
+            love.graphics.setColor(0.9, 0.62, 0.3)
+            love.graphics.ellipse('fill', w.x - 2, cy, 3, 1.8)
+            love.graphics.setColor(0.8, 0.45, 0.25)
+            love.graphics.ellipse('fill', w.x + 2, cy - 1, 3, 1.8)
         else
             love.graphics.setColor(0.95, 0.8, 0.2)
             love.graphics.rectangle('fill', w.x - 3, cy - 3, 6, 5)
