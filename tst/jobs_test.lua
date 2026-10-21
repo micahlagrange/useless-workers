@@ -352,6 +352,69 @@ function TestFollowNav:test_next_morphi_is_there_without_following()
     lu.assertTrue(g.selectedWorker == g.workers[2])
 end
 
+TestAlerts = {}
+
+function TestAlerts:test_only_bad_news_pops_up_one_at_a_time_with_a_log_button()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local ui = H.ui()
+    ui.alerts = {}
+    H.announce('Dave has nothing to do', { x = 3, y = 3 }, 'hardship')
+    H.announce('Summer 1 begins.')
+    lu.assertEquals(#ui.alerts, 0, 'hardships and news go to the log only')
+    H.announce('Priya is fed up and close to leaving the band.', { x = 2, y = 2 }, 'warning')
+    H.announce('Kenji starved and wandered off into the wilds.', { x = 4, y = 4 }, 'left')
+    lu.assertEquals(#ui.alerts, 1, 'alerts do not stack')
+    lu.assertNotNil(ui.alerts[1].text:find('Kenji'))
+    love.draw()
+    local r = ui.alertLog
+    lu.assertNotNil(r, 'the alert has a LOG button')
+    love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
+    lu.assertEquals(H.state(), 'log')
+    H.setState('playing')
+    ui.alerts = {}
+end
+
+TestStripAndUnits = {}
+
+function TestStripAndUnits:test_follow_on_the_strip_and_jobs_on_the_units_list()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g, ui = H.game(), H.ui()
+    -- by finger, laid out for touch as after a first touch
+    ui.touch = true
+    love.resize(1280, 720)
+    Stub.fingers = {}
+    love.update(0)
+    local function tap(r)
+        Stub.fingers = { 't' }
+        love.touchpressed('t', (r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale)
+        love.touchreleased('t')
+        Stub.fingers = {}
+    end
+    g.follow = false
+    g.selectedWorker = g.workers[1]
+    love.draw()
+    local f = ui.followButton
+    lu.assertNotNil(f, 'FOLLOW is on the strip')
+    tap(f)
+    lu.assertTrue(g.follow)
+    -- the units list: JOBS on a row opens that morphi's job screen
+    H.setState('units')
+    love.draw()
+    local jb
+    for _, b in ipairs(ui.unitButtons) do
+        if b.what == 'jobs' and b.worker == g.workers[3] then jb = b end
+    end
+    lu.assertNotNil(jb, 'a JOBS button on each free play row')
+    tap(jb)
+    lu.assertEquals(H.state(), 'jobs')
+    lu.assertTrue(g.selectedWorker == g.workers[3])
+    H.setState('playing')
+    ui.touch = false
+    love.resize(1280, 720)
+end
+
 TestJobsScreen = {}
 
 function TestJobsScreen:test_the_job_screen_sets_main_and_neutral_and_refuses_the_dislike()

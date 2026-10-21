@@ -113,10 +113,13 @@ end
 
 local NODE_WORDS = { bush = 'bush', tree = 'tree', ore = 'gold' }
 
--- Everything announced also goes into the log (LOG up top), with when,
--- what kind and where, so it can be read later and looked at on the map.
+-- Everything announced goes into the log (LOG up top), with when, what
+-- kind and where, so it can be read later and looked at on the map. Only
+-- bad news pops up over the map (Micah, 2026-10-21: alerts got in the way):
+-- a morphi fed up and close to leaving, or one that left or starved.
+local ALERT_KINDS = { warning = true, left = true }
 local function announce(text, tile, kind)
-    ui:alert(text, tile)
+    if ALERT_KINDS[kind] then ui:alert(text, tile) end
     if not game.log then return end
     game.log[#game.log + 1] = {
         text = text, tile = tile, kind = kind or 'news',
@@ -1192,8 +1195,12 @@ local function pointerPressed(x, y, button, istouch)
         end
         return
     elseif state == 'units' then
-        local w = ui:unitButtonAt(vx, vy)
-        if w then
+        local w, what = ui:unitButtonAt(vx, vy)
+        if w and what == 'jobs' then
+            game.selectedWorker = w
+            game.abilities:select(ABILITY_SELECT)
+            openJobs()
+        elseif w then
             game.selectedWorker = w
             game.follow = true
             game.abilities:select(ABILITY_SELECT)
@@ -1237,6 +1244,15 @@ local function pointerPressed(x, y, button, istouch)
     local nav = ui:followNavAt(vx, vy)
     if nav then
         followNext(nav)
+        Audio.playSFX('click')
+        return
+    end
+    if ui:alertLogAt(vx, vy) then
+        openLog()
+        return
+    end
+    if ui:followButtonAt(vx, vy) then
+        toggleFollow()
         Audio.playSFX('click')
         return
     end

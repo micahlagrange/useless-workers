@@ -14,7 +14,6 @@ TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
 FONT_PATH = 'assets/fonts/commodore64.ttf'
 local ALERT_TTL = 10
-local MAX_ALERTS = 4
 
 local C = {
     bar = { 0.08, 0.09, 0.07, 0.92 },
@@ -288,9 +287,10 @@ end
 
 
 
+-- One alert at a time: a new one takes the old one's place (the log keeps
+-- them all).
 function UI:alert(text, tile)
-    table.insert(self.alerts, 1, { text = text, ttl = ALERT_TTL, tile = tile })
-    while #self.alerts > MAX_ALERTS do table.remove(self.alerts) end
+    self.alerts = { { text = text, ttl = ALERT_TTL, tile = tile } }
 end
 
 function UI:toast(text)
@@ -311,6 +311,11 @@ function UI:update(dt)
         self.toastTtl = self.toastTtl - dt
         if self.toastTtl <= 0 then self.toastText = nil end
     end
+end
+
+-- The LOG button beside the alert.
+function UI:alertLogAt(mx, my)
+    return hit(self.alertLog, mx, my)
 end
 
 function UI:alertAt(mx, my)
@@ -930,9 +935,12 @@ function UI:drawAlerts(game)
     love.graphics.setFont(self.fonts.small)
     local y = (self.bannerBottom or TOP_BAR_H) + 8
     local box = game and self:goalBoxRect(game)
-    local maxW = (box and box.x - 16 or self.vw) - 40
+    -- room on the right for the LOG button that opens the announcements
+    local logW = self.fonts.small:getWidth('LOG') + 28
+    local maxW = (box and box.x - 16 or self.vw) - 40 - logW - 8
     local bottom = self.vh - BOTTOM_BAR_H - 70 -- the toast lives below this
     self.alertRects = {}
+    self.alertLog = nil
     for _, a in ipairs(self.alerts) do
         local alpha = math.min(1, a.ttl / 1.5)
         -- a tap looks at the place; the hint says so
@@ -951,7 +959,10 @@ function UI:drawAlerts(game)
         love.graphics.setFont(self.fonts.small)
         love.graphics.printf(text, 18, y + 4, maxW, 'left')
         self.alertRects[#self.alertRects + 1] = { x = 12, y = y, w = w, h = h, alert = a }
-        y = y + h + 4
+        local r = { x = 12 + w + 8, y = y, w = logW, h = math.max(h, self.quickH) }
+        self:button(r, 'LOG', false)
+        self.alertLog = r
+        y = y + math.max(h, r.h) + 4
     end
 end
 
@@ -985,6 +996,7 @@ end
 function UI:drawBottomBar(game)
     local abilities = game.abilities
     self.jobsButton = nil
+    self.followButton = nil
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
@@ -1048,9 +1060,10 @@ function UI:drawBottomBar(game)
             -- free play: name (JOBS opens the job screen), its three jobs,
             -- what it is doing, how it is
             local lh = self.fonts.small:getHeight() + 6
-            local jw = 84
-            local _, nw = self:printLine(w.name .. ', the ' .. w.species, ix, iy, iw - jw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            local jw, fw = 72, 96
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species, ix, iy, iw - jw - fw - 8 - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
+            self:followButtonDraw(game, { x = ix + iw - jw - 8 - fw, y = iy - 4, w = fw, h = 28 })
             self:jobsButtonDraw({ x = ix + iw - jw, y = iy - 4, w = jw, h = 28 })
             self:printLine(self:jobsSummary(w), ix, iy + lh + 6, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             self:printLine(w:describeState(), ix, iy + 2 * lh + 6, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
@@ -1058,8 +1071,10 @@ function UI:drawBottomBar(game)
             self:printLine(word .. ', ' .. w:mood(), ix, iy + 3 * lh + 6, iw, 'left', color, { self.fonts.small, self.fonts.tiny })
         elseif w and w.alive then
             local lh = self.fonts.small:getHeight() + 8
+            local fw = 96
+            self:followButtonDraw(game, { x = ix + iw - fw, y = iy - 4, w = fw, h = 28 })
             -- the name line, with what it eats at the end, as on the units list
-            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - 24, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - fw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             if w.arcade then
@@ -1085,14 +1100,15 @@ function UI:drawBottomBar(game)
             setColor(C.good)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
-            if w.jobSet then
-                -- free play: JOBS where the arcade job would be named
-                self:printLine('the ' .. w.species .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-                self:jobsButtonDraw({ x = px + pw - 132, y = py - 4, w = 132, h = 22 })
-            else
-                self:printLine('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-            end
-            self:iconFoodKind(w.diet, px + pw - 160, py - 2, 18)
+            -- FOLLOW (and JOBS in free play) at the top right, what it eats before them
+            local jw = w.jobSet and 56 or 0
+            local fw = 76
+            local bx0 = px + pw - jw - (jw > 0 and 6 or 0) - fw
+            self:followButtonDraw(game, { x = bx0, y = py - 4, w = fw, h = 22 })
+            if w.jobSet then self:jobsButtonDraw({ x = px + pw - jw, y = py - 4, w = jw, h = 22 }) end
+            local words = w.jobSet and ('the ' .. w.species .. ', eats') or ('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats')
+            self:printLine(words, nx, py + 3, bx0 - 26 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:iconFoodKind(w.diet, bx0 - 24, py - 2, 18)
             self:printLine(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             local sx = px
             for i = 1, INVENTORY_SLOTS do
@@ -1152,11 +1168,14 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        local room = self.vw - 28
+        local room = self.vw - 28 - 76
+        local fx = self.vw - 8 - 70
         if w.jobSet then
             room = room - 70
             self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 })
+            fx = fx - 70
         end
+        self:followButtonDraw(game, { x = fx, y = ty, w = 70, h = 20 })
         self:printLine(line, 14, ty + 4, room, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     end
     if self.toastText then
@@ -1177,6 +1196,16 @@ function UI:drawBottomBar(game)
         love.graphics.setFont(self.fonts.hud)
     end
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The FOLLOW button on the picked morphi's strip: lit while following.
+function UI:followButtonDraw(game, r)
+    self:button(r, 'FOLLOW', game.follow == true)
+    self.followButton = r
+end
+
+function UI:followButtonAt(mx, my)
+    return hit(self.followButton, mx, my)
 end
 
 -- The JOBS button on the picked morphi's strip (free play only).
@@ -1381,15 +1410,24 @@ function UI:drawUnits(game, view)
     x, y, pw, ph = self:panel(pw, ph)
     self.unitPanel = { x = x, y = y, w = pw, h = ph }
     local btnW = compact and 100 or 120
+    -- free play rows also have JOBS beside FOLLOW
+    local anyJobs = false
+    for _, w in ipairs(units) do if w.jobSet then anyJobs = true end end
+    local jobsW = anyJobs and (compact and 64 or 72) or 0
     self:printLine('UNITS  (' .. #units .. ' morphis)', x + 18, y + 16, pw - btnW - 52, 'left', C.text, { self.fonts.big, self.fonts.hud, self.fonts.small })
     local cName = x + 18 + rowH
+    local right = x + pw - btnW - 24 - (jobsW > 0 and jobsW + 8 or 0)
     local cTask = compact and x + math.floor(pw * 0.42) or x + math.floor(pw * 0.34)
-    local cHunger, cMorale = x + math.floor(pw * 0.62), x + math.floor(pw * 0.76)
-    local right = x + pw - btnW - 24
+    -- the hunger and morale columns share out what the buttons leave
+    local cHunger, cMorale = x + math.floor((right - x) * 0.72), x + math.floor((right - x) * 0.88)
+    -- a phone with JOBS and FOLLOW on each row: the task goes under the
+    -- name instead of in a column of its own
+    local stacked = compact and jobsW > 0
+    if stacked then cTask = right end
     local wide = pw >= 760
     local arcade = game.mode == 'arcade'
     self:printLine('MORPHI', cName, y + 56, cTask - cName - 8, 'left', C.dim, { self.fonts.tiny })
-    self:printLine('TASK', cTask, y + 56, (compact and right or cHunger) - cTask - 8, 'left', C.dim, { self.fonts.tiny })
+    if not stacked then self:printLine('TASK', cTask, y + 56, (compact and right or cHunger) - cTask - 8, 'left', C.dim, { self.fonts.tiny }) end
     if not compact then
         self:printLine(arcade and 'MEAL' or 'HUNGER', cHunger, y + 56, (wide and not arcade and cMorale or right) - cHunger - 8, 'left', C.dim, { self.fonts.tiny })
         if wide and not arcade then self:printLine('MORALE', cMorale, y + 56, right - cMorale - 8, 'left', C.dim, { self.fonts.tiny }) end
@@ -1412,14 +1450,22 @@ function UI:drawUnits(game, view)
         end
         local nameFonts = rowH >= 44 and { self.fonts.hud, self.fonts.small, self.fonts.tiny } or { self.fonts.small, self.fonts.tiny }
         local nameW = cTask - cName - 30
-        self:printLine(w.name, cName, ry + 4, nameW, 'left', C.good, nameFonts)
-        local nf = love.graphics.getFont()
-        self:iconFoodKind(w.diet, cName + math.min(nf:getWidth(w.name), nameW) + 6, ry + 2, 16)
+        if stacked and rowH < 44 then
+            -- one line: name and what it is doing
+            self:printLine(w.name .. ': ' .. w:describeState(), cName, ry + 8, cTask - cName - 8, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        else
+            self:printLine(w.name, cName, ry + 4, nameW, 'left', C.good, nameFonts)
+            local nf = love.graphics.getFont()
+            self:iconFoodKind(w.diet, cName + math.min(nf:getWidth(w.name), nameW) + 6, ry + 2, 16)
+        end
         if rowH >= 44 then
-            self:printLine(w.species .. ', ' .. w.roleInfo.label:lower(), cName, ry + 26, cTask - cName - 8, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            local second = stacked and w:describeState() or (w.species .. ', ' .. w.roleInfo.label:lower())
+            self:printLine(second, cName, ry + 26, cTask - cName - 8, 'left', stacked and C.text or C.dim, { self.fonts.small, self.fonts.tiny })
         end
         local taskRight = compact and right or cHunger
-        self:printLine(w:describeState(), cTask, ry + 8, taskRight - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        if not stacked then
+            self:printLine(w:describeState(), cTask, ry + 8, taskRight - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        end
         if not compact then
             local barW = (wide and not arcade and cMorale or right) - cHunger - 12
             if arcade then
@@ -1443,7 +1489,12 @@ function UI:drawUnits(game, view)
         local following = game.follow and selected
         local r = { x = x + pw - btnW - 18, y = ry + math.floor((rowH - 4 - 28) / 2), w = btnW, h = 28 }
         self:button(r, following and 'FOLLOWING' or 'FOLLOW', following)
-        self.unitButtons[#self.unitButtons + 1] = { worker = w, x = r.x, y = r.y, w = r.w, h = r.h }
+        self.unitButtons[#self.unitButtons + 1] = { worker = w, what = 'follow', x = r.x, y = r.y, w = r.w, h = r.h }
+        if w.jobSet then
+            local jr = { x = r.x - jobsW - 8, y = r.y, w = jobsW, h = 28 }
+            self:button(jr, 'JOBS', false)
+            self.unitButtons[#self.unitButtons + 1] = { worker = w, what = 'jobs', x = jr.x, y = jr.y, w = jr.w, h = jr.h }
+        end
         ry = ry + rowH
     end
     self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
@@ -1521,9 +1572,11 @@ function UI:insideLogPanel(mx, my)
     return hit(self.logPanel, mx, my)
 end
 
+-- The morphi whose row button is under the pointer, and which button:
+-- 'follow' or 'jobs'.
 function UI:unitButtonAt(mx, my)
     for _, b in ipairs(self.unitButtons) do
-        if hit(b, mx, my) then return b.worker end
+        if hit(b, mx, my) then return b.worker, b.what end
     end
     return nil
 end
