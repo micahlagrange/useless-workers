@@ -204,8 +204,44 @@ function Worker:careScore()
     return self.careSum / self.careTime
 end
 
+-- Gone: a little flower marks the spot (world.graves).
+function Worker:die(cause)
+    if self.trade then self:endTrade(false) end
+    self:dropJob()
+    self.slots = {}
+    self.scoring:addQuit()
+    self.alive = false
+    self.state = 'gone'
+    local t = self:tile()
+    self.world.graves = self.world.graves or {}
+    self.world.graves[#self.world.graves + 1] = { x = t.x, y = t.y, name = self.name }
+    self:emit('died', { cause = cause, stage = self.stage or 'grown-up' })
+end
+
 function Worker:updateBaby(dt)
     self.age = self.age + dt
+    -- danger: an empty belly, or every need empty, for long enough
+    local n = self.needs
+    if self.hunger <= 0 then self.emptyTime = (self.emptyTime or 0) + dt else self.emptyTime = 0 end
+    if self.hunger <= 0 and n.fun <= 0 and n.clean <= 0 and n.sleep <= 0 then
+        self.neglectTime = (self.neglectTime or 0) + dt
+    else
+        self.neglectTime = 0
+    end
+    if self.emptyTime >= BABY_STARVE_SECONDS then self:die('hunger') return end
+    if self.neglectTime >= BABY_NEGLECT_SECONDS then self:die('neglect') return end
+    if self.emptyTime >= BABY_STARVE_SECONDS / 2 and not self.warnedHungry then
+        self.warnedHungry = true
+        self:emit('babyWarning', 'hungry')
+    elseif self.emptyTime == 0 then
+        self.warnedHungry = nil
+    end
+    if self.neglectTime >= BABY_NEGLECT_SECONDS / 2 and not self.warnedNeglect then
+        self.warnedNeglect = true
+        self:emit('babyWarning', 'neglected')
+    elseif self.neglectTime == 0 then
+        self.warnedNeglect = nil
+    end
     local n = self.needs
     for k, rate in pairs(BABY_NEED_DRAIN) do n[k] = math.max(0, n[k] - rate * dt) end
     if self.state == 'breaking' then n.sleep = math.min(100, n.sleep + BABY_NAP_RATE * dt) end
@@ -1441,17 +1477,22 @@ function Worker:update(dt, clock)
         if self.hunger <= 0 then
             -- starving: it holds out as long again as a full belly lasts
             self.hunger = 0
-            self.starveTimer = (self.starveTimer or HUNGER_MAX / math.max(self.drain, 0.01)) - dt
-            if self.starveTimer <= 0 then
-                self:quit('starved')
-                return
+            if self.stage ~= 'baby' then
+                self.starveTimer = (self.starveTimer or HUNGER_MAX / math.max(self.drain, 0.01)) - dt
+                if self.starveTimer <= 0 then
+                    if self.wilds then self:die('hunger') else self:quit('starved') end
+                    return
+                end
             end
         else
             self.starveTimer = nil
         end
         if self:updateMorale(dt) then return end
     end
-    if self.stage == 'baby' then self:updateBaby(dt) end
+    if self.stage == 'baby' then
+        self:updateBaby(dt)
+        if not self.alive then return end
+    end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then

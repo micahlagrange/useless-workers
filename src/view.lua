@@ -631,7 +631,23 @@ function View:drawWorkerCargo(w, clock, sx, feetY)
     end
 end
 
+function View:drawGraves()
+    for _, g in ipairs(self.world.graves or {}) do
+        local px, py = (g.x - 1) * TILE_SIZE, (g.y - 1) * TILE_SIZE
+        love.graphics.setColor(0.4, 0.62, 0.32)
+        love.graphics.line(px + 8, py + 14, px + 8, py + 8)
+        love.graphics.setColor(0.95, 0.75, 0.85)
+        for i = 0, 4 do
+            local a = i / 5 * math.pi * 2
+            love.graphics.circle('fill', px + 8 + math.cos(a) * 2, py + 7 + math.sin(a) * 2, 1.4)
+        end
+        love.graphics.setColor(1, 0.92, 0.5)
+        love.graphics.circle('fill', px + 8, py + 7, 1)
+    end
+end
+
 function View:drawWorkers(workers, clock, selectedWorker)
+    self:drawGraves()
     local sorted = {}
     for _, w in ipairs(workers) do
         if w.alive then sorted[#sorted + 1] = w end

@@ -161,6 +161,17 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'babyWarning' then
+        local t = worker:tile()
+        local text = data == 'hungry' and (worker.name .. ' is a hungry baby with an empty tummy. Feed it, or set a CARETAKER.')
+            or (worker.name .. ' is a baby nobody is looking after. Set a CARETAKER, or tend it yourself.')
+        announce(text, { x = t.x, y = t.y }, 'warning')
+    elseif name == 'died' then
+        Audio.playSFX('quit')
+        local t = worker:tile()
+        if game.stats then game.stats:event('died', game, worker.name, data.cause .. '/' .. data.stage, t) end
+        local why = data.cause == 'neglect' and 'nobody looked after it' or 'it got far too hungry'
+        announce(worker.name .. ' is gone: ' .. why .. '. A little flower grows where it was.', { x = t.x, y = t.y }, 'left')
     elseif name == 'hatched' then
         Audio.playSFX('hire')
         local t = worker:tile()

@@ -196,4 +196,59 @@ function TestEggs:test_a_pair_lays_an_egg_in_a_free_nest_and_it_hatches()
     lu.assertTrue(said)
 end
 
+
+TestDanger = {}
+
+function TestDanger:test_a_hungry_baby_is_warned_about_then_dies()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    local b = baby(g)
+    -- nothing to eat anywhere, nobody minding babies
+    for i = #g.world.items, 1, -1 do table.remove(g.world.items, i) end
+    for _, n in ipairs(g.world.nodes) do n.ready = false; n.timer = 9999 end
+    for _, w in ipairs(g.workers) do w.slots = {} end
+    b.hunger = 0
+    local warned, warnedAt = false, nil
+    for step = 1, math.floor((BABY_STARVE_SECONDS + 2) / 0.1) do
+        b.hunger = 0
+        love.update(0.1)
+        if not warned then
+            for _, e in ipairs(g.log) do if e.text:find('hungry baby') then warned = true; warnedAt = step * 0.1 end end
+        end
+        if not b.alive then break end
+    end
+    lu.assertTrue(warned, 'a warning first')
+    lu.assertTrue(warnedAt < BABY_STARVE_SECONDS)
+    lu.assertFalse(b.alive, 'then it is gone')
+    lu.assertEquals(#g.world.graves, 1)
+    local said = false
+    for _, e in ipairs(g.log) do if e.text:find('is gone') then said = true end end
+    lu.assertTrue(said)
+end
+
+function TestDanger:test_a_starving_grown_up_dies_in_free_play()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    local w = g.workers[1]
+    w.hunger = 0
+    w.starveTimer = 0.05
+    love.update(0.1)
+    lu.assertFalse(w.alive)
+    lu.assertNotEquals(w.state, 'quitting', 'gone, not wandering off')
+    local died = 0
+    for _, e in ipairs(g.stats.events) do if e.kind == 'died' then died = died + 1 end end
+    lu.assertEquals(died, 1)
+end
+
+function TestDanger:test_an_egg_never_dies()
+    H.newGame('PUPPER', 1)
+    local g = H.game()
+    local egg = H.game().workers[1] -- borrow the first worker's slot to make an egg
+    egg.stage, egg.hatchTimer, egg.hunger = 'egg', 9999, 0
+    for _ = 1, 100 do egg:update(1, 0) end
+    lu.assertTrue(egg.alive)
+end
+
 os.exit(lu.LuaUnit.run())

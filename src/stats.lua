@@ -275,6 +275,8 @@ function Stats:history()
             list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A little blob') .. ' wandered in.' }
         elseif e.kind == 'starved' then
             list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' got too hungry and toddled off.' }
+        elseif e.kind == 'died' then
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' is gone. A little flower grows there.' }
         elseif e.kind == 'left' then
             list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' packed a tiny bag and left.' }
         end

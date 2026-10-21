@@ -176,6 +176,13 @@ START_BABIES       = 1
 -- egg in a free nest. A nest holds one egg or baby; the home nest counts as
 -- one. With no free nest, no egg. An egg hatches after EGG_HATCH_SECONDS.
 EGGS_PER_SEASON    = 2
+-- Danger: neglect long enough and a morphi dies. A grown-up starving as long
+-- as a full belly lasts dies (in free play; in the old levels it still
+-- wanders off). A baby dies after BABY_STARVE_SECONDS with an empty belly,
+-- or BABY_NEGLECT_SECONDS with every need empty; a warning comes at half
+-- way. An egg never dies.
+BABY_STARVE_SECONDS  = 60
+BABY_NEGLECT_SECONDS = 120
 EGG_HATCH_SECONDS  = 60
 FIRST_BABY_NAME    = 'Morphi'
 BABY_SECONDS       = 300
