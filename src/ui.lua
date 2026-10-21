@@ -1229,18 +1229,18 @@ function UI:drawJobs(game)
         main = 'MAIN JOB: done first, whenever there is any',
         neutral = 'NEUTRAL JOB: done when the main job has nothing',
     }
-    local disliked = 'DISLIKED: ' .. JobSets.label(js.disliked)
-        .. (js.main == js.disliked and ', and it is the main job now.' or ', done only when nothing else is left.')
-        .. ' It is part of who ' .. w.name .. ' is and never changes.'
-    local function wrapH(text)
-        local _, lines = small:getWrap(text, inner)
+    hints.disliked = js.main == js.disliked and 'DISLIKED JOB: it is the main job now'
+        or 'DISLIKED JOB: done only when nothing else is left'
+    local trait = 'Part of who ' .. w.name .. ' is. It never changes.'
+    local function wrapH(text, width)
+        local _, lines = small:getWrap(text, width or inner)
         return #lines * small:getHeight()
     end
     local stateH = small:getHeight() + 6
     local ph = 52 + stateH + 6
         + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
         + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
-        + wrapH(disliked) + 16
+        + wrapH(hints.disliked) + 6 + math.max(bh, wrapH(trait, inner - bw - 12)) + 12
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
     self.jobPanel = { x = x, y = y, w = pw, h = ph }
@@ -1281,7 +1281,14 @@ function UI:drawJobs(game)
     local neutral = { false }
     for _, job in ipairs(JobSets.JOBS) do neutral[#neutral + 1] = job end
     grid('neutral', neutral)
-    self:printWrap(disliked, x + 18, cy, inner, C.warn, { small }, 4)
+    -- the disliked job in a box like the others, so it reads the same;
+    -- tapping it only says why it cannot change
+    cy = cy + self:printWrap(hints.disliked, x + 18, cy, inner, C.text, { small }, 3) + 6
+    self:panelButton('job:disliked:' .. js.disliked, { x = x + 18, y = cy, w = bw, h = bh }, JobSets.label(js.disliked):upper(), false, C.warn)
+    -- why it cannot change, beside the box (a short screen has no row to spare)
+    local tw = inner - bw - 12
+    local th = wrapH(trait, tw)
+    self:printWrap(trait, x + 18 + bw + 12, cy + math.max(0, math.floor((bh - th) / 2)), tw, C.dim, { small }, 4)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
