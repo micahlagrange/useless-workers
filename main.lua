@@ -302,7 +302,7 @@ local function newGame(seedString, difficultyIndex)
     game.stats = Stats.new({ mode = 'free', seed = seedString, difficulty = DIFFICULTIES[difficultyIndex].name, build = Version.build })
     hire(DIFFICULTIES[difficultyIndex].workers)
     game.log = {}
-    announce('Mark a STASH (or a BASKET, 1 stick, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
+    announce('Mark a STASH (or a BASKET, 1 grass, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)

@@ -74,7 +74,7 @@ BREAK_SECONDS       = 8        -- resting on a break room tile or the ground
 BREAK_SECONDS_BED   = 4        -- resting in a bed
 BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break is due
 -- Floor spots, bins and bridges are 'build' jobs: the builder's, in free
--- play and arcade alike. A bed is 'woodwork': a lumberjack or a builder.
+-- play and arcade alike. A nest is 'nestwork': a gatherer or a builder.
 -- Every resting morphi claims its own spot: a bed, a break room tile, or a
 -- free tile next to the break room. Nobody naps on top of anybody.
 
@@ -83,10 +83,10 @@ ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
+    lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
     miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
     -- building is a job of its own (in free play since the player-jobs epic)
-    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
+    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
 -- Nobody gathers: the points a level starts with are all the sticks there are.
@@ -170,6 +170,35 @@ COSTS = {
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
 }
+-- Free play builds nests, not furniture: a NEST is woven from sticks, grass
+-- and leaves, a BASKET from grass, a STASH is a free leaf mat, a bridge is
+-- sticks. Hand built levels keep COSTS above, in points (sticks).
+FREE_COSTS = {
+    storage = {},
+    bin     = { grass = 1 },
+    bed     = { logs = 2, grass = 2, leaves = 1 },
+    bridge  = { logs = 1 },   -- per water tile
+    wall    = { logs = 1 },
+    door    = { logs = 1 },
+}
+-- What a kind of site costs in this world.
+function costOf(world, kind)
+    local t = (world and world.wilds) and FREE_COSTS or COSTS
+    return t[kind] or {}
+end
+-- A cost in words, most first: '2 sticks 2 grass 1 leaf'. Empty for free.
+local MATERIAL_ORDER = { 'logs', 'grass', 'leaves', 'gold' }
+local MATERIAL_WORDS = { logs = { 'stick', 'sticks' }, grass = { 'grass', 'grass' }, leaves = { 'leaf', 'leaves' }, gold = { 'shiny', 'shinies' } }
+function costWords(cost, sep)
+    local parts = {}
+    for _, k in ipairs(MATERIAL_ORDER) do
+        local n = cost[k] or 0
+        if n > 0 then parts[#parts + 1] = n .. ' ' .. MATERIAL_WORDS[k][n == 1 and 1 or 2] end
+    end
+    return table.concat(parts, sep or ' ')
+end
+-- the site kinds by their new names (the keys stay 'bed', 'bin', 'storage')
+SITE_NEST, ABILITY_NEST = 'bed', 'bed'
 STARTING_STOCK  = { logs = 4, gold = 0, grass = 0, leaves = 0 }
 BUILD_SECONDS   = 3.0
 LINE_MAX_LENGTH = 12

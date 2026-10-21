@@ -54,11 +54,11 @@ function Jobs:postNode(node, front)
     return self:post({ type = Jobs.typeForNode(node), x = node.x, y = node.y, node = node }, front)
 end
 
--- Mine sites are miner work, beds are woodwork for a lumberjack, and floor
+-- Mine sites are miner work, nests are nestwork for a gatherer, and floor
 -- spots, bins and bridges are 'build' jobs for anyone.
 function Jobs.typeForSite(site)
     if site.kind == SITE_MINE then return 'mine' end
-    if site.kind == SITE_BED then return 'woodwork' end
+    if site.kind == SITE_BED then return 'nestwork' end
     return 'build' -- floors, bins, walls, doors, bridges
 end
 

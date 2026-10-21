@@ -411,7 +411,7 @@ end
 -- rock or otherwise cut off: dig to it), 'taken' (what there is, others
 -- are already doing) or 'none' (no work of that kind
 -- anywhere: nothing ripe, nothing marked). at is the work out of reach.
-local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'woodwork' }
+local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'nestwork' }
 local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather' }
 
 function Worker:whyNoWork(job, slot)

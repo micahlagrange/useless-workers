@@ -46,13 +46,15 @@ local function bandSize(game)
     return n
 end
 
--- A bed for every morphi in the band, one per call, while the logs last.
-function Player.placeBeds(game)
-    if Player.bedCount(game) < bandSize(game) and game.world:canAfford(COSTS.bed) then
+-- A nest for every morphi in the bunch, one per call, while the sticks,
+-- grass and leaves last.
+function Player.placeNests(game)
+    if Player.bedCount(game) < bandSize(game) and game.world:canAfford(costOf(game.world, 'bed')) then
         return placeNearCamp(game, ABILITY_BED, SITE_BED, 1)
     end
     return 0
 end
+Player.placeBeds = Player.placeNests
 
 -- Job management, the way a person would do it from the job screen (free
 -- play only; arcade morphis have one fixed job). Each look: work waiting on
@@ -155,7 +157,7 @@ Player.act = {
         Player.clearRoutes(game, 4)
         Player.placeBeds(game)
         if Player.freeStorage(game) < 4 then Player.placeStorage(game, 3) end
-        if game.world.stock.logs >= COSTS.bin.logs + COSTS.bed.logs + 4 then Player.placeStorage(game, 1, true) end
+        if game.world:canAfford(costOf(game.world, 'bin')) and (game.world.stock.grass or 0) >= 4 then Player.placeStorage(game, 1, true) end
     end,
     none = function() end,
     dig = function(game) Player.clearRoutes(game, 4) end,

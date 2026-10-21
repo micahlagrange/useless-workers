@@ -69,8 +69,9 @@ do the rest.
   looking. Drag from a marked tile to clear marks.
 - **Stash**: tap open ground for a free leaf-mat stash. It holds one thing.
   Food can only be put down on a stash or in a basket, so this comes first.
-- **Basket**: 1 stick, holds four things.
-- **Nest**: 2 sticks. A nap in a nest is shorter and does more good.
+- **Basket**: 1 grass, holds four things.
+- **Nest**: 2 sticks, 2 grass and 1 leaf. A nap in a nest is shorter and does
+  more good.
 - **Bridge**: drag a line over water (1 stick a tile). Two streams cut every
   meadow and plenty of good things sit on the far banks.
 - **Mood**: grumbles and hunger wear a morphi down; food and naps cheer it up.

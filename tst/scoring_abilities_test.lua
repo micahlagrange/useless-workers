@@ -259,7 +259,7 @@ function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     self.abilities:select(ABILITY_BED)
     lu.assertTrue((self.abilities:use(3, 4)))
     lu.assertEquals(self.world.stock.logs, 4 - COSTS.bed.logs)
-    lu.assertEquals(self.jobs:count('woodwork'), 1)                -- lumberjack work, not a generic build
+    lu.assertEquals(self.jobs:count('nestwork'), 1)                -- gatherer work, not a generic build
     local site = self.world:get(3, 4).site
     lu.assertEquals(site.kind, SITE_BED)
     self.world:completeSite(site)
@@ -267,6 +267,29 @@ function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     lu.assertEquals(#self.world.beds, 1)
     local ok = self.abilities:use(3, 4)                     -- can't put a bed on a bed
     lu.assertFalse(ok)
+end
+function TestAbilities:testFreePlayNestsAreWovenFromSticksGrassAndLeaves()
+    self.world.wilds = true
+    self.abilities:select(ABILITY_NEST)
+    local ok, why = self.abilities:use(3, 4)
+    lu.assertFalse(ok)
+    lu.assertStrContains(why, 'grass')
+    lu.assertStrContains(why, 'leaf')
+    self.world.stock.grass, self.world.stock.leaves = 2, 1
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals({ self.world.stock.logs, self.world.stock.grass, self.world.stock.leaves }, { 2, 0, 0 })
+    -- taking the mark back gives them all back
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals({ self.world.stock.logs, self.world.stock.grass, self.world.stock.leaves }, { 4, 2, 1 })
+    -- a basket is 1 grass, a stash is free
+    self.abilities:select(ABILITY_BIN)
+    lu.assertStrContains(self.abilities:costText(ABILITY_BIN), '1 grass')
+    lu.assertTrue((self.abilities:use(6, 1)))
+    lu.assertEquals(self.world.stock.grass, 1)
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:use(10, 1)))
+    lu.assertEquals(self.world.stock.logs, 4)
+    lu.assertEquals(self.abilities:costText(ABILITY_BED), '2 sticks 2 grass 1 leaf')
 end
 function TestAbilities:testBridgeSitesAllOrNothing()
     self.abilities:select(ABILITY_BRIDGE)
