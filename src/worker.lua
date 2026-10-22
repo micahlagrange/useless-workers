@@ -339,7 +339,7 @@ function Worker:tendInfo(action, world)
             ok = total > 0,
             does = '+' .. gain .. ' tummy' .. (best and best.taste == 'loved' and ', loved: a happier baby' or ''),
             cost = '1 stored meal',
-            have = total > 0 and ('stashes: ' .. table.concat(parts, ', ')) or ('none it eats in the stashes; it loves ' .. FOOD_NAME(self.diet)),
+            have = total > 0 and ('stashes: ' .. table.concat(parts, ', ')) or 'none in the stashes',
         }
     elseif action == 'clean' then
         local grass = world.stock.grass or 0
@@ -347,22 +347,22 @@ function Worker:tendInfo(action, world)
             ok = grass >= 1,
             does = '+' .. TAMA_CLEAN .. ' clean',
             cost = '1 grass',
-            have = grass >= 1 and ('you have ' .. grass .. ' grass') or 'no grass: gatherers pick it',
+            have = grass >= 1 and ('you have ' .. grass .. ' grass') or 'no grass yet',
         }
     elseif action == 'play' then
         return {
             ok = true,
-            does = '+' .. TAMA_FUN .. ' fun, -' .. TAMA_PLAY_COST .. ' clean, -' .. TAMA_PLAY_COST .. ' sleep',
+            does = '+' .. TAMA_FUN .. ' fun, -' .. TAMA_PLAY_COST .. ' clean & sleep',
             cost = 'free',
-            have = 'tiring, and a bit messy',
+            have = 'tiring and messy',
         }
     elseif action == 'nap' then
         local sleepy = n.sleep < TAMA_SLEEPY_BELOW
         return {
             ok = sleepy,
-            does = 'sleep to 100; waking it early undoes it',
-            cost = TAMA_NAP_SECONDS .. ' s, nothing else meanwhile',
-            have = sleepy and ('sleep ' .. math.floor(n.sleep + 0.5) .. ', ready for a nap') or 'not sleepy yet',
+            does = 'sleep to 100, if not woken',
+            cost = TAMA_NAP_SECONDS .. ' s asleep',
+            have = sleepy and 'ready for a nap' or 'not sleepy yet',
         }
     end
     return { ok = false, does = '', cost = '', have = '' }

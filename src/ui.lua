@@ -1419,23 +1419,36 @@ function UI:drawTama(game, view)
     local gap = 8
     local cw = math.floor((infoW - (cols - 1) * gap) / cols)
     local bh = self.touch and 38 or 32
-    local short = self.vh < 460
-    local infos, textH = {}, 0
-    for i, a in ipairs(TAMA_ACTIONS) do
-        local info = w:tendInfo(a[1], game.world)
-        infos[i] = info
-        local lines = short and { 'costs ' .. info.cost, info.have } or { info.does, 'costs ' .. info.cost, info.have }
-        local h = 0
-        for _, line in ipairs(lines) do
-            if short then h = h + th + 2 else
-                local _, ls = tiny:getWrap(line, cw - 8)
-                h = h + #ls * th + 2
-            end
-        end
-        textH = math.max(textH, h)
-    end
-    local cardH = bh + 4 + textH + 2
+    local infos = {}
+    for i, a in ipairs(TAMA_ACTIONS) do infos[i] = w:tendInfo(a[1], game.world) end
     local rows = math.ceil(#TAMA_ACTIONS / cols)
+    -- a card's words: in full (wrapped) or short (cost and what you have,
+    -- a line each)
+    local function cardHeight(compact)
+        local textH = 0
+        for _, info in ipairs(infos) do
+            local lines = compact and { 'costs ' .. info.cost, info.have } or { info.does, 'costs ' .. info.cost, info.have }
+            local h = 0
+            for _, line in ipairs(lines) do
+                if compact then h = h + th + 2 else
+                    local _, ls = tiny:getWrap(line, cw - 8)
+                    h = h + #ls * th + 2
+                end
+            end
+            textH = math.max(textH, h)
+        end
+        return bh + 4 + textH + 2
+    end
+    -- the baby always gets room: when the full cards would squeeze it out
+    -- (a phone held upright), the cards go short
+    local short = self.vh < 460
+    if not short and not wide then
+        local words = rows * cardHeight(false) + (rows - 1) * gap + (lh + 6) + #TAMA_NEEDS * (lh + 6) + 3 * lh + 16
+            + (game.tamaSandbox and 50 or 0)
+        local sceneRoom = (bottom - top) - words
+        if sceneRoom < math.max(130, ph * 0.26) then short = true end
+    end
+    local cardH = cardHeight(short)
     local cardsTop = bottom - rows * cardH - (rows - 1) * gap
     for i, a in ipairs(TAMA_ACTIONS) do
         local r, c = math.floor((i - 1) / cols), (i - 1) % cols
