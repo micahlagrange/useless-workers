@@ -276,41 +276,124 @@ function Worker:hasCaretaker()
     return false
 end
 
--- Tamagotchi mode: the player tends this baby. FEED eats a stored meal it
--- will eat, CLEAN uses a tuft of grass, NAP settles it down (sleep fills
--- while it naps), PLAY fills fun (and a baby that plays gets a bit grubby
--- and sleepy). Returns true if anything happened.
+-- Tamagotchi mode: the player tends this baby, on the colony's real numbers.
+-- tendInfo(action, world) says what a button does, what it costs, what the
+-- colony has to pay with and whether it can be done now; tend() does it and
+-- returns a line saying what happened.
+
+local FOOD_NAME = function(food) return (FOOD_WORDS and FOOD_WORDS[food]) or food end
+Worker.foodName = FOOD_NAME
+
+-- The stored meals this baby will eat, best liked first: { {food, n, taste} }
+function Worker:mealsFor(world)
+    local by = {}
+    for _, item in ipairs(world.items) do
+        if item.kind == ITEM_FOOD and self:willEat(item.food) then by[item.food] = (by[item.food] or 0) + 1 end
+    end
+    local out = {}
+    for food, n in pairs(by) do out[#out + 1] = { food = food, n = n, taste = self:taste(food) } end
+    local rank = { loved = 1, fine = 2, hated = 3 }
+    table.sort(out, function(a, b)
+        if rank[a.taste] ~= rank[b.taste] then return rank[a.taste] < rank[b.taste] end
+        return a.food < b.food
+    end)
+    return out
+end
+
+function Worker:tendInfo(action, world)
+    local n = self.needs
+    if action == 'feed' then
+        local meals = self:mealsFor(world)
+        local total = 0
+        local parts = {}
+        for _, m in ipairs(meals) do
+            total = total + m.n
+            parts[#parts + 1] = m.n .. ' ' .. FOOD_NAME(m.food)
+        end
+        local best = meals[1]
+        local gain = best and FOOD_VALUE[best.taste] or FOOD_VALUE.fine
+        return {
+            ok = total > 0,
+            does = '+' .. gain .. ' tummy' .. (best and best.taste == 'loved' and ', loved: a happier baby' or ''),
+            cost = '1 stored meal',
+            have = total > 0 and ('stashes: ' .. table.concat(parts, ', ')) or ('none it eats in the stashes; it loves ' .. FOOD_NAME(self.diet)),
+        }
+    elseif action == 'clean' then
+        local grass = world.stock.grass or 0
+        return {
+            ok = grass >= 1,
+            does = '+' .. TAMA_CLEAN .. ' clean',
+            cost = '1 grass',
+            have = grass >= 1 and ('you have ' .. grass .. ' grass') or 'no grass: gatherers pick it',
+        }
+    elseif action == 'play' then
+        return {
+            ok = true,
+            does = '+' .. TAMA_FUN .. ' fun, -' .. TAMA_PLAY_COST .. ' clean, -' .. TAMA_PLAY_COST .. ' sleep',
+            cost = 'free',
+            have = 'tiring, and a bit messy',
+        }
+    elseif action == 'nap' then
+        return {
+            ok = true,
+            does = '+10 sleep, then a nap',
+            cost = 'free',
+            have = self.tuckedIn and 'already tucked in' or 'naps in its nest after',
+        }
+    end
+    return { ok = false, does = '', cost = '', have = '' }
+end
+
 function Worker:tend(action, world)
     local n = self.needs
     if action == 'feed' then
+        local best = self:mealsFor(world)[1]
+        if not best then return nil end
         for _, item in ipairs(world.items) do
-            if item.kind == ITEM_FOOD and self:willEat(item.food) then
+            if item.kind == ITEM_FOOD and item.food == best.food then
+                local before = self.hunger
                 world:takeItem(item.x, item.y, item)
                 self:mealOf(item.food)
                 self:say('yum', 1.5)
-                return true
+                return string.format('Ate some %s (%s): tummy %d -> %d.', FOOD_NAME(best.food), best.taste, math.floor(before + 0.5), math.floor(self.hunger + 0.5))
             end
         end
-        return false
+        return nil
     elseif action == 'clean' then
-        if (world.stock.grass or 0) < 1 then return false end
+        if (world.stock.grass or 0) < 1 then return nil end
+        local before = n.clean
         world.stock.grass = world.stock.grass - 1
         n.clean = math.min(100, n.clean + TAMA_CLEAN)
         self:say('squeaky', 1.5)
-        return true
+        return string.format('A wash with a tuft of grass: clean %d -> %d. %d grass left.', math.floor(before + 0.5), math.floor(n.clean + 0.5), world.stock.grass)
     elseif action == 'nap' then
+        local before = n.sleep
         self.tuckedIn = true
         n.sleep = math.min(100, n.sleep + 10)
         self:say('zzz', 1.5)
-        return true
+        return string.format('Tucked in: sleep %d -> %d. It naps in its nest when you go back.', math.floor(before + 0.5), math.floor(n.sleep + 0.5))
     elseif action == 'play' then
+        local f = n.fun
         n.fun = math.min(100, n.fun + TAMA_FUN)
         n.clean = math.max(0, n.clean - TAMA_PLAY_COST)
         n.sleep = math.max(0, n.sleep - TAMA_PLAY_COST)
         self:say('hee hee', 1.5)
-        return true
+        return string.format('Played together: fun %d -> %d, a little grubbier and sleepier.', math.floor(f + 0.5), math.floor(n.fun + 0.5))
     end
-    return false
+    return nil
+end
+
+-- How a need reads, in a word: 'full', 'peckish', 'hungry', 'starving'...
+local NEED_WORDS = {
+    hunger = { 'starving', 'hungry', 'peckish', 'full' },
+    fun = { 'miserable', 'bored', 'content', 'delighted' },
+    clean = { 'filthy', 'grubby', 'fine', 'spotless' },
+    sleep = { 'exhausted', 'sleepy', 'awake', 'rested' },
+}
+function Worker.needWord(kind, v)
+    local w = NEED_WORDS[kind]
+    if v < 15 then return w[1] elseif v < 45 then return w[2] elseif v < 75 then return w[3] end
+    return w[4]
 end
 
 -- A caretaker's visit: play, clean, feed when hungry, tuck in when sleepy.

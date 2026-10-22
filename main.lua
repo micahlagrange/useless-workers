@@ -1015,6 +1015,7 @@ local function openTama(w)
     if not (w and w.alive and w:isBaby()) then return end
     game.tending = w
     game.tamaCan = tamaCan
+    game.tamaLast = nil
     state = 'tama'
     love.mouse.setVisible(true)
     Audio.playSFX('click')
@@ -1030,24 +1031,19 @@ end
 tamaCan = function(action)
     local b = game.tending
     if not b then return false end
-    if action == 'feed' then
-        for _, item in ipairs(game.world.items) do
-            if item.kind == ITEM_FOOD and b:willEat(item.food) then return true end
-        end
-        return false, 'Nothing in the stashes ' .. b.name .. ' will eat'
-    elseif action == 'clean' then
-        if (game.world.stock.grass or 0) >= 1 then return true end
-        return false, 'A wash needs a tuft of grass'
-    end
-    return true
+    local info = b:tendInfo(action, game.world)
+    return info.ok, info.have
 end
 
 local function pressTama(action)
     local b = game.tending
     if not (b and b.alive and b:isBaby()) then closeTama() return end
     local ok, why = tamaCan(action)
-    if not ok then ui:toast(why) return end
-    b:tend(action, game.world)
+    if not ok then
+        game.tamaLast = 'Can not: ' .. why .. '.'
+        return
+    end
+    game.tamaLast = b:tend(action, game.world)
     Audio.playSFX('click')
 end
 

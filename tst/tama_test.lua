@@ -107,4 +107,28 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     lu.assertTrue(b.tuckedIn)
 end
 
+
+function TestTama:test_it_says_what_each_action_does_and_costs()
+    local g = H.game()
+    local b = baby(g)
+    H.openTama(b)
+    g.world.stock.grass = 0
+    local info = b:tendInfo('clean', g.world)
+    lu.assertFalse(info.ok)
+    lu.assertEquals(info.cost, '1 grass')
+    lu.assertStrContains(info.have, 'no grass')
+    H.pressTama('clean')
+    lu.assertStrContains(g.tamaLast, 'no grass')
+    g.world.stock.grass = 3
+    info = b:tendInfo('clean', g.world)
+    lu.assertTrue(info.ok)
+    lu.assertStrContains(info.have, '3 grass')
+    H.pressTama('clean')
+    lu.assertStrContains(g.tamaLast, '2 grass left')
+    local feed = b:tendInfo('feed', g.world)
+    lu.assertEquals(feed.cost, '1 stored meal')
+    lu.assertStrContains(b:tendInfo('play', g.world).cost, 'free')
+    love.draw() -- the screen draws with all of it
+end
+
 os.exit(lu.LuaUnit.run())
