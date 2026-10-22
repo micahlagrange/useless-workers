@@ -1515,7 +1515,7 @@ function UI:drawTama(game, view)
     end
     love.graphics.setColor(1, 1, 1, 1)
     if game.tamaMenu == 'food' then self:drawTamaFoodBag(game, w)
-    elseif game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave' then self:drawTamaWake(game, w) end
+    elseif (game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave') and game.tamaNap then self:drawTamaWake(game, w) end
 end
 
 -- The food bag: every food in the stashes, how many, what this baby thinks

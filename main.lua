@@ -1069,6 +1069,8 @@ end
 local function finishNap()
     local nap, b = game.tamaNap, game.tending
     game.tamaNap = nil
+    -- it woke on its own: a 'wake it?' box still open has nothing to ask
+    if game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave' then game.tamaMenu = nil end
     if not (nap and b) then return end
     b.needs.sleep = 100
     game.tamaLast = b.name .. ' slept well: sleep ' .. math.floor(nap.from + 0.5) .. ' -> 100.'
