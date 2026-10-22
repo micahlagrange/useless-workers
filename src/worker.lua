@@ -300,6 +300,29 @@ function Worker:mealsFor(world)
     return out
 end
 
+-- How a baby takes to a food put down in front of it: 'love' (it knows
+-- and loves it: jumps right on it), 'hate' (knows it and hates it: yuck),
+-- 'ok' (knows it, it will do), or 'curious' (never seen it: creeps up,
+-- sniffs, nibbles, and then finds out). knownFoods remembers what it tried.
+function Worker:reactTo(food)
+    self.knownFoods = self.knownFoods or {}
+    local taste = self:taste(food)
+    if not self.knownFoods[food] then return 'curious', taste end
+    if taste == 'loved' then return 'love', taste end
+    if taste == 'hated' then return 'hate', taste end
+    return 'ok', taste
+end
+
+-- It tried the food: it knows it now, and eats it unless it hates it (and
+-- is not starving). Returns true if it ate.
+function Worker:tryFood(food)
+    self.knownFoods = self.knownFoods or {}
+    self.knownFoods[food] = true
+    if self:taste(food) == 'hated' and self.hunger >= HUNGER_STARVING then return false end
+    self:mealOf(food)
+    return true
+end
+
 function Worker:tendInfo(action, world)
     local n = self.needs
     if action == 'feed' then
@@ -347,15 +370,14 @@ end
 function Worker:tend(action, world)
     local n = self.needs
     if action == 'feed' then
+        -- the best-liked meal leaves the stash; the baby eats it on screen
+        -- (or not), see Worker:reactTo and tryFood
         local best = self:mealsFor(world)[1]
         if not best then return nil end
         for _, item in ipairs(world.items) do
             if item.kind == ITEM_FOOD and item.food == best.food then
-                local before = self.hunger
                 world:takeItem(item.x, item.y, item)
-                self:mealOf(item.food)
-                self:say('yum', 1.5)
-                return string.format('Ate some %s (%s): tummy %d -> %d.', FOOD_NAME(best.food), best.taste, math.floor(before + 0.5), math.floor(self.hunger + 0.5))
+                return 'Put some ' .. FOOD_NAME(best.food) .. ' down for ' .. self.name .. '.', best.food
             end
         end
         return nil

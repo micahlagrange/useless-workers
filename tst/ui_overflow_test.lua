@@ -187,6 +187,12 @@ local function playingScreens(tag)
             game.tending = w
             H.setState('tama')
             frame(tag .. ' tama ' .. w.name)
+            -- the test shelf, and a baby taking to a new food
+            game.tamaSandbox = true
+            game.tamaScene = { food = FOOD_KINDS[1], t = 1, kind = 'curious', taste = 'fine', side = 1 }
+            game.tamaLast = w.name .. ' has never seen steak before...'
+            frame(tag .. ' tama test ' .. w.name)
+            game.tamaScene, game.tamaSandbox, game.tamaLast = nil, nil, nil
             game.tending = nil
         end
     end

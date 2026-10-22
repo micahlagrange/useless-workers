@@ -750,6 +750,8 @@ function love.update(dt)
             end
         end
         ui:update(dt)
+    elseif state == 'tama' then
+        updateTamaScene(dt)
     elseif state == 'report' then
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
@@ -1016,13 +1018,16 @@ local function openTama(w)
     game.tending = w
     game.tamaCan = tamaCan
     game.tamaLast = nil
+    game.tamaScene = nil
     state = 'tama'
     love.mouse.setVisible(true)
     Audio.playSFX('click')
 end
 
 local function closeTama()
+    if game.tamaScene then finishScene() end
     game.tending = nil
+    game.tamaSandbox = nil
     state = 'playing'
     hideCursor()
 end
@@ -1035,16 +1040,85 @@ tamaCan = function(action)
     return info.ok, info.have
 end
 
+-- A food put down in front of the baby: it reacts (Worker:reactTo) and the
+-- screen plays it out (game.tamaScene, UI:drawTama); at the end it eats it
+-- or does not.
+local SCENE_SECONDS = { love = 1.6, ok = 2.2, curious = 4.6, hate = 2.6 }
+local function dropFood(food)
+    local b = game.tending
+    if not b then return end
+    local kind, taste = b:reactTo(food)
+    game.tamaScene = { food = food, t = 0, kind = kind, taste = taste, side = (game.tamaSide or 1) }
+    game.tamaSide = -(game.tamaSide or 1)
+    local name = Worker.foodName(food)
+    game.tamaLast = kind == 'love' and (b.name .. ' knows ' .. name .. ' and jumps right on it!')
+        or kind == 'hate' and (b.name .. ' remembers ' .. name .. '. Yuck!')
+        or kind == 'ok' and (b.name .. ' trots over to the ' .. name .. '.')
+        or (b.name .. ' has never seen ' .. name .. ' before...')
+end
+
+local function finishScene()
+    local sc, b = game.tamaScene, game.tending
+    game.tamaScene = nil
+    if not (sc and b) then return end
+    local before = b.hunger
+    local name = Worker.foodName(sc.food)
+    local ate = b:tryFood(sc.food)
+    local tummy = string.format(' Tummy %d -> %d.', math.floor(before + 0.5), math.floor(b.hunger + 0.5))
+    if not ate then
+        game.tamaLast = b.name .. ' will not touch the ' .. name .. ': it hates it.'
+    elseif sc.kind == 'curious' then
+        game.tamaLast = (sc.taste == 'loved' and ('A new favourite! ' .. b.name .. ' loves ' .. name .. '.')
+            or ('Not bad. ' .. b.name .. ' will eat ' .. name .. ' now.')) .. tummy
+    else
+        game.tamaLast = b.name .. ' ate the ' .. name .. (sc.taste == 'loved' and ', happily.' or '.') .. tummy
+    end
+end
+
+function updateTamaScene(dt)
+    local sc = game.tamaScene
+    if not sc then return end
+    sc.t = sc.t + dt
+    if sc.t >= SCENE_SECONDS[sc.kind] then finishScene() end
+end
+
 local function pressTama(action)
     local b = game.tending
     if not (b and b.alive and b:isBaby()) then closeTama() return end
+    if game.tamaScene then return end -- let it finish its meal
     local ok, why = tamaCan(action)
     if not ok then
         game.tamaLast = 'Can not: ' .. why .. '.'
         return
     end
-    game.tamaLast = b:tend(action, game.world)
+    local line, food = b:tend(action, game.world)
+    game.tamaLast = line
+    if food then dropFood(food) end
     Audio.playSFX('click')
+end
+
+-- DEV: every kind of resource, to test with: 20 of each material in the
+-- pile and one stored meal of every food (on stashes laid out near home).
+function stockUp()
+    if not game.world then return end
+    local st = game.world.stock
+    for _, k in ipairs({ 'logs', 'grass', 'leaves', 'gold' }) do st[k] = (st[k] or 0) + 20 end
+    local br = game.world.breakroom
+    local placed = 0
+    for r = 2, 6 do
+        for dy = -r, r do
+            for dx = -r, r do
+                if placed < #FOOD_KINDS and math.max(math.abs(dx), math.abs(dy)) == r then
+                    local x, y = br.x + dx, br.y + dy
+                    if game.world:canSite(SITE_STORAGE, x, y) and game.world:isReachable(x, y) then
+                        game.world:markStorage(x, y, STORAGE_FLOOR_CAPACITY)
+                        placed = placed + 1
+                        game.world:storeItem(ITEM_FOOD, x, y, FOOD_KINDS[placed])
+                    end
+                end
+            end
+        end
+    end
 end
 
 local function openJobs()
@@ -1316,6 +1390,22 @@ local function pointerPressed(x, y, button, istouch)
         if pb == 'title' then goToTitle() end
         return
     elseif state == 'tools' then
+        if pb == 'tamatest' then
+            -- a fresh meadow with Morphi, straight into Tamagotchi mode, with a
+            -- shelf of every food to put down for free
+            newGame(DEFAULT_SEED, 1)
+            closeGoal()
+            for _, w in ipairs(game.workers) do
+                if w:isBaby() then openTama(w) break end
+            end
+            game.tamaSandbox = true
+            return
+        elseif pb == 'stockup' then
+            stockUp()
+            ui:toast('Stocked up: 20 of every material, a meal of every food')
+            backTo(sub.toolsBack)
+            return
+        end
         if pb == 'fingers' then fingerDebug = not fingerDebug
         elseif pb == 'back' then backTo(sub.toolsBack) end
         return
@@ -1373,6 +1463,9 @@ local function pointerPressed(x, y, button, istouch)
     elseif state == 'tama' then
         if pb == 'tama:close' or (not pb and not ui:insideTamaPanel(vx, vy)) then
             closeTama()
+        elseif pb and pb:sub(1, 9) == 'tamafood:' then
+            -- the test harness's food shelf: any food, free
+            if not game.tamaScene then dropFood(pb:sub(10)) end
         elseif pb and pb:sub(1, 5) == 'tama:' then
             pressTama(pb:sub(6))
         end
@@ -1820,6 +1913,9 @@ if TEST_HOOKS then
         sub = sub,
         openJobs = function() openJobs() end,
         openTama = function(w) openTama(w) end,
+        dropFood = function(f) dropFood(f) end,
+        updateTamaScene = function(dt) updateTamaScene(dt) end,
+        stockUp = function() stockUp() end,
         pressTama = function(a) pressTama(a) end,
         pressJob = function(id) pressJob(id) end,
     }

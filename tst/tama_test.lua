@@ -100,6 +100,7 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     b.hunger = 20
     local before = g.world:storedCount(ITEM_FOOD)
     H.pressTama('feed')
+    H.updateTamaScene(6) -- it eats on screen
     lu.assertTrue(b.hunger > 20)
     lu.assertEquals(g.world:storedCount(ITEM_FOOD), before - 1)
     -- NAP tucks it in
@@ -129,6 +130,66 @@ function TestTama:test_it_says_what_each_action_does_and_costs()
     lu.assertEquals(feed.cost, '1 stored meal')
     lu.assertStrContains(b:tendInfo('play', g.world).cost, 'free')
     love.draw() -- the screen draws with all of it
+end
+
+
+TestFoodFeelings = {}
+
+function TestFoodFeelings:test_new_foods_make_it_curious_then_it_knows()
+    H.newGame('PUPPER', 1)
+    local g = H.game()
+    local b = baby(g)
+    H.openTama(b)
+    -- never seen its favourite: curious first
+    lu.assertEquals((b:reactTo(b.diet)), 'curious')
+    H.dropFood(b.diet)
+    lu.assertEquals(g.tamaScene.kind, 'curious')
+    b.hunger = 30
+    H.updateTamaScene(6)
+    lu.assertNil(g.tamaScene)
+    lu.assertTrue(b.hunger > 30, 'it ate it')
+    lu.assertStrContains(g.tamaLast, 'new favourite')
+    -- now it knows it: it jumps right on it
+    lu.assertEquals((b:reactTo(b.diet)), 'love')
+    -- a food it hates: curious, then yuck, and it is not eaten
+    H.dropFood(b.hates)
+    b.hunger = 30
+    H.updateTamaScene(6)
+    lu.assertEquals(b.hunger, 30)
+    lu.assertStrContains(g.tamaLast, 'hates')
+    lu.assertEquals((b:reactTo(b.hates)), 'hate')
+    -- a food that will do: ok once known
+    local other
+    for _, f in ipairs(FOOD_KINDS) do if f ~= b.diet and f ~= b.hates then other = f break end end
+    H.dropFood(other); H.updateTamaScene(6)
+    lu.assertEquals((b:reactTo(other)), 'ok')
+end
+
+function TestFoodFeelings:test_the_test_harness_and_stocking_up()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    H.stockUp()
+    lu.assertTrue(g.world.stock.grass >= 20 and g.world.stock.leaves >= 20 and g.world.stock.logs >= 20)
+    local foods = {}
+    for _, it in ipairs(g.world.items) do if it.kind == ITEM_FOOD then foods[it.food] = true end end
+    for _, f in ipairs(FOOD_KINDS) do lu.assertTrue(foods[f], 'a stored ' .. f) end
+    -- the harness: Morphi on the Tamagotchi screen with a shelf of every food
+    H.setState('tools')
+    love.draw()
+    local ui = H.ui()
+    local tb
+    for _, b in ipairs(ui.panelButtons) do if b.id == 'tamatest' then tb = b end end
+    lu.assertNotNil(tb, 'TAMA TEST in the tester tools')
+    love.mousepressed((tb.x + tb.w / 2) * ui.scale, (tb.y + tb.h / 2) * ui.scale, 1, false)
+    g = H.game()
+    lu.assertEquals(H.state(), 'tama')
+    lu.assertTrue(g.tamaSandbox)
+    love.draw()
+    local shelf = 0
+    for _, b in ipairs(ui.panelButtons) do if b.id:sub(1, 9) == 'tamafood:' then shelf = shelf + 1 end end
+    lu.assertEquals(shelf, #FOOD_KINDS)
+    H.setState('playing')
 end
 
 os.exit(lu.LuaUnit.run())

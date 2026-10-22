@@ -1261,110 +1261,247 @@ function UI:jobsButtonDraw(r, label)
     self.jobsButton = r
 end
 
--- Tamagotchi mode: one baby in its nest, with everything it needs said
--- plainly: each need as a bar with its number and a word, what it eats,
--- and for each action what it does, what it costs and what the colony has
--- to pay with (from Worker:tendInfo). The meadow is paused. Actions are
--- panel buttons 'tama:feed', 'tama:play', 'tama:clean', 'tama:nap';
--- MEADOW is 'tama:close'.
+-- Tamagotchi mode: one baby in its nest. The scene shows it, any food put
+-- down in front of it, and how it takes to the food: hearts and a hop for
+-- a food it loves, a question mark and a careful creep for one it has
+-- never seen, a green yuck for one it hates. Around it: its needs (bar,
+-- number, word), what it eats, and a card per action saying what it does,
+-- costs and what you have (Worker:tendInfo). On a wide short screen the
+-- scene is on the left and the rest on the right. In the test harness
+-- (game.tamaSandbox) a shelf of every food sits under the scene: tap one
+-- to put it down for free. Buttons: 'tama:feed' 'tama:clean' 'tama:play'
+-- 'tama:nap', 'tamafood:<food>', 'tama:close' (MEADOW).
 local TAMA_ACTIONS = { { 'feed', 'FEED' }, { 'clean', 'CLEAN' }, { 'play', 'PLAY' }, { 'nap', 'NAP' } }
 local TAMA_NEEDS = { { 'hunger', 'TUMMY' }, { 'fun', 'FUN' }, { 'clean', 'CLEAN' }, { 'sleep', 'SLEEP' } }
+
+local function heart(x, y, s, a)
+    love.graphics.setColor(0.95, 0.4, 0.55, a)
+    love.graphics.circle('fill', x - s * 0.25, y, s * 0.3)
+    love.graphics.circle('fill', x + s * 0.25, y, s * 0.3)
+    love.graphics.polygon('fill', x - s * 0.53, y + s * 0.08, x + s * 0.53, y + s * 0.08, x, y + s * 0.6)
+end
+
+local function yuckFace(x, y, s, a)
+    love.graphics.setColor(0.55, 0.78, 0.35, a)
+    love.graphics.circle('fill', x, y, s * 0.5)
+    love.graphics.setColor(0.2, 0.3, 0.15, a)
+    love.graphics.rectangle('fill', x - s * 0.22, y - s * 0.18, s * 0.1, s * 0.1)
+    love.graphics.rectangle('fill', x + s * 0.12, y - s * 0.18, s * 0.1, s * 0.1)
+    love.graphics.setLineWidth(math.max(1, s * 0.07))
+    love.graphics.line(x - s * 0.25, y + s * 0.2, x - s * 0.1, y + s * 0.1, x, y + s * 0.2, x + s * 0.1, y + s * 0.1, x + s * 0.25, y + s * 0.2)
+    love.graphics.setLineWidth(1)
+end
+
+-- Where the baby is, how it is squashed, and the feeling over its head, at
+-- time t into a scene. Returns dx (0 home, 1 at the food), lift (0-1), the
+-- squash, and a list of {kind, a, rise} emotes.
+local function sceneState(sc)
+    if not sc then return 0, 0, 1, {} end
+    local t = sc.t
+    if sc.kind == 'love' then
+        if t < 0.5 then
+            local f = t / 0.5
+            return f, math.sin(f * math.pi), 1.1, { { 'heart', 1, f } }
+        end
+        local m = (t - 0.5) / 1.1
+        return 1, 0, 1 + 0.12 * math.sin(t * 18), { { 'heart', 1 - m * 0.5, 0.4 + m }, { 'heart', 1 - m, 0.1 + m } }
+    elseif sc.kind == 'ok' then
+        if t < 1 then return t * 0.85, math.abs(math.sin(t * 9)) * 0.15, 1, {} end
+        return 0.85, 0, 1 + 0.08 * math.sin(t * 16), { { 'smile', 1, (t - 1) } }
+    elseif sc.kind == 'curious' then
+        if t < 2 then return t / 2 * 0.7, 0, 0.92, { { 'question', 1, 0 } } end
+        if t < 2.8 then return 0.7 + 0.05 * math.sin(t * 20), 0, 0.92, { { 'question', 1, 0.1 } } end
+        if t < 3.4 then return 0.8, 0, 1 + 0.06 * math.sin(t * 14), {} end
+        local m = (t - 3.4) / 1.2
+        if sc.taste == 'hated' then return 0.8 - m * 0.8, 0, 0.9 + 0.08 * math.sin(t * 30), { { 'yuck', 1, m * 0.5 } } end
+        if sc.taste == 'loved' then return 0.85, math.abs(math.sin(m * math.pi * 2)) * 0.5, 1.05, { { 'exclaim', 1 - m * 0.4, 0 }, { 'heart', 1 - m, m } } end
+        return 0.8, 0, 1 + 0.08 * math.sin(t * 16), { { 'smile', 1, m * 0.5 } }
+    elseif sc.kind == 'hate' then
+        local back = math.min(1, t / 0.6)
+        return -0.35 * back, 0, 0.9 + 0.06 * math.sin(t * 30), { { 'yuck', 1, math.min(1, t / 2) * 0.4 } }
+    end
+    return 0, 0, 1, {}
+end
+
+local function drawEmote(self, kind, x, y, s, a)
+    if kind == 'heart' then heart(x, y, s, a)
+    elseif kind == 'yuck' then yuckFace(x, y, s, a)
+    else
+        local glyph = kind == 'question' and '?' or (kind == 'exclaim' and '!' or ':)')
+        local f = self.fonts.big
+        local w = f:getWidth(glyph) + 12
+        love.graphics.setColor(1, 1, 1, 0.9 * a)
+        love.graphics.rectangle('fill', x - w / 2, y - f:getHeight() / 2 - 4, w, f:getHeight() + 8, 6, 6)
+        love.graphics.setFont(f)
+        love.graphics.setColor(0.25, 0.2, 0.3, a)
+        love.graphics.print(glyph, x - f:getWidth(glyph) / 2, y - f:getHeight() / 2)
+    end
+end
+
+function UI:drawTamaScene(game, view, w, sx, sy, sw, sh)
+    local sc = game.tamaScene
+    local cx = sx + sw / 2
+    local ny = sy + sh * 0.68
+    local nestW = math.min(sw * 0.26, sh * 0.5)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.ellipse('fill', cx, ny, nestW, nestW * 0.42)
+    love.graphics.setColor(0.95, 0.88, 0.68)
+    love.graphics.ellipse('fill', cx, ny - nestW * 0.04, nestW * 0.72, nestW * 0.26)
+    local side = sc and sc.side or 1
+    local foodX = cx + side * nestW * 1.55
+    local scale = math.max(2, math.min(8, math.floor(math.min(sh * 0.55, nestW * 1.2) / 16)))
+    if sc then
+        -- the food on the ground beside the nest (gone once eaten, faded if refused)
+        local img = self.foodImages[sc.food]
+        local fa = 1
+        if sc.kind == 'hate' then fa = math.max(0.3, 1 - math.max(0, sc.t - 1.6)) end
+        local eating = (sc.kind == 'love' and sc.t > 0.6) or (sc.kind == 'ok' and sc.t > 1.2) or (sc.kind == 'curious' and sc.t > 3.4 and sc.taste ~= 'hated')
+        local fs = scale * 10
+        if eating then fs = fs * math.max(0.2, 1 - (sc.t % 1)) end
+        if img then
+            love.graphics.setColor(1, 1, 1, fa)
+            love.graphics.draw(img, foodX - fs / 2, ny - fs * 0.6, 0, fs / 16, fs / 16)
+        end
+    end
+    local dx, lift, sq, emotes = sceneState(sc)
+    local bx = cx + dx * (foodX - cx) * 0.75
+    local by = ny - nestW * 0.05 - lift * scale * 8
+    local t = love.timer.getTime()
+    if not sc then
+        local napping = w.state == 'breaking' or w.tuckedIn
+        sq = napping and 0.85 or (1 + 0.05 * math.sin(t * 4))
+        by = by + (napping and 0 or math.sin(t * 3) * scale * 0.5)
+    end
+    local sheet = view and view.sheets[w.sheet]
+    if sheet then
+        love.graphics.setColor(1, 1, 1, 1)
+        local face = (sc and side < 0) and -1 or 1
+        love.graphics.draw(sheet.image, sheet.quads[1], bx, by, 0, face * scale * (2 - sq), scale * sq, 8, 16)
+    end
+    -- the feeling over its head
+    for i, e in ipairs(emotes) do
+        local ex = bx + (i - 1) * scale * 5 - (#emotes - 1) * scale * 2.5
+        local ey = by - scale * 19 - e[3] * scale * 6
+        drawEmote(self, e[1], ex, ey, scale * 5, math.max(0, math.min(1, e[2])))
+    end
+end
+
 function UI:drawTama(game, view)
     local w = game.tending
     if not (w and w.alive and w:isBaby()) then return end
     local small, tiny, hud = self.fonts.small, self.fonts.tiny, self.fonts.hud
     local lh, th = small:getHeight(), tiny:getHeight()
-    local x, y, pw, ph = self:panel(math.min(620, self.vw - 16), self.vh - 16)
+    local wide = self.vw > self.vh * 1.25
+    local x, y, pw, ph = self:panel(wide and math.min(980, self.vw - 16) or math.min(620, self.vw - 16), self.vh - 16)
     self.tamaPanel = { x = x, y = y, w = pw, h = ph }
-    local inner = pw - 36
-    local lx = x + 18
     -- header: name, MEADOW
     local btnW = math.max(110, small:getWidth('MEADOW') + 28)
     self:panelButton('tama:close', { x = x + pw - btnW - 14, y = y + 10, w = btnW, h = 32 }, 'MEADOW', false)
-    self:printLine(w.name, lx, y + 12, pw - btnW - 46, 'left', C.good, { self.fonts.big, hud, small })
-    local cy = y + 48
-    local left = math.max(0, math.ceil(BABY_SECONDS - w.age))
-    local doing = w.state == 'breaking' and 'napping' or (w.tuckedIn and 'tucked in' or 'awake')
-    cy = cy + self:printWrap('Baby ' .. w.species .. ', ' .. doing .. ', grows up in ' .. math.floor(left / 60) .. ':' .. string.format('%02d', left % 60)
-        .. '. The meadow waits while you tend.', lx, cy, inner, C.dim, { small, tiny }, 2) + 4
-    cy = cy + self:printWrap('Eats: loves ' .. Worker.foodName(w.diet) .. ', will not eat ' .. Worker.foodName(w.hates) .. ' unless starving.',
-        lx, cy, inner, C.dim, { small, tiny }, 2) + 8
-    -- the actions at the bottom: a card each, button on top, then what it
-    -- does, what it costs, what you have
-    local cols = pw >= 520 and 4 or 2
+    self:printLine(w.name .. (game.tamaSandbox and '  (test)' or ''), x + 18, y + 12, pw - btnW - 46, 'left', C.good, { self.fonts.big, hud, small })
+    local top = y + 48
+    -- columns: the scene, and the words; on a wide screen side by side
+    local sceneX, sceneW, infoX, infoW
+    if wide then
+        sceneX, sceneW = x + 18, math.floor((pw - 36) * 0.42)
+        infoX, infoW = sceneX + sceneW + 16, pw - 36 - sceneW - 16
+    else
+        sceneX, sceneW, infoX, infoW = x + 18, pw - 36, x + 18, pw - 36
+    end
+    local bottom = y + ph - 14
+    -- the words, from the bottom up: cards, the last line, the needs
+    local cols = (wide and infoW >= 460 or (not wide and infoW >= 520)) and 4 or 2
     local gap = 8
-    local cw = math.floor((inner - (cols - 1) * gap) / cols)
-    local bh = self.touch and 40 or 34
-    -- each card as tall as its words need (they wrap on a narrow screen)
+    local cw = math.floor((infoW - (cols - 1) * gap) / cols)
+    local bh = self.touch and 38 or 32
+    local short = self.vh < 460
     local infos, textH = {}, 0
     for i, a in ipairs(TAMA_ACTIONS) do
         local info = w:tendInfo(a[1], game.world)
         infos[i] = info
+        local lines = short and { 'costs ' .. info.cost, info.have } or { info.does, 'costs ' .. info.cost, info.have }
         local h = 0
-        for _, line in ipairs({ info.does, 'costs ' .. info.cost, info.have }) do
-            local _, ls = tiny:getWrap(line, cw - 8)
-            h = h + #ls * th + 2
+        for _, line in ipairs(lines) do
+            if short then h = h + th + 2 else
+                local _, ls = tiny:getWrap(line, cw - 8)
+                h = h + #ls * th + 2
+            end
         end
         textH = math.max(textH, h)
     end
-    local cardH = bh + 4 + textH + 4
+    local cardH = bh + 4 + textH + 2
     local rows = math.ceil(#TAMA_ACTIONS / cols)
-    local cardsTop = y + ph - 14 - rows * cardH - (rows - 1) * gap
-    -- what just happened, above the cards
-    local lastH = game.tamaLast and (lh + 8) or 0
-    local needsH = #TAMA_NEEDS * (lh + 8)
-    local needsTop = cardsTop - lastH - 8 - needsH
-    -- the baby in its nest in whatever room is left (none on a short screen)
-    local picRoom = needsTop - 8 - cy
-    if picRoom >= 60 then
-        local cx, ny = x + pw / 2, cy + picRoom * 0.66
-        local nestW = math.min(pw * 0.3, picRoom * 0.55)
-        love.graphics.setColor(0.6, 0.45, 0.28)
-        love.graphics.ellipse('fill', cx, ny, nestW, nestW * 0.42)
-        love.graphics.setColor(0.95, 0.88, 0.68)
-        love.graphics.ellipse('fill', cx, ny - nestW * 0.04, nestW * 0.72, nestW * 0.26)
-        local sheet = view and view.sheets[w.sheet]
-        if sheet then
-            local t = love.timer.getTime()
-            local scale = math.max(2, math.min(10, math.floor(math.min(picRoom * 0.75, nestW * 1.3) / 16)))
-            local napping = w.state == 'breaking' or w.tuckedIn
-            local bob = napping and 0 or math.sin(t * 3) * scale * 0.5
-            local sq = napping and 0.85 or (1 + 0.05 * math.sin(t * 4))
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(sheet.image, sheet.quads[1], cx, ny - nestW * 0.05 + bob, 0, scale * (2 - sq), scale * sq, 8, 16)
-        end
-    end
-    -- the needs: a bar, the number, and a word
-    local labelW = small:getWidth('TUMMY') + 12
-    local valueW = small:getWidth('100 delighted') + 10
-    for i, nd in ipairs(TAMA_NEEDS) do
-        local v = nd[1] == 'hunger' and w.hunger or w.needs[nd[1]]
-        local ry = needsTop + (i - 1) * (lh + 8)
-        self:printLine(nd[2], lx, ry, labelW, 'left', C.text, { small })
-        local bx, bwid = lx + labelW, inner - labelW - valueW
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle('fill', bx, ry + 1, bwid, lh)
-        local f = math.max(0, math.min(1, v / 100))
-        local col = f > 0.6 and C.good or (f > 0.3 and C.amber or C.warn)
-        setColor(col)
-        love.graphics.rectangle('fill', bx, ry + 1, bwid * f, lh)
-        self:printLine(math.floor(v + 0.5) .. ' ' .. Worker.needWord(nd[1], v), bx + bwid + 8, ry, valueW - 8, 'left', col, { small, tiny })
-    end
-    if game.tamaLast then
-        self:printLine(game.tamaLast, lx, cardsTop - lastH - 4, inner, 'left', C.good, { small, tiny })
-    end
-    -- the cards
+    local cardsTop = bottom - rows * cardH - (rows - 1) * gap
     for i, a in ipairs(TAMA_ACTIONS) do
         local r, c = math.floor((i - 1) / cols), (i - 1) % cols
-        local cx0, cy0 = lx + c * (cw + gap), cardsTop + r * (cardH + gap)
+        local cx0, cy0 = infoX + c * (cw + gap), cardsTop + r * (cardH + gap)
         local info = infos[i]
         love.graphics.setColor(0, 0, 0, 0.3)
         love.graphics.rectangle('fill', cx0, cy0, cw, cardH)
-        self:panelButton('tama:' .. a[1], { x = cx0, y = cy0, w = cw, h = bh }, a[2], false, (not info.ok) and C.dim or nil)
+        self:panelButton('tama:' .. a[1], { x = cx0, y = cy0, w = cw, h = bh }, a[2], false, (not info.ok or game.tamaScene) and C.dim or nil)
         local ty = cy0 + bh + 4
-        ty = ty + self:printWrap(info.does, cx0 + 4, ty, cw - 8, C.text, { tiny }, 3) + 2
-        ty = ty + self:printWrap('costs ' .. info.cost, cx0 + 4, ty, cw - 8, C.amber, { tiny }, 3) + 2
-        self:printWrap(info.have, cx0 + 4, ty, cw - 8, info.ok and C.dim or C.warn, { tiny }, 3)
+        if short then
+            self:printLine('costs ' .. info.cost, cx0 + 4, ty, cw - 8, 'left', C.amber, { tiny })
+            self:printLine(info.have, cx0 + 4, ty + th + 2, cw - 8, 'left', info.ok and C.dim or C.warn, { tiny })
+        else
+            ty = ty + self:printWrap(info.does, cx0 + 4, ty, cw - 8, C.text, { tiny }, 3) + 2
+            ty = ty + self:printWrap('costs ' .. info.cost, cx0 + 4, ty, cw - 8, C.amber, { tiny }, 3) + 2
+            self:printWrap(info.have, cx0 + 4, ty, cw - 8, info.ok and C.dim or C.warn, { tiny }, 3)
+        end
+    end
+    local ry = cardsTop - 6
+    if game.tamaLast then
+        ry = ry - lh
+        self:printLine(game.tamaLast, infoX, ry, infoW, 'left', C.good, { small, tiny })
+        ry = ry - 6
+    end
+    local labelW = small:getWidth('TUMMY') + 12
+    local valueW = small:getWidth('100 delighted') + 10
+    ry = ry - #TAMA_NEEDS * (lh + 6)
+    for i, nd in ipairs(TAMA_NEEDS) do
+        local v = nd[1] == 'hunger' and w.hunger or w.needs[nd[1]]
+        local yy = ry + (i - 1) * (lh + 6)
+        self:printLine(nd[2], infoX, yy, labelW, 'left', C.text, { small })
+        local bx, bwid = infoX + labelW, infoW - labelW - valueW
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle('fill', bx, yy + 1, bwid, lh)
+        local f = math.max(0, math.min(1, v / 100))
+        local col = f > 0.6 and C.good or (f > 0.3 and C.amber or C.warn)
+        setColor(col)
+        love.graphics.rectangle('fill', bx, yy + 1, bwid * f, lh)
+        self:printLine(math.floor(v + 0.5) .. ' ' .. Worker.needWord(nd[1], v), bx + bwid + 8, yy, valueW - 8, 'left', col, { small, tiny })
+    end
+    -- about the baby, at the top of the words column
+    local left = math.max(0, math.ceil(BABY_SECONDS - w.age))
+    local doing = w.state == 'breaking' and 'napping' or (w.tuckedIn and 'tucked in' or 'awake')
+    local about = 'Baby ' .. w.species .. ', ' .. doing .. ', grows up in ' .. math.floor(left / 60) .. ':' .. string.format('%02d', left % 60) .. '. The meadow waits while you tend.'
+    local eats = 'Loves ' .. Worker.foodName(w.diet) .. ', hates ' .. Worker.foodName(w.hates) .. '.'
+    local iy = top
+    local aboutRoom = ry - 8 - top
+    if aboutRoom >= 2 * lh + 6 then
+        iy = iy + self:printWrap(about, infoX, iy, infoW, C.dim, { small, tiny }, 2) + 4
+        if ry - 8 - iy >= lh then self:printLine(eats, infoX, iy, infoW, 'left', C.dim, { small, tiny }); iy = iy + lh + 6 end
+    elseif aboutRoom >= lh then
+        self:printLine(eats, infoX, iy, infoW, 'left', C.dim, { small, tiny }); iy = iy + lh + 6
+    end
+    -- the scene: beside the words, or between the top lines and the needs
+    local sceneTop = wide and top or iy
+    local sceneBottom = wide and bottom or (ry - 8)
+    if game.tamaSandbox then
+        -- the test shelf: every food, free
+        local n = #FOOD_KINDS
+        local fsz = math.min(44, math.floor((sceneW - (n - 1) * 6) / n))
+        local fy = sceneBottom - fsz
+        for i, food in ipairs(FOOD_KINDS) do
+            local fx = sceneX + (i - 1) * (fsz + 6)
+            love.graphics.setColor(0, 0, 0, 0.35)
+            love.graphics.rectangle('fill', fx, fy, fsz, fsz)
+            self:iconFoodKind(food, fx + 4, fy + 4, fsz - 8)
+            self.panelButtons[#self.panelButtons + 1] = { id = 'tamafood:' .. food, x = fx, y = fy, w = fsz, h = fsz }
+        end
+        sceneBottom = fy - 6
+    end
+    if sceneBottom - sceneTop >= 48 then
+        self:drawTamaScene(game, view, w, sceneX, sceneTop, sceneW, sceneBottom - sceneTop)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -2262,12 +2399,16 @@ end
 
 -- The tester's corner: FINGERS, and the run's audit log.
 function UI:drawTools(fingerDebug)
-    local x, y, pw, ph = self:panel(620, 300)
+    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44))
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     self:centeredFit('For finding bugs and tuning the meadow.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
     local bx = x + math.floor((pw - bw) / 2)
     self:panelButton('fingers', { x = bx, y = y + 110, w = bw, h = bh }, fingerDebug and 'FINGERS: ON' or 'FINGERS: OFF', fingerDebug)
+    -- Tamagotchi test harness, and every resource for testing
+    local hw = math.floor((bw - 8) / 2)
+    self:panelButton('tamatest', { x = bx, y = y + 118 + bh, w = hw, h = bh }, 'TAMA TEST', false)
+    self:panelButton('stockup', { x = bx + hw + 8, y = y + 118 + bh, w = hw, h = bh }, 'STOCK UP', false)
     self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
