@@ -195,7 +195,18 @@ local function playingScreens(tag)
             game.tamaScene = nil
             game.tamaNap = { t = 3, from = 40 }
             frame(tag .. ' tama nap ' .. w.name)
-            game.tamaNap = nil
+            game.tamaMenu = 'wakeLeave'
+            frame(tag .. ' tama wake ' .. w.name)
+            game.tamaMenu, game.tamaNap = nil, nil
+            game.tamaMenu = 'food'
+            frame(tag .. ' tama bag test ' .. w.name)
+            game.tamaSandbox = nil
+            frame(tag .. ' tama bag ' .. w.name)
+            game.tamaMenu = nil
+            game.tamaToss = { food = FOOD_KINDS[2], t = 0.3, side = 1 }
+            game.tamaDelta = { what = 'meals', t = 0.5 }
+            frame(tag .. ' tama toss ' .. w.name)
+            game.tamaToss, game.tamaDelta = nil, nil
             game.tamaScene, game.tamaSandbox, game.tamaLast = nil, nil, nil
             game.tending = nil
         end

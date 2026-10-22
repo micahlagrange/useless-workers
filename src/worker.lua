@@ -323,6 +323,29 @@ function Worker:tryFood(food)
     return true
 end
 
+-- What this baby thinks of a food, for the food bag: a word, and the
+-- tummy a meal of it gives ('loves it' +70, 'likes it' +35, 'hates it',
+-- 'never tried').
+function Worker:opinionOf(food)
+    self.knownFoods = self.knownFoods or {}
+    local taste = self:taste(food)
+    if not self.knownFoods[food] then return 'never tried', FOOD_VALUE[taste], taste end
+    if taste == 'loved' then return 'loves it', FOOD_VALUE.loved, taste end
+    if taste == 'hated' then return 'hates it', 0, taste end
+    return 'likes it', FOOD_VALUE.fine, taste
+end
+
+-- Every food in the stashes, kind by kind: { {food, n} }, most first.
+function Worker.pantry(world)
+    local by, out = {}, {}
+    for _, item in ipairs(world.items) do
+        if item.kind == ITEM_FOOD then by[item.food] = (by[item.food] or 0) + 1 end
+    end
+    for food, n in pairs(by) do out[#out + 1] = { food = food, n = n } end
+    table.sort(out, function(a, b) if a.n ~= b.n then return a.n > b.n end return a.food < b.food end)
+    return out
+end
+
 function Worker:tendInfo(action, world)
     local n = self.needs
     if action == 'feed' then

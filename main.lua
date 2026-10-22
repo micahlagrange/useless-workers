@@ -1020,6 +1020,9 @@ local function openTama(w)
     game.tamaLast = nil
     game.tamaScene = nil
     game.tamaNap = nil
+    game.tamaToss = nil
+    game.tamaMenu = nil
+    game.tamaDelta = nil
     state = 'tama'
     love.mouse.setVisible(true)
     Audio.playSFX('click')
@@ -1027,6 +1030,8 @@ end
 
 local wakeNap
 local function closeTama()
+    if game.tamaToss then game.tamaToss = nil end
+    game.tamaMenu = nil
     if game.tamaScene then finishScene() end
     if game.tamaNap then wakeNap() end -- leaving wakes it: no rest
     game.tending = nil
@@ -1104,7 +1109,20 @@ local function finishScene()
     end
 end
 
+local TOSS_SECONDS = 0.6 -- a tossed food's flight
 function updateTamaScene(dt)
+    if game.tamaDelta then
+        game.tamaDelta.t = game.tamaDelta.t + dt
+        if game.tamaDelta.t > 1.5 then game.tamaDelta = nil end
+    end
+    local toss = game.tamaToss
+    if toss then
+        toss.t = toss.t + dt
+        if toss.t >= TOSS_SECONDS then
+            game.tamaToss = nil
+            dropFood(toss.food)
+        end
+    end
     local nap = game.tamaNap
     if nap then
         nap.t = nap.t + dt
@@ -1116,11 +1134,40 @@ function updateTamaScene(dt)
     if sc.t >= SCENE_SECONDS[sc.kind] then finishScene() end
 end
 
+-- A food pulled out of the bag and tossed to the baby: it flies over in an
+-- arc (game.tamaToss) and lands by the nest, then the baby takes to it
+-- (dropFood). From a stash it is one meal fewer; in the test harness, free.
+local function tossFood(food)
+    local b = game.tending
+    if not b or game.tamaScene or game.tamaToss or game.tamaNap then return end
+    if not game.tamaSandbox then
+        local took = false
+        for _, item in ipairs(game.world.items) do
+            if item.kind == ITEM_FOOD and item.food == food then
+                game.world:takeItem(item.x, item.y, item)
+                took = true
+                break
+            end
+        end
+        if not took then return end
+        game.tamaDelta = { what = 'meals', t = 0 }
+    end
+    game.tamaMenu = nil
+    game.tamaToss = { food = food, t = 0, side = game.tamaSide or 1 }
+    game.tamaLast = 'You toss some ' .. Worker.foodName(food) .. ' to ' .. b.name .. '...'
+    Audio.playSFX('click')
+end
+
 local function pressTama(action)
     local b = game.tending
     if not (b and b.alive and b:isBaby()) then closeTama() return end
-    if game.tamaScene then return end -- let it finish its meal
-    if action == 'nap' and game.tamaNap then wakeNap() return end -- the button reads WAKE while it sleeps
+    if game.tamaScene or game.tamaToss then return end -- let it finish its meal
+    if action == 'nap' and game.tamaNap then game.tamaMenu = 'wake' return end -- WAKE: check first
+    if action == 'food' then
+        if game.tamaNap then game.tamaLast = 'Can not: ' .. b.name .. ' is asleep.' return end
+        game.tamaMenu = 'food'
+        return
+    end
     local ok, why = tamaCan(action)
     if not ok then
         game.tamaLast = 'Can not: ' .. why .. '.'
@@ -1131,8 +1178,10 @@ local function pressTama(action)
         Audio.playSFX('click')
         return
     end
+    local grassBefore = game.world.stock.grass or 0
     local line, food = b:tend(action, game.world)
     game.tamaLast = line
+    if (game.world.stock.grass or 0) < grassBefore then game.tamaDelta = { what = 'grass', t = 0 } end
     if food then dropFood(food) end
     Audio.playSFX('click')
 end
@@ -1436,8 +1485,16 @@ local function pointerPressed(x, y, button, istouch)
             newGame(DEFAULT_SEED, 1)
             closeGoal()
             for _, w in ipairs(game.workers) do
-                if w:isBaby() then openTama(w) break end
+                if w:isBaby() then
+                    -- a bit hungry, bored, grubby and sleepy, so every
+                    -- button has something to do; some grass to wash with
+                    w.hunger = 40
+                    w.needs.fun, w.needs.clean, w.needs.sleep = 50, 50, 40
+                    openTama(w)
+                    break
+                end
             end
+            game.world.stock.grass = math.max(game.world.stock.grass or 0, 10)
             game.tamaSandbox = true
             return
         elseif pb == 'stockup' then
@@ -1501,11 +1558,23 @@ local function pointerPressed(x, y, button, istouch)
         end
         return
     elseif state == 'tama' then
+        if game.tamaMenu == 'food' then
+            if pb and pb:sub(1, 9) == 'tamafood:' then tossFood(pb:sub(10))
+            elseif pb == 'tamamenu:close' or not ui:insideTamaMenu(vx, vy) then game.tamaMenu = nil end
+            return
+        elseif game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave' then
+            if pb == 'tamawake:yes' then
+                local leave = game.tamaMenu == 'wakeLeave'
+                game.tamaMenu = nil
+                wakeNap()
+                if leave then closeTama() end
+            elseif pb == 'tamawake:no' or not ui:insideTamaMenu(vx, vy) then
+                game.tamaMenu = nil
+            end
+            return
+        end
         if pb == 'tama:close' or (not pb and not ui:insideTamaPanel(vx, vy)) then
-            closeTama()
-        elseif pb and pb:sub(1, 9) == 'tamafood:' then
-            -- the test harness's food shelf: any food, free
-            if not game.tamaScene and not game.tamaNap then dropFood(pb:sub(10)) end
+            if game.tamaNap then game.tamaMenu = 'wakeLeave' else closeTama() end
         elseif pb and pb:sub(1, 5) == 'tama:' then
             pressTama(pb:sub(6))
         end
@@ -1845,7 +1914,11 @@ function love.keypressed(key)
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
     elseif state == 'tama' then
-        if key == 'escape' or key == 'j' then closeTama() end
+        if key == 'escape' or key == 'j' then
+            if game.tamaMenu then game.tamaMenu = nil
+            elseif game.tamaNap then game.tamaMenu = 'wakeLeave'
+            else closeTama() end
+        end
     elseif state == 'jobs' then
         if key == 'j' or key == 'escape' then
             closeJobs()
@@ -1954,6 +2027,7 @@ if TEST_HOOKS then
         openJobs = function() openJobs() end,
         openTama = function(w) openTama(w) end,
         dropFood = function(f) dropFood(f) end,
+        tossFood = function(f) tossFood(f) end,
         updateTamaScene = function(dt) updateTamaScene(dt) end,
         stockUp = function() stockUp() end,
         pressTama = function(a) pressTama(a) end,

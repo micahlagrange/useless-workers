@@ -8,6 +8,7 @@ dofile('conf.lua')
 TEST_HOOKS = {}
 dofile('main.lua')
 local H = TEST_HOOKS.main
+local Worker = require('src.worker')
 love.load()
 love.resize(1280, 720)
 
@@ -53,7 +54,7 @@ function TestTama:test_tend_on_the_strip_opens_the_screen_and_the_meadow_stops()
     lu.assertEquals(H.state(), 'tama')
     lu.assertTrue(g.tending == b)
     love.draw()
-    for _, id in ipairs({ 'tama:feed', 'tama:play', 'tama:clean', 'tama:nap', 'tama:close' }) do
+    for _, id in ipairs({ 'tama:food', 'tama:play', 'tama:clean', 'tama:nap', 'tama:close' }) do
         lu.assertNotNil(button(ui, id), id)
     end
     -- the meadow is paused: nothing moves, nobody gets hungrier
@@ -99,10 +100,18 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     g.world:storeItem(ITEM_FOOD, spot.x, spot.y, food)
     b.hunger = 20
     local before = g.world:storedCount(ITEM_FOOD)
-    H.pressTama('feed')
+    -- FOOD opens the bag; pick a food and it is tossed over, one meal fewer
+    H.pressTama('food')
+    lu.assertEquals(g.tamaMenu, 'food')
+    H.tossFood(food)
+    lu.assertNil(g.tamaMenu, 'the bag closes')
+    lu.assertNotNil(g.tamaToss, 'it flies over')
+    lu.assertEquals(g.world:storedCount(ITEM_FOOD), before - 1)
+    lu.assertEquals(g.tamaDelta.what, 'meals')
+    H.updateTamaScene(1) -- lands
+    lu.assertNil(g.tamaToss)
     H.updateTamaScene(6) -- it eats on screen
     lu.assertTrue(b.hunger > 20)
-    lu.assertEquals(g.world:storedCount(ITEM_FOOD), before - 1)
     -- NAP: only when sleepy, takes time, locks the rest, undone if woken
     b.needs.sleep = 95
     H.pressTama('nap')
@@ -113,7 +122,18 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     b.needs.fun = 10
     H.pressTama('play')
     lu.assertEquals(b.needs.fun, 10, 'nothing else while it sleeps')
-    H.pressTama('nap') -- WAKE
+    -- WAKE asks first; LET IT SLEEP keeps the nap going
+    local ui = H.ui()
+    H.pressTama('nap')
+    lu.assertEquals(g.tamaMenu, 'wake')
+    lu.assertNotNil(g.tamaNap, 'still asleep while it asks')
+    love.draw()
+    tap(ui, button(ui, 'tamawake:no'))
+    lu.assertNil(g.tamaMenu)
+    lu.assertNotNil(g.tamaNap)
+    H.pressTama('nap')
+    love.draw()
+    tap(ui, button(ui, 'tamawake:yes'))
     lu.assertNil(g.tamaNap)
     lu.assertEquals(b.needs.sleep, 40, 'woken early: no rest')
     H.pressTama('nap')
@@ -127,6 +147,11 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     H.pressTama('nap')
     H.updateTamaScene(TAMA_NAP_SECONDS - 1)
     love.keypressed('escape')
+    lu.assertEquals(g.tamaMenu, 'wakeLeave', 'leaving asks first')
+    lu.assertEquals(H.state(), 'tama')
+    love.draw()
+    tap(ui, button(ui, 'tamawake:yes'))
+    lu.assertEquals(H.state(), 'playing')
     lu.assertEquals(b.needs.sleep, 30)
 end
 
@@ -198,20 +223,54 @@ function TestFoodFeelings:test_the_test_harness_and_stocking_up()
     for _, f in ipairs(FOOD_KINDS) do lu.assertTrue(foods[f], 'a stored ' .. f) end
     -- the harness: Morphi on the Tamagotchi screen with a shelf of every food
     H.setState('tools')
-    love.draw()
     local ui = H.ui()
+    ui.touch = true
+    love.resize(1280, 720)
+    love.draw()
     local tb
     for _, b in ipairs(ui.panelButtons) do if b.id == 'tamatest' then tb = b end end
     lu.assertNotNil(tb, 'TAMA TEST in the tester tools')
-    love.mousepressed((tb.x + tb.w / 2) * ui.scale, (tb.y + tb.h / 2) * ui.scale, 1, false)
+    tap(ui, tb)
     g = H.game()
     lu.assertEquals(H.state(), 'tama')
     lu.assertTrue(g.tamaSandbox)
+    H.pressTama('food')
     love.draw()
     local shelf = 0
     for _, b in ipairs(ui.panelButtons) do if b.id:sub(1, 9) == 'tamafood:' then shelf = shelf + 1 end end
     lu.assertEquals(shelf, #FOOD_KINDS)
     H.setState('playing')
+end
+
+function TestFoodFeelings:test_the_food_bag_lists_the_stashes_and_what_it_thinks()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    H.stockUp()
+    local b = baby(g)
+    H.openTama(b)
+    H.pressTama('food')
+    love.draw()
+    local ui = H.ui()
+    local rows = 0
+    for _, bt in ipairs(ui.panelButtons) do if bt.id:sub(1, 9) == 'tamafood:' then rows = rows + 1 end end
+    lu.assertEquals(rows, #Worker.pantry(g.world))
+    lu.assertEquals((b:opinionOf(b.diet)), 'never tried')
+    b.knownFoods[b.diet] = true
+    b.knownFoods[b.hates] = true
+    lu.assertEquals((b:opinionOf(b.diet)), 'loves it')
+    lu.assertEquals((b:opinionOf(b.hates)), 'hates it')
+    -- tapping outside closes it; asleep, the bag will not open
+    tap(ui, { x = 0, y = 0, w = 2, h = 2 })
+    lu.assertNil(g.tamaMenu)
+    lu.assertEquals(H.state(), 'tama')
+    b.needs.sleep = 20
+    H.pressTama('nap')
+    H.pressTama('food')
+    lu.assertNil(g.tamaMenu)
+    H.setState('playing')
+    ui.touch = false
+    love.resize(1280, 720)
 end
 
 os.exit(lu.LuaUnit.run())
