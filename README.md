@@ -87,7 +87,7 @@ do the rest.
 - The window can be any size; the HUD scales to fit. F11 toggles fullscreen.
 - On a phone or tablet: drag to pan with the SELECT tool, pinch to zoom, and
   use the buttons along the top.
-- Title: LEFT / RIGHT pick free play or an old level
+- Title: free play only; S edits the seed, Enter starts
 - 1 to 6 pick a tool: select, dig, stash, basket, nest, bridge
 - Pick a morphi to see what it is up to: FOLLOW, JOBS (or J), and [ ] for the
   previous and next morphi

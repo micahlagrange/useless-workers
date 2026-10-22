@@ -1817,10 +1817,14 @@ function UI:drawTitle(title, highScore)
     end
     local aw, ah = 44, 40
     local nw, nh = self:centered(row1, y + 6, self.fonts.big, opt.locked and C.dim or C.text, self.vw - 2 * (aw + 20) - 16)
-    self.titleButtons.left = { x = math.floor(cx - nw / 2 - 12 - aw), y = y - 1, w = aw, h = ah }
-    self.titleButtons.right = { x = math.floor(cx + nw / 2 + 12), y = y - 1, w = aw, h = ah }
-    self:button(self.titleButtons.left, '<', false)
-    self:button(self.titleButtons.right, '>', false)
+    -- arrows only when there is something to choose between
+    self.titleButtons.left, self.titleButtons.right = nil, nil
+    if #title.options > 1 then
+        self.titleButtons.left = { x = math.floor(cx - nw / 2 - 12 - aw), y = y - 1, w = aw, h = ah }
+        self.titleButtons.right = { x = math.floor(cx + nw / 2 + 12), y = y - 1, w = aw, h = ah }
+        self:button(self.titleButtons.left, '<', false)
+        self:button(self.titleButtons.right, '>', false)
+    end
     y = y + ah + 14 -- clear of the arrows above
     local function diffRow(name)
         local dw, dh = self:centered(name, y, self.fonts.hud, C.text, self.vw - 2 * (36 + 16) - 16)
@@ -1889,10 +1893,12 @@ function UI:drawTitle(title, highScore)
     y = y + 54 + gap(14)
     -- the small print, as much of it as there is room for
     local notes = {
-        'ARCADE: every morphi wants one meal. Give the bunch what it insists on, spend as few points as you can.',
-        'SURVIVAL (retired): keep everyone fed to the clock. You never control a morphi.',
+        'Three little blobs and a baby, a big meadow, four seasons. Mark the work; they do the rest.',
     }
-    if not self.touch then table.insert(notes, 1, 'arrow keys pick the level and the difficulty') end
+    if #title.options > 1 then
+        table.insert(notes, 'ARCADE: every morphi wants one meal. Give the bunch what it insists on, spend as few points as you can.')
+        if not self.touch then table.insert(notes, 1, 'arrow keys pick the level and the difficulty') end
+    end
     for _, note in ipairs(notes) do
         local fonts = { self.fonts.small, self.fonts.tiny }
         local f = self.fonts.tiny

@@ -32,9 +32,14 @@ local function levelsUnlocked(set)
     return math.max(1, Highscore.load(Campaign.unlockKey[set]))
 end
 
+-- The title offers free play only (Micah, 2026-10-22). The hand built
+-- arcade and survival levels and their code stay (tst/arcade_test.lua,
+-- tst/levels_test.lua) for the coming hunting events; TITLE_LEVELS = true
+-- puts them back on the title for testing.
+TITLE_LEVELS = false
 local function buildTitleOptions()
     title.options = {}
-    for _, set in ipairs({ 'arcade', 'survival' }) do
+    for _, set in ipairs(TITLE_LEVELS and { 'arcade', 'survival' } or {}) do
         local unlocked = levelsUnlocked(set)
         local key = Campaign.saveKey[set]
         for i = 1, Campaign.count(set) do
