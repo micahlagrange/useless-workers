@@ -276,6 +276,43 @@ function Worker:hasCaretaker()
     return false
 end
 
+-- Tamagotchi mode: the player tends this baby. FEED eats a stored meal it
+-- will eat, CLEAN uses a tuft of grass, NAP settles it down (sleep fills
+-- while it naps), PLAY fills fun (and a baby that plays gets a bit grubby
+-- and sleepy). Returns true if anything happened.
+function Worker:tend(action, world)
+    local n = self.needs
+    if action == 'feed' then
+        for _, item in ipairs(world.items) do
+            if item.kind == ITEM_FOOD and self:willEat(item.food) then
+                world:takeItem(item.x, item.y, item)
+                self:mealOf(item.food)
+                self:say('yum', 1.5)
+                return true
+            end
+        end
+        return false
+    elseif action == 'clean' then
+        if (world.stock.grass or 0) < 1 then return false end
+        world.stock.grass = world.stock.grass - 1
+        n.clean = math.min(100, n.clean + TAMA_CLEAN)
+        self:say('squeaky', 1.5)
+        return true
+    elseif action == 'nap' then
+        self.tuckedIn = true
+        n.sleep = math.min(100, n.sleep + 10)
+        self:say('zzz', 1.5)
+        return true
+    elseif action == 'play' then
+        n.fun = math.min(100, n.fun + TAMA_FUN)
+        n.clean = math.max(0, n.clean - TAMA_PLAY_COST)
+        n.sleep = math.max(0, n.sleep - TAMA_PLAY_COST)
+        self:say('hee hee', 1.5)
+        return true
+    end
+    return false
+end
+
 -- A caretaker's visit: play, clean, feed when hungry, tuck in when sleepy.
 function Worker:careFor(b)
     local n = b.needs

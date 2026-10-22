@@ -865,6 +865,8 @@ local function drawScene()
         ui:drawUnits(game, game.view)
     elseif state == 'jobs' then
         ui:drawJobs(game)
+    elseif state == 'tama' then
+        ui:drawTama(game, game.view)
     elseif state == 'log' then
         ui:drawLog(game)
     end
@@ -1001,8 +1003,55 @@ local function openUnits()
 end
 
 -- The job screen for the picked morphi (free play: main, neutral, disliked).
+-- Tamagotchi mode: tend one baby on a screen of its own. The meadow does
+-- not run (love.update steps it only in 'playing', 'units', 'log', 'jobs').
+local tamaCan
+local function openTama(w)
+    if not (w and w.alive and w:isBaby()) then return end
+    game.tending = w
+    game.tamaCan = tamaCan
+    state = 'tama'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local function closeTama()
+    game.tending = nil
+    state = 'playing'
+    hideCursor()
+end
+
+-- What each button does to the baby being tended, and whether it can now.
+tamaCan = function(action)
+    local b = game.tending
+    if not b then return false end
+    if action == 'feed' then
+        for _, item in ipairs(game.world.items) do
+            if item.kind == ITEM_FOOD and b:willEat(item.food) then return true end
+        end
+        return false, 'Nothing in the stashes ' .. b.name .. ' will eat'
+    elseif action == 'clean' then
+        if (game.world.stock.grass or 0) >= 1 then return true end
+        return false, 'A wash needs a tuft of grass'
+    end
+    return true
+end
+
+local function pressTama(action)
+    local b = game.tending
+    if not (b and b.alive and b:isBaby()) then closeTama() return end
+    local ok, why = tamaCan(action)
+    if not ok then ui:toast(why) return end
+    b:tend(action, game.world)
+    Audio.playSFX('click')
+end
+
 local function openJobs()
     local w = game.selectedWorker
+    if w and w.alive and w:isBaby() then
+        openTama(w)
+        return
+    end
     if w and w.alive and (w:isBaby() or w:isEgg()) then
         ui:toast(w.name .. (w:isEgg() and ' is still an egg' or ' is a baby') .. ': no jobs yet, it grows up in a season')
         return
@@ -1318,6 +1367,13 @@ local function pointerPressed(x, y, button, istouch)
         elseif pb == 'close' or not ui:insideLogPanel(vx, vy) then
             state = 'playing'
             hideCursor()
+        end
+        return
+    elseif state == 'tama' then
+        if pb == 'tama:close' or (not pb and not ui:insideTamaPanel(vx, vy)) then
+            closeTama()
+        elseif pb and pb:sub(1, 5) == 'tama:' then
+            pressTama(pb:sub(6))
         end
         return
     elseif state == 'jobs' then
@@ -1654,6 +1710,8 @@ function love.keypressed(key)
         if key == 'l' or key == 'escape' then state = 'playing'; hideCursor() end
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
+    elseif state == 'tama' then
+        if key == 'escape' or key == 'j' then closeTama() end
     elseif state == 'jobs' then
         if key == 'j' or key == 'escape' then
             closeJobs()
@@ -1760,6 +1818,8 @@ if TEST_HOOKS then
         exportRun = exportRun,
         sub = sub,
         openJobs = function() openJobs() end,
+        openTama = function(w) openTama(w) end,
+        pressTama = function(a) pressTama(a) end,
         pressJob = function(id) pressJob(id) end,
     }
 end

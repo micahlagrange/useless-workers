@@ -179,6 +179,19 @@ local function playingScreens(tag)
     end
     game.selectedWorker = nil
     H.setState('playing')
+    -- Tamagotchi mode, for each baby
+    for _, w in ipairs(game.workers) do
+        if w.alive and w:isBaby() then
+            game.selectedWorker = w
+            frame(tag .. ' selected baby ' .. w.name)
+            game.tending = w
+            H.setState('tama')
+            frame(tag .. ' tama ' .. w.name)
+            game.tending = nil
+        end
+    end
+    game.selectedWorker = nil
+    H.setState('playing')
     -- the log, with a season's worth of everything
     H.announce('Bartholomew gave up walking to the tree at 41,12', { x = 3, y = 3 }, 'hardship')
     H.announce('Fatima is hungry and the bush at 12,40 is walled off', { x = 4, y = 4 }, 'hardship')

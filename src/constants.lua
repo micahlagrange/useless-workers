@@ -182,6 +182,8 @@ EGGS_PER_SEASON    = 2
 -- or BABY_NEGLECT_SECONDS with every need empty; a warning comes at half
 -- way. An egg never dies.
 BABY_STARVE_SECONDS  = 60
+-- Tamagotchi mode: what one tap does for the baby being tended
+TAMA_FUN, TAMA_CLEAN, TAMA_PLAY_COST = 30, 40, 5
 BABY_NEGLECT_SECONDS = 120
 EGG_HATCH_SECONDS  = 60
 FIRST_BABY_NAME    = 'Morphi'

@@ -1112,6 +1112,11 @@ function UI:drawBottomBar(game)
             local lh = self.fonts.small:getHeight() + 8
             local fw = 96
             self:followButtonDraw(game, { x = ix + iw - fw, y = iy - 4, w = fw, h = 28 })
+            if w:isBaby() then
+                -- TEND opens Tamagotchi mode for this baby
+                self:jobsButtonDraw({ x = ix + iw - fw - 8 - 80, y = iy - 4, w = 80, h = 28 }, 'TEND')
+                fw = fw + 8 + 80
+            end
             -- the name line, with what it eats at the end, as on the units list
             local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - fw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
@@ -1142,11 +1147,11 @@ function UI:drawBottomBar(game)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
             -- FOLLOW (and JOBS in free play) at the top right, what it eats before them
-            local jw = w.jobSet and 56 or 0
+            local jw = (w.jobSet or w:isBaby()) and 56 or 0
             local fw = 76
             local bx0 = px + pw - jw - (jw > 0 and 6 or 0) - fw
             self:followButtonDraw(game, { x = bx0, y = py - 4, w = fw, h = 22 })
-            if w.jobSet then self:jobsButtonDraw({ x = px + pw - jw, y = py - 4, w = jw, h = 22 }) end
+            if w.jobSet or w:isBaby() then self:jobsButtonDraw({ x = px + pw - jw, y = py - 4, w = jw, h = 22 }, w:isBaby() and 'TEND' or 'JOBS') end
             local words = w.jobSet and ('the ' .. w.species .. ', eats') or ('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats')
             self:printLine(words, nx, py + 3, bx0 - 26 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             self:iconFoodKind(w.diet, bx0 - 24, py - 2, 18)
@@ -1211,9 +1216,9 @@ function UI:drawBottomBar(game)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
         local room = self.vw - 28 - 76
         local fx = self.vw - 8 - 70
-        if w.jobSet then
+        if w.jobSet or w:isBaby() then
             room = room - 70
-            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 })
+            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
             fx = fx - 70
         end
         self:followButtonDraw(game, { x = fx, y = ty, w = 70, h = 20 })
@@ -1250,9 +1255,87 @@ function UI:followButtonAt(mx, my)
 end
 
 -- The JOBS button on the picked morphi's strip (free play only).
-function UI:jobsButtonDraw(r)
-    self:button(r, 'JOBS', false)
+function UI:jobsButtonDraw(r, label)
+    self:button(r, label or 'JOBS', false)
     self.jobsButton = r
+end
+
+-- Tamagotchi mode: one baby in its nest, big, with its needs and FEED,
+-- PLAY, CLEAN and NAP. The meadow is paused while this is open. Buttons are
+-- panel buttons 'tama:feed', 'tama:play', 'tama:clean', 'tama:nap' and
+-- 'tama:close' (MEADOW).
+local TAMA_ACTIONS = { { 'feed', 'FEED' }, { 'play', 'PLAY' }, { 'clean', 'CLEAN' }, { 'nap', 'NAP' } }
+local TAMA_NEEDS = { { 'hunger', 'TUMMY' }, { 'fun', 'FUN' }, { 'clean', 'CLEAN' }, { 'sleep', 'SLEEP' } }
+function UI:drawTama(game, view)
+    local w = game.tending
+    if not (w and w.alive and w:isBaby()) then return end
+    local small, hud = self.fonts.small, self.fonts.hud
+    local x, y, pw, ph = self:panel(math.min(560, self.vw - 16), self.vh - 16)
+    self.tamaPanel = { x = x, y = y, w = pw, h = ph }
+    local btnW = math.max(110, small:getWidth('MEADOW') + 28)
+    self:panelButton('tama:close', { x = x + pw - btnW - 14, y = y + 12, w = btnW, h = 32 }, 'MEADOW', false)
+    self:printLine(w.name, x + 18, y + 14, pw - btnW - 46, 'left', C.good, { self.fonts.big, hud, small })
+    local left = math.max(0, math.ceil(BABY_SECONDS - w.age))
+    self:printLine('a baby ' .. w.species .. ', grows up in ' .. math.floor(left / 60) .. ':' .. string.format('%02d', left % 60),
+        x + 18, y + 52, pw - 36, 'left', C.dim, { small, self.fonts.tiny })
+    -- the buttons along the bottom, two rows on a narrow screen
+    local bh = self.touch and 48 or 40
+    local cols = pw >= 480 and 4 or 2
+    local rows = math.ceil(#TAMA_ACTIONS / cols)
+    local gap = 10
+    local bw = math.floor((pw - 36 - (cols - 1) * gap) / cols)
+    local by = y + ph - 16 - rows * bh - (rows - 1) * gap
+    for i, a in ipairs(TAMA_ACTIONS) do
+        local r, c = math.floor((i - 1) / cols), (i - 1) % cols
+        local ok, why = true, nil
+        if game.tamaCan then ok, why = game.tamaCan(a[1]) end
+        self:panelButton('tama:' .. a[1], { x = x + 18 + c * (bw + gap), y = by + r * (bh + gap), w = bw, h = bh }, a[2], false, (not ok) and C.dim or nil)
+    end
+    -- the needs, as meters above the buttons
+    local mh = small:getHeight() + 10
+    local my = by - 14 - #TAMA_NEEDS * mh
+    local labelW = small:getWidth('TUMMY') + 14
+    for i, n in ipairs(TAMA_NEEDS) do
+        local v = n[1] == 'hunger' and w.hunger or w.needs[n[1]]
+        local ry = my + (i - 1) * mh
+        self:printLine(n[2], x + 18, ry, labelW, 'left', C.text, { small })
+        local bx, bwid = x + 18 + labelW, pw - 36 - labelW
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle('fill', bx, ry + 2, bwid, mh - 8)
+        local f = math.max(0, math.min(1, v / 100))
+        if f > 0.6 then setColor(C.good) elseif f > 0.3 then setColor(C.amber) else setColor(C.warn) end
+        love.graphics.rectangle('fill', bx, ry + 2, bwid * f, mh - 8)
+    end
+    local line = w.lovedPlay and ('loves ' .. w.lovedPlay .. ', not keen on ' .. (w.dislikedPlay or 'anything')) or nil
+    if line then
+        my = my - small:getHeight() - 8
+        self:printLine(line, x + 18, my, pw - 36, 'left', C.dim, { small, self.fonts.tiny })
+    end
+    -- the baby in its nest, as big as the room above allows
+    local top, bottom = y + 52 + small:getHeight() + 10, my - 10
+    local room = bottom - top
+    local cx, cy = x + pw / 2, top + room * 0.62
+    local nestW = math.min(pw * 0.36, room * 0.55)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.ellipse('fill', cx, cy, nestW, nestW * 0.42)
+    love.graphics.setColor(0.95, 0.88, 0.68)
+    love.graphics.ellipse('fill', cx, cy - nestW * 0.04, nestW * 0.72, nestW * 0.26)
+    local sheet = view and view.sheets[w.sheet]
+    if sheet then
+        local t = love.timer.getTime()
+        local scale = math.max(2, math.floor(math.min(room * 0.7, nestW * 1.4) / 16))
+        local bob = math.sin(t * 3) * scale * 0.6
+        local napping = w.state == 'breaking'
+        local sq = napping and 0.85 or (1 + 0.05 * math.sin(t * 4))
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(sheet.image, sheet.quads[1], cx, cy - nestW * 0.05 + (napping and 0 or bob), 0, scale * (2 - sq), scale * sq, 8, 16)
+        if napping then self:printLine('z z', cx + scale * 6, cy - scale * 14, scale * 10, 'left', C.text, { hud }) end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function UI:insideTamaPanel(mx, my)
+    return hit(self.tamaPanel, mx, my)
 end
 
 function UI:jobsButtonAt(mx, my)
