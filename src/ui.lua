@@ -1327,7 +1327,7 @@ local function drawEmote(self, kind, x, y, s, a)
     if kind == 'heart' then heart(x, y, s, a)
     elseif kind == 'yuck' then yuckFace(x, y, s, a)
     else
-        local glyph = kind == 'question' and '?' or (kind == 'exclaim' and '!' or ':)')
+        local glyph = kind == 'question' and '?' or (kind == 'exclaim' and '!' or (kind == 'zzz' and 'z' or ':)'))
         local f = self.fonts.big
         local w = f:getWidth(glyph) + 12
         love.graphics.setColor(1, 1, 1, 0.9 * a)
@@ -1364,10 +1364,16 @@ function UI:drawTamaScene(game, view, w, sx, sy, sw, sh)
         end
     end
     local dx, lift, sq, emotes = sceneState(sc)
+    local nap = game.tamaNap
+    if nap then
+        -- asleep in the nest: squashed down, breathing, a z or two drifting up
+        sq = 0.82 + 0.03 * math.sin(nap.t * 2.5)
+        emotes = { { 'zzz', 1, (nap.t * 0.4) % 1 } }
+    end
     local bx = cx + dx * (foodX - cx) * 0.75
     local by = ny - nestW * 0.05 - lift * scale * 8
     local t = love.timer.getTime()
-    if not sc then
+    if not sc and not nap then
         local napping = w.state == 'breaking' or w.tuckedIn
         sq = napping and 0.85 or (1 + 0.05 * math.sin(t * 4))
         by = by + (napping and 0 or math.sin(t * 3) * scale * 0.5)
@@ -1437,7 +1443,15 @@ function UI:drawTama(game, view)
         local info = infos[i]
         love.graphics.setColor(0, 0, 0, 0.3)
         love.graphics.rectangle('fill', cx0, cy0, cw, cardH)
-        self:panelButton('tama:' .. a[1], { x = cx0, y = cy0, w = cw, h = bh }, a[2], false, (not info.ok or game.tamaScene) and C.dim or nil)
+        local napping = game.tamaNap ~= nil
+        local label = (a[1] == 'nap' and napping) and 'WAKE' or a[2]
+        local dim = (a[1] == 'nap' and napping) and nil or ((not info.ok or game.tamaScene or napping) and C.dim or nil)
+        self:panelButton('tama:' .. a[1], { x = cx0, y = cy0, w = cw, h = bh }, label, napping and a[1] == 'nap', dim)
+        if napping and a[1] == 'nap' then
+            info = { does = 'asleep: ' .. math.max(0, math.ceil(TAMA_NAP_SECONDS - game.tamaNap.t)) .. ' s left', cost = 'waking it now undoes the nap', have = 'let it sleep', ok = true }
+        elseif napping then
+            info = { does = info.does, cost = info.cost, have = 'wait: it is asleep', ok = false }
+        end
         local ty = cy0 + bh + 4
         if short then
             self:printLine('costs ' .. info.cost, cx0 + 4, ty, cw - 8, 'left', C.amber, { tiny })
@@ -1459,6 +1473,10 @@ function UI:drawTama(game, view)
     ry = ry - #TAMA_NEEDS * (lh + 6)
     for i, nd in ipairs(TAMA_NEEDS) do
         local v = nd[1] == 'hunger' and w.hunger or w.needs[nd[1]]
+        local napFill = nil
+        if nd[1] == 'sleep' and game.tamaNap then
+            napFill = game.tamaNap.from + (100 - game.tamaNap.from) * math.min(1, game.tamaNap.t / TAMA_NAP_SECONDS)
+        end
         local yy = ry + (i - 1) * (lh + 6)
         self:printLine(nd[2], infoX, yy, labelW, 'left', C.text, { small })
         local bx, bwid = infoX + labelW, infoW - labelW - valueW
@@ -1468,6 +1486,11 @@ function UI:drawTama(game, view)
         local col = f > 0.6 and C.good or (f > 0.3 and C.amber or C.warn)
         setColor(col)
         love.graphics.rectangle('fill', bx, yy + 1, bwid * f, lh)
+        if napFill then
+            -- what the nap will give, shown filling; only earned at the end
+            love.graphics.setColor(col[1], col[2], col[3], 0.35)
+            love.graphics.rectangle('fill', bx + bwid * f, yy + 1, bwid * (napFill / 100 - f), lh)
+        end
         self:printLine(math.floor(v + 0.5) .. ' ' .. Worker.needWord(nd[1], v), bx + bwid + 8, yy, valueW - 8, 'left', col, { small, tiny })
     end
     -- about the baby, at the top of the words column

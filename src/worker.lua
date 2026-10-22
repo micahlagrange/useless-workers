@@ -357,11 +357,12 @@ function Worker:tendInfo(action, world)
             have = 'tiring, and a bit messy',
         }
     elseif action == 'nap' then
+        local sleepy = n.sleep < TAMA_SLEEPY_BELOW
         return {
-            ok = true,
-            does = '+10 sleep, then a nap',
-            cost = 'free',
-            have = self.tuckedIn and 'already tucked in' or 'naps in its nest after',
+            ok = sleepy,
+            does = 'sleep to 100; waking it early undoes it',
+            cost = TAMA_NAP_SECONDS .. ' s, nothing else meanwhile',
+            have = sleepy and ('sleep ' .. math.floor(n.sleep + 0.5) .. ', ready for a nap') or 'not sleepy yet',
         }
     end
     return { ok = false, does = '', cost = '', have = '' }
@@ -388,12 +389,6 @@ function Worker:tend(action, world)
         n.clean = math.min(100, n.clean + TAMA_CLEAN)
         self:say('squeaky', 1.5)
         return string.format('A wash with a tuft of grass: clean %d -> %d. %d grass left.', math.floor(before + 0.5), math.floor(n.clean + 0.5), world.stock.grass)
-    elseif action == 'nap' then
-        local before = n.sleep
-        self.tuckedIn = true
-        n.sleep = math.min(100, n.sleep + 10)
-        self:say('zzz', 1.5)
-        return string.format('Tucked in: sleep %d -> %d. It naps in its nest when you go back.', math.floor(before + 0.5), math.floor(n.sleep + 0.5))
     elseif action == 'play' then
         local f = n.fun
         n.fun = math.min(100, n.fun + TAMA_FUN)

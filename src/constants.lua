@@ -184,6 +184,10 @@ EGGS_PER_SEASON    = 2
 BABY_STARVE_SECONDS  = 60
 -- Tamagotchi mode: what one tap does for the baby being tended
 TAMA_FUN, TAMA_CLEAN, TAMA_PLAY_COST = 30, 40, 5
+-- a nap on the Tamagotchi screen takes this long; nothing else can be done
+-- meanwhile, and waking it early (WAKE, MEADOW) gives no rest at all
+TAMA_NAP_SECONDS = 15
+TAMA_SLEEPY_BELOW = 90  -- a baby with more sleep than this will not nap
 BABY_NEGLECT_SECONDS = 120
 EGG_HATCH_SECONDS  = 60
 FIRST_BABY_NAME    = 'Morphi'

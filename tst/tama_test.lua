@@ -103,9 +103,31 @@ function TestTama:test_the_buttons_use_the_colony_s_own_stock()
     H.updateTamaScene(6) -- it eats on screen
     lu.assertTrue(b.hunger > 20)
     lu.assertEquals(g.world:storedCount(ITEM_FOOD), before - 1)
-    -- NAP tucks it in
+    -- NAP: only when sleepy, takes time, locks the rest, undone if woken
+    b.needs.sleep = 95
     H.pressTama('nap')
-    lu.assertTrue(b.tuckedIn)
+    lu.assertNil(g.tamaNap, 'not sleepy yet')
+    b.needs.sleep = 40
+    H.pressTama('nap')
+    lu.assertNotNil(g.tamaNap)
+    b.needs.fun = 10
+    H.pressTama('play')
+    lu.assertEquals(b.needs.fun, 10, 'nothing else while it sleeps')
+    H.pressTama('nap') -- WAKE
+    lu.assertNil(g.tamaNap)
+    lu.assertEquals(b.needs.sleep, 40, 'woken early: no rest')
+    H.pressTama('nap')
+    H.updateTamaScene(TAMA_NAP_SECONDS / 2)
+    lu.assertEquals(b.needs.sleep, 40, 'the rest comes at the end')
+    H.updateTamaScene(TAMA_NAP_SECONDS)
+    lu.assertNil(g.tamaNap)
+    lu.assertEquals(b.needs.sleep, 100)
+    -- leaving mid-nap wakes it, with no rest
+    b.needs.sleep = 30
+    H.pressTama('nap')
+    H.updateTamaScene(TAMA_NAP_SECONDS - 1)
+    love.keypressed('escape')
+    lu.assertEquals(b.needs.sleep, 30)
 end
 
 

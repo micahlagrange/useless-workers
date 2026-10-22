@@ -1019,13 +1019,16 @@ local function openTama(w)
     game.tamaCan = tamaCan
     game.tamaLast = nil
     game.tamaScene = nil
+    game.tamaNap = nil
     state = 'tama'
     love.mouse.setVisible(true)
     Audio.playSFX('click')
 end
 
+local wakeNap
 local function closeTama()
     if game.tamaScene then finishScene() end
+    if game.tamaNap then wakeNap() end -- leaving wakes it: no rest
     game.tending = nil
     game.tamaSandbox = nil
     state = 'playing'
@@ -1036,8 +1039,34 @@ end
 tamaCan = function(action)
     local b = game.tending
     if not b then return false end
+    if game.tamaNap then return false, b.name .. ' is asleep' end
     local info = b:tendInfo(action, game.world)
     return info.ok, info.have
+end
+
+-- A nap on the screen: it takes TAMA_NAP_SECONDS and locks every other
+-- button. Sleep only fills when it ends; woken early (WAKE, or MEADOW),
+-- the baby gets no rest at all.
+local function startNap()
+    local b = game.tending
+    game.tamaNap = { t = 0, from = b.needs.sleep }
+    game.tamaLast = b.name .. ' curls up in the nest for a nap...'
+end
+
+wakeNap = function()
+    local nap, b = game.tamaNap, game.tending
+    game.tamaNap = nil
+    if not (nap and b) then return end
+    b.needs.sleep = nap.from
+    game.tamaLast = 'Woken up early: ' .. b.name .. ' got no rest. Sleep still ' .. math.floor(nap.from + 0.5) .. '.'
+end
+
+local function finishNap()
+    local nap, b = game.tamaNap, game.tending
+    game.tamaNap = nil
+    if not (nap and b) then return end
+    b.needs.sleep = 100
+    game.tamaLast = b.name .. ' slept well: sleep ' .. math.floor(nap.from + 0.5) .. ' -> 100.'
 end
 
 -- A food put down in front of the baby: it reacts (Worker:reactTo) and the
@@ -1076,6 +1105,11 @@ local function finishScene()
 end
 
 function updateTamaScene(dt)
+    local nap = game.tamaNap
+    if nap then
+        nap.t = nap.t + dt
+        if nap.t >= TAMA_NAP_SECONDS then finishNap() end
+    end
     local sc = game.tamaScene
     if not sc then return end
     sc.t = sc.t + dt
@@ -1086,9 +1120,15 @@ local function pressTama(action)
     local b = game.tending
     if not (b and b.alive and b:isBaby()) then closeTama() return end
     if game.tamaScene then return end -- let it finish its meal
+    if action == 'nap' and game.tamaNap then wakeNap() return end -- the button reads WAKE while it sleeps
     local ok, why = tamaCan(action)
     if not ok then
         game.tamaLast = 'Can not: ' .. why .. '.'
+        return
+    end
+    if action == 'nap' then
+        startNap()
+        Audio.playSFX('click')
         return
     end
     local line, food = b:tend(action, game.world)
@@ -1465,7 +1505,7 @@ local function pointerPressed(x, y, button, istouch)
             closeTama()
         elseif pb and pb:sub(1, 9) == 'tamafood:' then
             -- the test harness's food shelf: any food, free
-            if not game.tamaScene then dropFood(pb:sub(10)) end
+            if not game.tamaScene and not game.tamaNap then dropFood(pb:sub(10)) end
         elseif pb and pb:sub(1, 5) == 'tama:' then
             pressTama(pb:sub(6))
         end
