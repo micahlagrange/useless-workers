@@ -1958,7 +1958,7 @@ function Worker:details()
     local pl = self.play
     if pl and pl.b and self:isPlaying() then
         local other = (pl.a == self and pl.b or pl.a)
-        add((PLAY_KIND_NAMES[pl.category] or pl.category):lower() .. ' with ' .. other.name .. ': "' .. tostring(pl.convo.title) .. '"')
+        add((PLAY_DOING[pl.category] or 'Playing with '):gsub(' with $', '') .. ' with ' .. other.name .. ': "' .. tostring(pl.convo.title) .. '"')
         if #pl.said == 0 then add('(nobody has said anything yet)') end
         for _, l in ipairs(pl.said) do add(l.text, l.who) end
     elseif self.trade and self.trade.b then
