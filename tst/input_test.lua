@@ -125,14 +125,12 @@ function TestInput:testAVanishedFingerLetsGo()
     love.touchreleased('b', 300, 200)
 end
 
--- A finger tap on a top bar or dropdown button, found by id after a frame.
+-- A finger tap on a Toybox top bar button, found by id after a frame.
 local function tapButton(id)
     love.draw()
     local ui = H.ui()
     local found
-    for _, list in ipairs({ ui.dropButtons or {}, ui.topButtons }) do
-        for _, b in ipairs(list) do if b.id == id and not found then found = b end end
-    end
+    for _, b in ipairs(ui.topButtons) do if b.id == id and not found then found = b end end
     lu.assertNotNil(found, 'no ' .. id .. ' button')
     local x, y = (found.x + found.w / 2) * ui.scale, (found.y + found.h / 2) * ui.scale
     Stub.fingers = { 't' }
@@ -142,50 +140,64 @@ local function tapButton(id)
     return found
 end
 
--- The gear menu stays open under buttons pressed over and over, and shuts
--- behind one that goes somewhere.
-function TestInput:testGearMenuStaysOpenForRepeatPresses()
-    local ui, game = H.ui(), H.game()
-    tapButton('gear')
-    lu.assertEquals(ui.dropdown, 'gear')
-    local speed = game.speed or 1
-    tapButton('speed')
-    tapButton('speed')
-    lu.assertNotEquals(game.speed or 1, speed)
-    lu.assertEquals(ui.dropdown, 'gear')
-    tapButton('log')
-    lu.assertNil(ui.dropdown)
-    lu.assertEquals(H.state(), 'log')
-    H.setState('playing')
+-- A finger tap on a button of the menu sheet (they act on release).
+local function tapMenu(id, at)
+    local ui = H.ui()
+    local found
+    -- a short screen scrolls the menu: look for it from the top down
+    ui.menuScroll = 0
+    for _ = 1, 20 do
+        love.draw()
+        for _, b in ipairs(ui.panelButtons) do if b.id == id and not found and b.h >= 40 then found = b end end
+        if found then break end
+        ui.menuScroll = ui.menuScroll + 40
+    end
+    lu.assertNotNil(found, 'no ' .. id .. ' in the menu')
+    local x = ((at and (found.x + at)) or (found.x + found.w / 2)) * ui.scale
+    local y = (found.y + found.h / 2) * ui.scale
+    Stub.fingers = { 'm' }
+    love.touchpressed('m', x, y)
+    love.touchreleased('m', x, y)
+    Stub.fingers = {}
 end
 
--- SOUND opens the mixer, which stays open while the levels move.
-function TestInput:testMixerSetsEachChannel()
-    local ui = H.ui()
+-- Speed and pause are one tap each, always on the bar.
+function TestInput:testSpeedAndPauseAreOneTap()
+    local game = H.game()
+    local speed = game.speed or 1
+    tapButton('speed')
+    lu.assertNotEquals(game.speed or 1, speed)
+    local paused = game.paused == true
+    tapButton('pause')
+    lu.assertEquals(game.paused == true, not paused)
+    tapButton('pause')
+    lu.assertEquals(game.paused == true, paused)
+end
+
+-- The menu holds the sound: each channel's - and +, and a tap on the bar.
+function TestInput:testMenuSetsEachChannel()
     local Audio = require('src.audio')
     Audio.setVolume('music', 0.5)
     Audio.setVolume('alert', 1)
-    tapButton('gear')
-    tapButton('sound')
-    lu.assertEquals(ui.dropdown, 'sound')
-    tapButton('vol:music:+')
-    tapButton('vol:alert:-')
-    tapButton('vol:alert:-')
-    lu.assertEquals(ui.dropdown, 'sound')
+    tapButton('menu')
+    lu.assertEquals(H.state(), 'menu')
+    tapMenu('vol:music:+')
+    tapMenu('vol:alert:-')
+    tapMenu('vol:alert:-')
+    lu.assertEquals(H.state(), 'menu')
     lu.assertAlmostEquals(Audio.getVolume('music'), 0.6, 1e-9)
     lu.assertAlmostEquals(Audio.getVolume('alert'), 0.8, 1e-9)
     -- a tap at the bar's left end silences that channel
-    love.draw()
-    local bar
-    for _, b in ipairs(ui.dropButtons) do if b.id == 'volbar:sfx' then bar = b end end
-    Stub.fingers = { 't' }
-    love.touchpressed('t', (bar.x + 1) * ui.scale, (bar.y + bar.h / 2) * ui.scale)
-    love.touchreleased('t', (bar.x + 1) * ui.scale, (bar.y + bar.h / 2) * ui.scale)
-    Stub.fingers = {}
+    tapMenu('volbar:sfx', 1)
     lu.assertEquals(Audio.getVolume('sfx'), 0)
-    lu.assertEquals(ui.dropdown, 'sound')
     for _, c in ipairs(Audio.CHANNELS) do Audio.setVolume(c, 1) end
-    ui.dropdown = nil
+    -- going back to the title asks once
+    tapMenu('title')
+    lu.assertEquals(H.ui().menuConfirm, 'title')
+    tapMenu('confirm:no')
+    lu.assertNil(H.ui().menuConfirm)
+    tapMenu('carryon')
+    lu.assertEquals(H.state(), 'playing')
 end
 
 os.exit(lu.LuaUnit.run())

@@ -205,6 +205,7 @@ function UI:layout(w, h)
         self.buttons = {}
         self.panelW, self.infoH = 0, 0
         self.goalBox = true
+        self:layoutToy()
     end
 end
 
@@ -303,8 +304,14 @@ function UI:alert(text, tile)
     self.alerts = { { text = text, ttl = ALERT_TTL, tile = tile } }
 end
 
-function UI:toast(text)
-    self.toastText, self.toastTtl = text, 2.2
+function UI:toast(text, icon)
+    self.toastText, self.toastTtl, self.toastIcon = text, 2.2, icon
+end
+
+-- A count on the stock plate bumps when it goes up.
+function UI:bump(key)
+    self.bumps = self.bumps or {}
+    self.bumps[key] = love.timer.getTime()
 end
 
 function UI:clear()
@@ -343,7 +350,8 @@ function UI:alertTiles()
     return tiles
 end
 
-function UI:isOverBars(_, my)
+function UI:isOverBars(mx, my)
+    if UI.RADIAL then return self:toyButtonAt(mx, my) ~= nil or hit(self.toyPlateRect, mx, my) end
     return my < TOP_BAR_H or my > self.vh - BOTTOM_BAR_H
 end
 
@@ -1791,7 +1799,8 @@ function UI:drawGoalBox(game)
     self:drawGoalList(game, r.x + 8, r.y + 6, r.w - 16, r.rowH)
 end
 
-function UI:drawHUD(game)
+function UI:drawHUD(game, menuOpen)
+    if UI.RADIAL then return self:drawToyHUD(game, menuOpen) end
     self.bannerBottom = TOP_BAR_H
     self:drawTopBar(game)
     self:drawPauseBanner(game)
@@ -1928,10 +1937,11 @@ local LOG_KIND = {
 function UI:drawLog(game)
     local log = game.log or {}
     local pw = math.min(900, self.vw - 24)
-    local ph = self.vh - TOP_BAR_H - 24
+    local topH = UI.RADIAL and 0 or TOP_BAR_H
+    local ph = self.vh - topH - 24
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
-    y = math.max(y, TOP_BAR_H + 8)
+    y = math.max(y, topH + 8)
     self.logPanel = { x = x, y = y, w = pw, h = ph }
     local btnW = self.touch and 100 or 110
     self:printLine('LOG', x + 18, y + 14, pw - btnW - 52, 'left', C.text, { self.fonts.big, self.fonts.hud })
@@ -2582,5 +2592,8 @@ function UI:drawHistory(lines, scroll)
     self:panelButtonRow(x, y, pw, ph, defs)
     return fit
 end
+
+-- the Toybox HUD (src/ui_toy.lua)
+require('src.ui_toy')(UI)
 
 return UI

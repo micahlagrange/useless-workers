@@ -359,20 +359,17 @@ function TestFollowNav:test_next_morphi_is_there_without_following()
     local g = H.game()
     g.follow = false
     g.selectedWorker = nil
-    love.draw()
-    local ui = H.ui()
-    lu.assertEquals(#ui.followNav, 2, 'the < and > buttons show with nobody followed')
-    local r = ui.followNav[2]
-    love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
+    -- ] picks the next morphi and looks at it, without following
+    love.keypressed(']')
     lu.assertTrue(g.selectedWorker == g.workers[1])
     lu.assertFalse(g.follow, 'picking the next morphi does not start following')
-    love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
+    love.keypressed(']')
     lu.assertTrue(g.selectedWorker == g.workers[2])
 end
 
 TestAlerts = {}
 
-function TestAlerts:test_only_bad_news_pops_up_one_at_a_time_with_a_log_button()
+function TestAlerts:test_only_bad_news_pops_up_one_at_a_time_as_a_pill()
     H.newGame('PUPPER', 1)
     H.closeGoal()
     local ui = H.ui()
@@ -385,10 +382,12 @@ function TestAlerts:test_only_bad_news_pops_up_one_at_a_time_with_a_log_button()
     lu.assertEquals(#ui.alerts, 1, 'alerts do not stack')
     lu.assertNotNil(ui.alerts[1].text:find('Kenji'))
     love.draw()
-    local r = ui.alertLog
-    lu.assertNotNil(r, 'the alert has a LOG button')
+    -- the pill with a place on it looks there
+    local r = ui.alertRects[1]
+    lu.assertNotNil(r, 'the alert is a pill')
+    local g = H.game()
     love.mousepressed((r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale, 1, false)
-    lu.assertEquals(H.state(), 'log')
+    lu.assertNotNil(g.focus, 'a tap on the pill looks at the place')
     H.setState('playing')
     ui.alerts = {}
 end

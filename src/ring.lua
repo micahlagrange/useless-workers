@@ -99,7 +99,8 @@ function Ring.forTile(world, tx, ty, tools)
         spec.kind = 'site'
         items[#items + 1] = { id = 'calloff', icon = 'trash', label = 'Call off', cost = s.working and nil or 'gives back', off = s.working and true or nil,
             why = s.working and 'Someone is already building that' or nil }
-        spec.caption = { title = name .. ' (being built)', line = s.working and 'A builder is on it.' or 'Waiting for a builder.' }
+        local p = Ring.siteProgress(s)
+        spec.caption = { title = name .. ' (being built)', line = s.working and ('A builder is on it: ' .. math.floor(p * 100) .. '% done.') or 'Waiting for a builder.' }
         return spec
     end
 
@@ -200,6 +201,13 @@ function Ring.forWorker(w)
     end
     spec.center = { id = 'follow', icon = 'follow' }
     return spec
+end
+
+-- How far along a site is, 0 to 1: its builder's work so far.
+function Ring.siteProgress(site)
+    local w = site.claimedBy
+    if type(w) ~= 'table' or not (w.state == 'working' and w.targetSite == site) then return 0 end
+    return math.max(0, math.min(1, 1 - (w.stateTimer or 0) / BUILD_SECONDS))
 end
 
 -- Layout -------------------------------------------------------------------

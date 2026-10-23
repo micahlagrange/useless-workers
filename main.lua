@@ -201,6 +201,8 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'shiny' and game.mode == 'free' then
         Audio.playSFX('deliver')
         announce(worker.name .. ' dug up a shiny!', data, 'news')
+        ui:toast(worker.name .. ' dug up a shiny!', 'shiny')
+        ui:bump('shinies')
     elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
@@ -865,6 +867,12 @@ local function drawWorld()
     game.view:drawWorkers(game.workers, game.clock, game.selectedWorker)
     Effects.draw()
     cam:reset()
+    if game.paused and UI.RADIAL then
+        -- paused: the meadow loses some colour and goes a little darker
+        love.graphics.setColor(0.42, 0.4, 0.38, 0.38)
+        love.graphics.rectangle('fill', 0, 0, love.graphics.getDimensions())
+        love.graphics.setColor(1, 1, 1, 1)
+    end
 end
 
 local function drawScene()
@@ -879,7 +887,7 @@ local function drawScene()
     game.muted = Audio.isMuted()
     ui:beginScaled()
     if UI.RADIAL and state == 'playing' then hud:drawRing(game, love.timer.getTime()) end
-    ui:drawHUD(game)
+    ui:drawHUD(game, state == 'menu')
     if UI.RADIAL and state == 'playing' then hud:drawCaption() end
     if state == 'report' then
         ui:drawReport(game.report, game.scoring)
@@ -895,6 +903,8 @@ local function drawScene()
         sub.fit = ui:drawHistory(game.stats and game.stats:history() or {}, sub.scroll)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
+    elseif state == 'menu' then
+        ui:drawToyMenu(game, ui.menuConfirm, fingerDebug)
     elseif state == 'goal' then
         ui:drawGoal(game)
     elseif state == 'levelclear' then
@@ -1033,7 +1043,7 @@ local function toggleFollow()
         game.follow = not game.follow
         ui:toast(game.follow and ('Following ' .. game.selectedWorker.name) or 'Camera free')
     else
-        ui:toast('Select a morphi first (SELECT tool, then tap one)')
+        ui:toast('Tap a morphi first')
     end
 end
 
@@ -1256,7 +1266,7 @@ local function openJobs()
         return
     end
     if not (w and w.alive and w.jobSet) then
-        ui:toast(game.mode == 'free' and 'Select a morphi first (SELECT tool, then tap one)' or 'Each morphi here has one fixed job')
+        ui:toast(game.mode == 'free' and 'Tap a morphi first' or 'Each morphi here has one fixed job')
         return
     end
     state = 'jobs'
@@ -1477,8 +1487,20 @@ local function finishPaint(p)
 end
 
 local function openMenu()
-    state = 'confirmquit'
+    if UI.RADIAL then
+        hud:close()
+        state = 'menu'
+        ui.menuConfirm, ui.menuScroll = nil, 0
+    else
+        state = 'confirmquit'
+    end
     love.mouse.setVisible(true)
+end
+
+local function closeMenu()
+    state = 'playing'
+    ui.menuConfirm = nil
+    hideCursor()
 end
 
 -- EXPORT, HISTORY and the tester's corner open over another screen and go
@@ -1638,6 +1660,89 @@ local function pressTopButton(id, x, b)
     Audio.playSFX('click')
 end
 
+-- The Toybox top bar's buttons.
+local function pressToy(id)
+    Audio.playSFX('click')
+    if id == 'pause' or id == 'carryon' then togglePause()
+    elseif id == 'speed' then cycleSpeed()
+    elseif id == 'menu' then openMenu()
+    elseif id == 'resmore' then ui.resOpen = not ui.resOpen
+    elseif id == 'bunch' then
+        local br = game.world.breakroom
+        if br then
+            game.follow = false
+            game.camera:centerOn(br.cx, br.cy)
+            tapMap({ x = br.x, y = br.y }, nil)
+        end
+    elseif id == 'hungry' then
+        for _, w in ipairs(game.workers) do
+            if w.alive and (w:hungerStatus() == 'hungry' or w:hungerStatus() == 'starving') then
+                hud:close()
+                game.follow = false
+                game.camera:centerOn(w.x, w.y)
+                openWorkerRing(w)
+                return
+            end
+        end
+        ui:toast('Nobody is hungry')
+    end
+end
+
+-- A tap on the menu sheet (on release, so a drag scrolls instead).
+local function menuTap(vx, vy)
+    local pb, rect
+    for _, b in ipairs(ui.panelButtons) do
+        if vx >= b.x and vx <= b.x + b.w and vy >= b.y and vy <= b.y + b.h then pb, rect = b.id, b end
+    end
+    if not pb then
+        if not ui:insideMenu(vx, vy) then closeMenu() end
+        return
+    end
+    Audio.playSFX('click')
+    local channel, step = pb:match('^vol:(%a+):([%+%-])$')
+    local barChannel = pb:match('^volbar:(%a+)$')
+    if pb == 'carryon' then closeMenu()
+    elseif pb == 'mute' then Audio.toggleMute()
+    elseif channel then Audio.setVolume(channel, Audio.getVolume(channel) + (step == '+' and 0.1 or -0.1))
+    elseif barChannel then Audio.setVolume(barChannel, (vx - rect.x) / rect.w)
+    elseif pb == 'restart' or pb == 'title' then ui.menuConfirm = pb
+    elseif pb == 'confirm:no' then ui.menuConfirm = nil
+    elseif pb == 'confirm:yes' then
+        local what = ui.menuConfirm
+        ui.menuConfirm = nil
+        if what == 'title' then goToTitle()
+        else
+            restartGame()
+            state = 'playing'
+            hideCursor()
+        end
+    elseif pb == 'goal' then openGoal()
+    elseif pb == 'export' or pb == 'history' then openSub(pb)
+    elseif pb == 'fingers' then fingerDebug = not fingerDebug
+    elseif pb == 'tiles' then cycleTileset()
+    elseif pb == 'news' then openLog()
+    elseif pb == 'stockup' then
+        stockUp()
+        ui:toast('Stocked up: 20 of every material, a meal of every food')
+        closeMenu()
+    elseif pb == 'tamatest' then
+        -- a fresh meadow with Morphi, straight into the baby screen, with a
+        -- shelf of every food to put down for free
+        newGame(DEFAULT_SEED, 1)
+        closeGoal()
+        for _, w in ipairs(game.workers) do
+            if w:isBaby() then
+                w.hunger = 40
+                w.needs.fun, w.needs.clean, w.needs.sleep = 50, 50, 40
+                openTama(w)
+                break
+            end
+        end
+        game.world.stock.grass = math.max(game.world.stock.grass or 0, 10)
+        game.tamaSandbox = true
+    end
+end
+
 -- The first finger on the screen switches to the touch layout.
 local function noteTouch()
     if ui.touch then return end
@@ -1762,6 +1867,9 @@ local function pointerPressed(x, y, button, istouch)
             hideCursor()
         end
         return
+    elseif state == 'menu' then
+        game.menuPress = { x = x, y = y, vy = vy, scroll = ui.menuScroll or 0, moved = false }
+        return
     elseif state == 'confirmquit' then
         if pb == 'yes' then
             goToTitle()
@@ -1860,7 +1968,11 @@ local function pointerPressed(x, y, button, istouch)
         if not (top == ui.dropdown) then ui.dropdown = nil end
         if not top then return end
     end
-    if vy < TOP_BAR_H then
+    if UI.RADIAL then
+        local id = ui:toyButtonAt(vx, vy)
+        if id then pressToy(id) return end
+        if ui:isOverBars(vx, vy) then return end
+    elseif vy < TOP_BAR_H then
         local id = ui:topButtonAt(vx, vy)
         if id then pressTopButton(id) end
         return
@@ -1939,6 +2051,12 @@ local function pointerPressed(x, y, button, istouch)
 end
 
 local function pointerReleased(x, y, button)
+    if state == 'menu' and game.menuPress then
+        local p = game.menuPress
+        game.menuPress = nil
+        if not p.moved and button == 1 then menuTap(ui:toVirtual(x, y)) end
+        return
+    end
     if state ~= 'playing' then return end
     if button == 1 and hud.press then
         hud:released(ui:toVirtual(x, y))
@@ -1972,6 +2090,12 @@ local function pointerReleased(x, y, button)
 end
 
 local function pointerMoved(x, y, dx, dy)
+    if state == 'menu' and game.menuPress then
+        local p = game.menuPress
+        if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
+        if p.moved then ui.menuScroll = p.scroll - (y - p.y) / ui.scale end
+        return
+    end
     if state ~= 'playing' or pinch then return end
     if game.paint then
         local p = game.paint
@@ -2096,6 +2220,7 @@ function love.touchreleased(id, x, y)
 end
 
 function love.wheelmoved(_, y)
+    if state == 'menu' then ui.menuScroll = (ui.menuScroll or 0) - y * 40 return end
     if state ~= 'playing' or y == 0 then return end
     local mx, my = pointerPosition()
     game.camera:zoomAt(y > 0 and 1.15 or 1 / 1.15, mx, my)
@@ -2208,6 +2333,10 @@ function love.keypressed(key)
             followNext(key == ']' and 1 or -1)
             Audio.playSFX('click')
         end
+    elseif state == 'menu' then
+        if key == 'escape' then closeMenu()
+        elseif key == 'up' then ui.menuScroll = (ui.menuScroll or 0) - 60
+        elseif key == 'down' then ui.menuScroll = (ui.menuScroll or 0) + 60 end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
