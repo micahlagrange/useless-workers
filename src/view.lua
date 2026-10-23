@@ -94,8 +94,7 @@ function View:rebuildCanvas()
                 love.graphics.rectangle('fill', px + 3, py + 4, 5, 2)
                 love.graphics.rectangle('fill', px + 9, py + 10, 4, 2)
             elseif t.type == TILE_BREAKROOM then
-                love.graphics.setColor(0.35, 0.28, 0.16)
-                love.graphics.rectangle('line', px + 0.5, py + 0.5, TILE_SIZE - 1, TILE_SIZE - 1)
+                -- plain trodden ground; the home nest is drawn over it, so no grid lines
             elseif t.type == TILE_WALL then
                 self:drawWallTile(px, py, 1)
             elseif t.type == TILE_DOOR then
@@ -130,18 +129,32 @@ function View:drawBreakroom()
         love.graphics.line(x0 + k[3] * c, y0, x0, y0, x0, y0 + k[4] * c)
     end
     local cx, cy = px + T, py + T
-    -- the nest: a ring of woven twigs round a soft middle
+    -- the nest, seen from above: a round ring of woven twigs round a soft
+    -- middle with four dents, one for each egg
+    local R = T
+    love.graphics.setColor(0, 0, 0, 0.15)
+    love.graphics.circle('fill', cx + 1, cy + 1.5, R)
     love.graphics.setColor(0.6, 0.45, 0.28)
-    love.graphics.ellipse('fill', cx, cy + 2, T * 0.82, T * 0.5)
-    love.graphics.setColor(0.93, 0.85, 0.62)
-    love.graphics.ellipse('fill', cx, cy + 1, T * 0.6, T * 0.32)
+    love.graphics.circle('fill', cx, cy, R)
     love.graphics.setColor(0.72, 0.55, 0.34)
-    for i = 0, 9 do
-        local a = i / 10 * math.pi * 2
-        love.graphics.line(cx + math.cos(a) * T * 0.62, cy + 2 + math.sin(a) * T * 0.38,
-            cx + math.cos(a + 0.5) * T * 0.8, cy + 2 + math.sin(a + 0.5) * T * 0.48)
+    love.graphics.setLineWidth(1.2)
+    for i = 0, 15 do
+        local a = i / 16 * math.pi * 2
+        love.graphics.line(cx + math.cos(a) * R * 0.74, cy + math.sin(a) * R * 0.74,
+            cx + math.cos(a + 0.45) * R * 0.97, cy + math.sin(a + 0.45) * R * 0.97)
     end
+    love.graphics.setColor(0.42, 0.3, 0.17)
     love.graphics.setLineWidth(1)
+    love.graphics.circle('line', cx, cy, R - 0.5)
+    love.graphics.setColor(0.93, 0.85, 0.62)
+    love.graphics.circle('fill', cx, cy, R * 0.74)
+    for _, d in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+        local dx, dy = cx + d[1] * T * 0.5, cy + d[2] * T * 0.5
+        love.graphics.setColor(0.78, 0.67, 0.44)
+        love.graphics.circle('fill', dx, dy, 5.5)
+        love.graphics.setColor(0.97, 0.92, 0.74)
+        love.graphics.circle('fill', dx + 0.8, dy + 0.8, 4.2)
+    end
     -- sign
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
@@ -283,17 +296,21 @@ function View:drawGhost(kind, tx, ty, ok)
 end
 
 function View:drawBed(px, py, a)
-    -- a nest: a ring of twigs round a soft, downy middle
+    -- a nest seen from above: a round ring of twigs round a soft, downy dent
     love.graphics.setColor(0, 0, 0, 0.15 * a)
-    love.graphics.ellipse('fill', px + 8.5, py + 10, 7, 4.5)
+    love.graphics.circle('fill', px + 8.5, py + 8.8, 7)
     love.graphics.setColor(0.6, 0.45, 0.28, a)
-    love.graphics.ellipse('fill', px + 8, py + 9, 7, 4.5)
-    love.graphics.setColor(0.95, 0.88, 0.68, a)
-    love.graphics.ellipse('fill', px + 8, py + 8.5, 4.5, 2.6)
+    love.graphics.circle('fill', px + 8, py + 8, 7)
     love.graphics.setColor(0.72, 0.55, 0.34, a)
-    love.graphics.line(px + 2, py + 9, px + 6, py + 12)
-    love.graphics.line(px + 10, py + 12, px + 14, py + 9)
-    love.graphics.line(px + 4, py + 6, px + 8, py + 5)
+    for i = 0, 7 do
+        local t = i / 8 * math.pi * 2
+        love.graphics.line(px + 8 + math.cos(t) * 4.8, py + 8 + math.sin(t) * 4.8,
+            px + 8 + math.cos(t + 0.5) * 6.7, py + 8 + math.sin(t + 0.5) * 6.7)
+    end
+    love.graphics.setColor(0.95, 0.88, 0.68, a)
+    love.graphics.circle('fill', px + 8, py + 8, 4.3)
+    love.graphics.setColor(0.99, 0.95, 0.8, a)
+    love.graphics.circle('fill', px + 8.6, py + 8.6, 2.8)
 end
 
 -- A wall from above: dark timber courses with the mortar showing, lit
