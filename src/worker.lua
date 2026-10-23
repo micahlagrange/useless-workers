@@ -752,10 +752,13 @@ function Worker:nextFunGap()
     return PLAY_MEAN_SECONDS * (0.5 + r)
 end
 
-function Worker:hasPlayChance()
+-- early: seconds ahead of its time it may still say yes (joining somebody
+-- else's offer, so a lone offer is not left waiting for a partner who is due
+-- at the same moment).
+function Worker:hasPlayChance(early)
     if not self.wilds then return false end
     if not self.funAt then self.funAt = self.clock + self:nextFunGap() end
-    return self.clock >= self.funAt
+    return self.clock >= self.funAt - (early or 0)
 end
 
 -- Free to play: here, fed enough to last the talk, hands empty, and not
@@ -786,7 +789,7 @@ end
 function Worker:joinPlay()
     local pl = self.world.openPlay
     if not pl or pl.a == self or pl.b or not pl.a:isWorking() then return false end
-    if not (self:hasPlayChance() and self:freeToPlay()) then return false end
+    if not (self:hasPlayChance(PLAY_JOIN_EARLY_SECONDS) and self:freeToPlay()) then return false end
     local at, here = pl.a:tile(), self:tile()
     if Util.manhattan(at.x, at.y, here.x, here.y) > PLAY_JOIN_TILES then return false end
     self.world.openPlay = nil
@@ -1351,6 +1354,18 @@ function Worker:decide()
         end
         self.decideTimer = DECIDE_INTERVAL * 4
         return
+    end
+    -- 3b. Due for some fun, between tasks and fed: play with whoever waits at
+    --     the home nest, or go there and offer.
+    if self.wilds and self:hasPlayChance() and self:freeToPlay() then
+        if self:joinPlay() or self:offerPlay() then return end
+        if not self:atCamp() and not (self.playRetryAt and self.clock < self.playRetryAt) then
+            local path = self:pathToBreakroom()
+            if path then
+                self:setPath(path, 'wander')
+                return
+            end
+        end
     end
     -- 4. The nearest job I can do and can actually walk to, main job first,
     --    then neutral, then disliked (free play). Jobs nobody can reach stay

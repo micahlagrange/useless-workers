@@ -383,7 +383,7 @@ TRADE_CHAT = {
 -- PLAY_MIN_HUNGER here, so the talk does not end the moment it starts: one
 -- that gets hungry mid-talk goes to eat, and nobody gets the lift.
 MORALE_PLAY          = 15
-PLAY_WAIT_SECONDS    = 20
+PLAY_WAIT_SECONDS    = 30
 PLAY_RETRY_SECONDS   = 30
 PLAY_JOIN_TILES      = 12
 PLAY_WALK_SECONDS    = 8     -- longer than this walking over, and they talk from where they are
@@ -392,7 +392,8 @@ PLAY_BUBBLE_SECONDS  = 2.6
 PLAY_MIN_HUNGER      = 40
 -- the kinds of play, in the order the rng picks from (dancing comes later)
 PLAY_CATEGORIES      = { 'philosophize', 'socialize', 'dance' }
-PLAY_MEAN_SECONDS    = QUARTER_SECONDS   -- about one fun task per morphi per season, at random
+PLAY_JOIN_EARLY_SECONDS = 150    -- a morphi may join an offer this long before its own fun is due
+PLAY_MEAN_SECONDS    = QUARTER_SECONDS * 0.55  -- gap mean, tuned so the sim bench shows about one fun task per morphi per season
 -- what the screen says a morphi is doing, by kind: '<this>' .. partner's name
 PLAY_DOING = { philosophize = 'Philosophizing with ', socialize = 'Having a drink with ', dance = 'Dancing with ' }
 -- the kinds, as the DEV screen names them
