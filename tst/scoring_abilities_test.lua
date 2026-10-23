@@ -9,11 +9,15 @@ local Highscore = require('src.highscore')
 
 TestScoring = {}
 function TestScoring:testGrades()
-    lu.assertEquals(Scoring.grade(16, 0, 0), 'S')
-    lu.assertEquals(Scoring.grade(12, 1, 0), 'A')
-    lu.assertEquals(Scoring.grade(10, 1, 1), 'B')
-    lu.assertEquals(Scoring.grade(5, 3, 0), 'C')
-    lu.assertEquals(Scoring.grade(2, 3, 1), 'F')
+    -- score = output - complaints - QUIT_PENALTY x quits, against GRADE_THRESHOLDS
+    local S, A, B, C = GRADE_THRESHOLDS[1][2], GRADE_THRESHOLDS[2][2], GRADE_THRESHOLDS[3][2], GRADE_THRESHOLDS[4][2]
+    lu.assertEquals(Scoring.grade(S, 0, 0), 'S')
+    lu.assertEquals(Scoring.grade(S, 1, 0), 'A')
+    lu.assertEquals(Scoring.grade(A + 1, 1, 0), 'A')
+    lu.assertEquals(Scoring.grade(A + QUIT_PENALTY, 1, 1), 'B')
+    lu.assertEquals(Scoring.grade(B + 3, 3, 0), 'B')
+    lu.assertEquals(Scoring.grade(C + 3, 3, 0), 'C')
+    lu.assertEquals(Scoring.grade(C + 3, 3, 1), 'F')
 end
 function TestScoring:testSeasonNames()
     lu.assertEquals(Scoring.seasonName(1), 'Spring')
@@ -42,7 +46,7 @@ function TestScoring:testQuarterCloseAndHires()
     lu.assertEquals(s:lifetimeValue(), 10 + 2 + 3)
     lu.assertEquals(r.fedPct, 60)
     lu.assertEquals(r.complaints, 1)
-    lu.assertEquals(r.grade, 'A')
+    lu.assertEquals(r.grade, Scoring.grade(12, 1, 0))
     lu.assertEquals(r.hires, 2)
     lu.assertEquals(s.quarter, 2)
     lu.assertEquals(s.output, 0)
@@ -70,9 +74,9 @@ end
 function TestScoring:testTimerAndFedSampling()
     local s = Scoring.new(1)
     local ended = false
-    for _ = 1, 100 do if s:update(1, 80) then ended = true end end
+    for _ = 1, QUARTER_SECONDS + 10 do if s:update(1, 80) then ended = true end end
     lu.assertTrue(ended)
-    lu.assertTrue(s.fedCount >= 89)
+    lu.assertTrue(s.fedCount >= QUARTER_SECONDS - 1)
 end
 
 TestAbilities = {}
@@ -126,7 +130,7 @@ function TestAbilities:testFloorSpotIsFreeAndBinCostsALog()
     self.world.stock.logs = 0
     ok, why = self.abilities:use(9, 1)
     lu.assertFalse(ok)
-    lu.assertStrContains(why, 'logs')
+    lu.assertStrContains(why, 'stick')
     ok, why = self.abilities:use(1, 4)                       -- break room furniture
     lu.assertFalse(ok)
 end
@@ -139,7 +143,7 @@ function TestAbilities:testDragLaysOnReleaseInTheToolsShape()
     self.abilities:select(ABILITY_WALL)
     local ok, why = self.abilities:useDrag(10, 1, 15, 1)
     lu.assertTrue(ok)
-    lu.assertStrContains(why, 'logs')
+    lu.assertStrContains(why, 'stick')
     lu.assertEquals(#self.world:sitesOfKind(SITE_WALL), 4)
     lu.assertEquals(self.world.stock.logs, 0)
     -- a bin goes where the drag ends, not where it started
@@ -255,7 +259,7 @@ function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     self.abilities:select(ABILITY_BED)
     lu.assertTrue((self.abilities:use(3, 4)))
     lu.assertEquals(self.world.stock.logs, 4 - COSTS.bed.logs)
-    lu.assertEquals(self.jobs:count('woodwork'), 1)                -- lumberjack work, not a generic build
+    lu.assertEquals(self.jobs:count('nestwork'), 1)                -- gatherer work, not a generic build
     local site = self.world:get(3, 4).site
     lu.assertEquals(site.kind, SITE_BED)
     self.world:completeSite(site)
@@ -263,6 +267,29 @@ function TestAbilities:testBedSiteCostsLogsAndBecomesABed()
     lu.assertEquals(#self.world.beds, 1)
     local ok = self.abilities:use(3, 4)                     -- can't put a bed on a bed
     lu.assertFalse(ok)
+end
+function TestAbilities:testFreePlayNestsAreWovenFromSticksGrassAndLeaves()
+    self.world.wilds = true
+    self.abilities:select(ABILITY_NEST)
+    local ok, why = self.abilities:use(3, 4)
+    lu.assertFalse(ok)
+    lu.assertStrContains(why, 'grass')
+    lu.assertStrContains(why, 'leaf')
+    self.world.stock.grass, self.world.stock.leaves = 2, 1
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals({ self.world.stock.logs, self.world.stock.grass, self.world.stock.leaves }, { 2, 0, 0 })
+    -- taking the mark back gives them all back
+    lu.assertTrue((self.abilities:use(3, 4)))
+    lu.assertEquals({ self.world.stock.logs, self.world.stock.grass, self.world.stock.leaves }, { 4, 2, 1 })
+    -- a basket is 1 grass, a stash is free
+    self.abilities:select(ABILITY_BIN)
+    lu.assertStrContains(self.abilities:costText(ABILITY_BIN), '1 grass')
+    lu.assertTrue((self.abilities:use(6, 1)))
+    lu.assertEquals(self.world.stock.grass, 1)
+    self.abilities:select(ABILITY_STORAGE)
+    lu.assertTrue((self.abilities:use(10, 1)))
+    lu.assertEquals(self.world.stock.logs, 4)
+    lu.assertEquals(self.abilities:costText(ABILITY_BED), '2 sticks 2 grass 1 leaf')
 end
 function TestAbilities:testBridgeSitesAllOrNothing()
     self.abilities:select(ABILITY_BRIDGE)
@@ -294,5 +321,6 @@ function TestHighscore:testMemoryFallback()
     lu.assertFalse(Highscore.save(2, 30))
     lu.assertEquals(Highscore.load(2), 40)
 end
+
 
 os.exit(lu.LuaUnit.run())

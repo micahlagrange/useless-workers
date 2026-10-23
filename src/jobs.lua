@@ -1,12 +1,12 @@
 -- First come, first served job queue. Jobs are typed by the node they point
--- at: 'forage' for bushes, 'chop' for trees, 'mine' for ore. Each role only
+-- at: 'forage' for bushes, 'gather' for trees, 'mine' for ore. Each role only
 -- takes its own type.
 require('src.constants')
 
 local Jobs = {}
 Jobs.__index = Jobs
 
-local TYPE_FOR_KIND = { bush = 'forage', tree = 'chop', ore = 'mine' }
+local TYPE_FOR_KIND = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather', critter = 'hunt' }
 
 function Jobs.typeForNode(node)
     return TYPE_FOR_KIND[node.kind]
@@ -54,12 +54,25 @@ function Jobs:postNode(node, front)
     return self:post({ type = Jobs.typeForNode(node), x = node.x, y = node.y, node = node }, front)
 end
 
--- Mine sites are miner work, beds are woodwork for a lumberjack, and floor
+-- Mine sites are miner work, nests are nestwork for a gatherer, and floor
 -- spots, bins and bridges are 'build' jobs for anyone.
 function Jobs.typeForSite(site)
     if site.kind == SITE_MINE then return 'mine' end
-    if site.kind == SITE_BED then return 'woodwork' end
+    if site.kind == SITE_BED then return 'nestwork' end
     return 'build' -- floors, bins, walls, doors, bridges
+end
+
+-- A visit to a baby that needs looking after (caretaker work).
+function Jobs:postBaby(baby)
+    local t = baby:tile()
+    return self:post({ type = 'care', x = t.x, y = t.y, baby = baby })
+end
+
+function Jobs:hasJobForBaby(baby)
+    for _, job in ipairs(self.items) do
+        if job.baby == baby then return true end
+    end
+    return false
 end
 
 function Jobs:hasJobForSite(site)
@@ -112,7 +125,8 @@ function Jobs:take(jobType, predicate)
     local i = 1
     while i <= #self.items do
         local job = self.items[i]
-        if (job.node and not job.node.ready) or (job.site and job.site.done) or (job.area and #job.area.sites == 0) then
+        if (job.node and not job.node.ready) or (job.site and job.site.done) or (job.area and #job.area.sites == 0)
+            or (job.baby and not (job.baby.alive and job.baby:isBaby())) then
             table.remove(self.items, i)
         elseif (jobType == nil or job.type == jobType) and (predicate == nil or predicate(job)) then
             table.remove(self.items, i)
@@ -147,6 +161,9 @@ function Jobs:takeNearest(jobTypes, fromX, fromY, predicate, claim, tries)
                         d = math.min(d, math.abs(s.x - fromX) + math.abs(s.y - fromY))
                     end
                 else
+                    -- a critter hops about: its job is wherever it is now
+                    if job.node then job.x, job.y = job.node.x, job.node.y end
+                    if job.baby then local t = job.baby:tile(); job.x, job.y = t.x, t.y end
                     d = math.abs(job.x - fromX) + math.abs(job.y - fromY)
                 end
                 candidates[#candidates + 1] = { job = job, d = d, order = i }

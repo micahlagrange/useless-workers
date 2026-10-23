@@ -162,6 +162,57 @@ local function playingScreens(tag)
     game.suggestRestart = false
     H.setState('units')
     frame(tag .. ' units')
+    -- the job screen, for each morphi (free play), and with no neutral job
+    for _, w in ipairs(game.workers) do
+        if w.jobSet then
+            game.selectedWorker = w
+            H.setState('jobs')
+            frame(tag .. ' jobs ' .. w.name)
+            local keep = w.jobSet.neutral
+            w.jobSet.neutral = nil
+            H.setState('playing')
+            frame(tag .. ' selected, no neutral ' .. w.name)
+            H.setState('jobs')
+            frame(tag .. ' jobs, no neutral ' .. w.name)
+            w.jobSet.neutral = keep
+        end
+    end
+    game.selectedWorker = nil
+    H.setState('playing')
+    -- Tamagotchi mode, for each baby
+    for _, w in ipairs(game.workers) do
+        if w.alive and w:isBaby() then
+            game.selectedWorker = w
+            frame(tag .. ' selected baby ' .. w.name)
+            game.tending = w
+            H.setState('tama')
+            frame(tag .. ' tama ' .. w.name)
+            -- the test shelf, and a baby taking to a new food
+            game.tamaSandbox = true
+            game.tamaScene = { food = FOOD_KINDS[1], t = 1, kind = 'curious', taste = 'fine', side = 1 }
+            game.tamaLast = w.name .. ' has never seen steak before...'
+            frame(tag .. ' tama test ' .. w.name)
+            game.tamaScene = nil
+            game.tamaNap = { t = 3, from = 40 }
+            frame(tag .. ' tama nap ' .. w.name)
+            game.tamaMenu = 'wakeLeave'
+            frame(tag .. ' tama wake ' .. w.name)
+            game.tamaMenu, game.tamaNap = nil, nil
+            game.tamaMenu = 'food'
+            frame(tag .. ' tama bag test ' .. w.name)
+            game.tamaSandbox = nil
+            frame(tag .. ' tama bag ' .. w.name)
+            game.tamaMenu = nil
+            game.tamaToss = { food = FOOD_KINDS[2], t = 0.3, side = 1 }
+            game.tamaDelta = { what = 'meals', t = 0.5 }
+            frame(tag .. ' tama toss ' .. w.name)
+            game.tamaToss, game.tamaDelta = nil, nil
+            game.tamaScene, game.tamaSandbox, game.tamaLast = nil, nil, nil
+            game.tending = nil
+        end
+    end
+    game.selectedWorker = nil
+    H.setState('playing')
     -- the log, with a season's worth of everything
     H.announce('Bartholomew gave up walking to the tree at 41,12', { x = 3, y = 3 }, 'hardship')
     H.announce('Fatima is hungry and the bush at 12,40 is walled off', { x = 4, y = 4 }, 'hardship')

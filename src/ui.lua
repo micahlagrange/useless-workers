@@ -3,6 +3,8 @@ require('src.constants')
 local Util = require('src.util')
 local Scoring = require('src.scoring')
 local Campaign = require('src.campaign')
+local JobSets = require('src.jobsets')
+local Worker = require('src.worker')
 local Version = require('src.version')
 local Audio = require('src.audio')
 
@@ -13,7 +15,6 @@ TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
 FONT_PATH = 'assets/fonts/commodore64.ttf'
 local ALERT_TTL = 10
-local MAX_ALERTS = 4
 
 local C = {
     bar = { 0.08, 0.09, 0.07, 0.92 },
@@ -63,11 +64,10 @@ function UI.new()
     self.morphiQuad = love.graphics.newQuad(0, 0, 16, 16, self.morphiIcon:getWidth(), self.morphiIcon:getHeight())
     self.icons = {
         select = love.graphics.newImage('assets/images/ui/plain_btn.png'),
-        mine = love.graphics.newImage('assets/images/ui/dig_icon.png'),
     }
     self.cursors = {
         select = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
-        mine = love.graphics.newImage('assets/images/ui/dig_cursor.png'),
+        mine = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         storage = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bin = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
         bed = love.graphics.newImage('assets/images/ui/plain_cursor.png'),
@@ -287,9 +287,10 @@ end
 
 
 
+-- One alert at a time: a new one takes the old one's place (the log keeps
+-- them all).
 function UI:alert(text, tile)
-    table.insert(self.alerts, 1, { text = text, ttl = ALERT_TTL, tile = tile })
-    while #self.alerts > MAX_ALERTS do table.remove(self.alerts) end
+    self.alerts = { { text = text, ttl = ALERT_TTL, tile = tile } }
 end
 
 function UI:toast(text)
@@ -310,6 +311,11 @@ function UI:update(dt)
         self.toastTtl = self.toastTtl - dt
         if self.toastTtl <= 0 then self.toastText = nil end
     end
+end
+
+-- The LOG button beside the alert.
+function UI:alertLogAt(mx, my)
+    return hit(self.alertLog, mx, my)
 end
 
 function UI:alertAt(mx, my)
@@ -437,6 +443,25 @@ function UI:iconLog(x, y, s)
     love.graphics.rectangle('fill', x + s * 0.86, y + s * 0.42, s * 0.08, s * 0.16)
 end
 
+-- A tuft of grass.
+function UI:iconGrass(x, y, s)
+    love.graphics.setColor(0.42, 0.72, 0.34)
+    love.graphics.setLineWidth(math.max(1, s * 0.08))
+    for i = 0, 4 do
+        local gx = x + s * (0.22 + i * 0.14)
+        love.graphics.line(gx, y + s * 0.85, gx + s * (i - 2) * 0.06, y + s * (0.2 + (i % 2) * 0.15))
+    end
+    love.graphics.setLineWidth(1)
+end
+
+-- Two fallen leaves.
+function UI:iconLeaves(x, y, s)
+    love.graphics.setColor(0.92, 0.62, 0.3)
+    love.graphics.ellipse('fill', x + s * 0.38, y + s * 0.55, s * 0.26, s * 0.15)
+    love.graphics.setColor(0.8, 0.42, 0.24)
+    love.graphics.ellipse('fill', x + s * 0.62, y + s * 0.42, s * 0.26, s * 0.15)
+end
+
 function UI:iconGold(x, y, s)
     love.graphics.setColor(0.95, 0.8, 0.2)
     love.graphics.rectangle('fill', x + s * 0.15, y + s * 0.25, s * 0.7, s * 0.55)
@@ -476,31 +501,31 @@ end
 
 -- A bin from above: wooden frame, dark open inside, lit from the top left.
 function UI:iconBin(x, y, s)
-    love.graphics.setColor(0.55, 0.42, 0.24)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84)
-    love.graphics.setColor(0.16, 0.12, 0.06)
-    love.graphics.rectangle('fill', x + s * 0.22, y + s * 0.22, s * 0.56, s * 0.56)
-    love.graphics.setColor(0.8, 0.64, 0.38)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.07)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.08, s * 0.07, s * 0.84)
-    love.graphics.setColor(0.36, 0.26, 0.14)
-    love.graphics.rectangle('fill', x + s * 0.08, y + s * 0.85, s * 0.84, s * 0.07)
-    love.graphics.rectangle('fill', x + s * 0.85, y + s * 0.08, s * 0.07, s * 0.84)
+    -- a woven grass basket with two berries in it
+    love.graphics.setColor(0.86, 0.72, 0.45)
+    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.3, s * 0.8, s * 0.58, s * 0.12, s * 0.12)
+    love.graphics.setColor(0.62, 0.46, 0.25)
+    for i = 0, 3 do
+        love.graphics.rectangle('fill', x + s * (0.18 + i * 0.18), y + s * 0.34, s * 0.05, s * 0.5)
+    end
+    love.graphics.setColor(0.72, 0.56, 0.32)
+    love.graphics.setLineWidth(math.max(1, s * 0.06))
+    love.graphics.arc('line', 'open', x + s * 0.5, y + s * 0.32, s * 0.3, math.pi, 2 * math.pi)
+    love.graphics.setLineWidth(1)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self.foodIcon, x + s * 0.26, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
-    love.graphics.draw(self.foodIcon, x + s * 0.52, y + s * 0.26, 0, s * 0.22 / 16, s * 0.22 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.24, y + s * 0.16, 0, s * 0.24 / 16, s * 0.24 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.52, y + s * 0.16, 0, s * 0.24 / 16, s * 0.24 / 16)
 end
 
 -- A floor storage spot: a chalked square with a corner mark.
 function UI:iconFloor(x, y, s)
-    love.graphics.setColor(0.35, 0.3, 0.2)
-    love.graphics.rectangle('fill', x + s * 0.12, y + s * 0.2, s * 0.76, s * 0.6)
-    love.graphics.setColor(0.85, 0.8, 0.6)
-    love.graphics.rectangle('line', x + s * 0.12 + 0.5, y + s * 0.2 + 0.5, s * 0.76 - 1, s * 0.6 - 1)
-    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.3, y + s * 0.2)
-    love.graphics.line(x + s * 0.12, y + s * 0.2, x + s * 0.12, y + s * 0.38)
+    -- a stash: a big leaf laid flat with a berry on it
+    love.graphics.setColor(0.55, 0.8, 0.45)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.55, s * 0.42, s * 0.3)
+    love.graphics.setColor(0.4, 0.65, 0.33)
+    love.graphics.line(x + s * 0.12, y + s * 0.62, x + s * 0.88, y + s * 0.48)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self.foodIcon, x + s * 0.3, y + s * 0.3, 0, s * 0.4 / 16, s * 0.4 / 16)
+    love.graphics.draw(self.foodIcon, x + s * 0.32, y + s * 0.3, 0, s * 0.36 / 16, s * 0.36 / 16)
 end
 
 -- Planks laid across water, seen from above.
@@ -521,14 +546,28 @@ function UI:iconBridge(x, y, s)
 end
 
 function UI:iconBed(x, y, s)
-    love.graphics.setColor(0.4, 0.28, 0.16)
-    love.graphics.rectangle('fill', x + s * 0.1, y + s * 0.2, s * 0.8, s * 0.65)
-    love.graphics.setColor(0.93, 0.9, 0.8)
-    love.graphics.rectangle('fill', x + s * 0.16, y + s * 0.26, s * 0.68, s * 0.53)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.rectangle('fill', x + s * 0.2, y + s * 0.3, s * 0.2, s * 0.45)
-    love.graphics.setColor(0.3, 0.45, 0.75)
-    love.graphics.rectangle('fill', x + s * 0.44, y + s * 0.3, s * 0.4, s * 0.45)
+    -- a nest: a ring of twigs with a soft middle (and an egg, for later)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.62, s * 0.44, s * 0.28)
+    love.graphics.setColor(0.95, 0.88, 0.68)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.58, s * 0.28, s * 0.15)
+    love.graphics.setColor(0.97, 0.95, 0.88)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.44, s * 0.12, s * 0.16)
+    love.graphics.setColor(0.72, 0.55, 0.34)
+    love.graphics.line(x + s * 0.1, y + s * 0.62, x + s * 0.32, y + s * 0.82)
+    love.graphics.line(x + s * 0.68, y + s * 0.82, x + s * 0.9, y + s * 0.62)
+end
+
+-- DIG: a little round spade in a pile of dirt.
+function UI:iconSpade(x, y, s)
+    love.graphics.setColor(0.72, 0.55, 0.36)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.84, s * 0.4, s * 0.12)
+    love.graphics.setColor(0.62, 0.45, 0.28)
+    love.graphics.setLineWidth(math.max(1, s * 0.08))
+    love.graphics.line(x + s * 0.68, y + s * 0.12, x + s * 0.48, y + s * 0.5)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(0.86, 0.82, 0.74)
+    love.graphics.ellipse('fill', x + s * 0.42, y + s * 0.62, s * 0.16, s * 0.2)
 end
 
 -- A wall from above: dark timber with the mortar lines showing.
@@ -562,6 +601,8 @@ end
 function UI:iconForKind(kind, x, y, s)
     if kind == ITEM_FOOD or kind == CARGO_FOOD then self:iconFood(x, y, s)
     elseif kind == CARGO_LOGS then self:iconLog(x, y, s)
+    elseif kind == CARGO_GRASS then self:iconGrass(x, y, s)
+    elseif kind == CARGO_LEAVES then self:iconLeaves(x, y, s)
     elseif kind == CARGO_GOLD then self:iconGold(x, y, s)
     end
 end
@@ -610,6 +651,10 @@ function UI:topValues(game)
         key = 1
     end
     icon(UI.iconLog, tostring(game.world.stock.logs), C.good)
+    if not arcade then
+        icon(UI.iconGrass, tostring(game.world.stock.grass or 0), C.good)
+        icon(UI.iconLeaves, tostring(game.world.stock.leaves or 0), C.good)
+    end
     local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
     icon(UI.iconFood, stored .. '/' .. cap, (cap == 0 and not arcade) and C.warn or C.text)
     icon(UI.iconMorphi, tostring(game.staffCount or 0))
@@ -877,7 +922,7 @@ function UI:drawRestartCall(game)
     love.graphics.setFont(self.fonts.hud)
     love.graphics.setColor(0.08, 0.05, 0.04, 1)
     love.graphics.print(label, r.x + 14, r.y + 12)
-    local why = 'Out of logs and nobody can reach food.'
+    local why = 'Out of sticks and nobody can reach food.'
     local f = self.fonts.small:getWidth(why) <= self.vw - 16 and self.fonts.small or self.fonts.tiny
     self:printLine(why, 8, r.y + r.h + 6, self.vw - 16, 'right', C.warn, { f })
     self.restartButton = r
@@ -892,12 +937,23 @@ end
 -- the bottom bar.
 function UI:drawFollowNav(game)
     self.followNav = {}
-    if not (game.follow and game.selectedWorker and game.selectedWorker.alive) then return end
+    -- shown whenever there is a morphi to go to, following or not
+    local any = false
+    for _, w in ipairs(game.workers or {}) do
+        if w.alive and w.state ~= 'quitting' then any = true break end
+    end
+    if not any then return end
     local prev = self.touch and '<' or '< ['
     local nxt = self.touch and '>' or '] >'
     local bw = math.max(self.touch and 64 or 0, self.fonts.hud:getWidth(prev) + 28)
     local bh = self.quickH + 8
     local y = self.vh - BOTTOM_BAR_H - bh - 8
+    -- above the one-line strip a narrow screen shows for the picked morphi
+    local w = game.selectedWorker
+    if not self.portrait and self.panelW == 0 and w and w.alive then y = y - 26 end
+    -- a short screen whose floating arcade goals reach down this far: they win
+    local goals = self:goalBoxRect(game)
+    if goals and goals.y + goals.h > y - 4 then return end
     -- at the edges, clear of the toast in the middle
     local r1 = { id = -1, x = 8, y = y, w = bw, h = bh }
     local r2 = { id = 1, x = self.vw - 8 - bw, y = y, w = bw, h = bh }
@@ -918,9 +974,12 @@ function UI:drawAlerts(game)
     love.graphics.setFont(self.fonts.small)
     local y = (self.bannerBottom or TOP_BAR_H) + 8
     local box = game and self:goalBoxRect(game)
-    local maxW = (box and box.x - 16 or self.vw) - 40
+    -- room on the right for the LOG button that opens the announcements
+    local logW = self.fonts.small:getWidth('LOG') + 28
+    local maxW = (box and box.x - 16 or self.vw) - 40 - logW - 8
     local bottom = self.vh - BOTTOM_BAR_H - 70 -- the toast lives below this
     self.alertRects = {}
+    self.alertLog = nil
     for _, a in ipairs(self.alerts) do
         local alpha = math.min(1, a.ttl / 1.5)
         -- a tap looks at the place; the hint says so
@@ -939,7 +998,10 @@ function UI:drawAlerts(game)
         love.graphics.setFont(self.fonts.small)
         love.graphics.printf(text, 18, y + 4, maxW, 'left')
         self.alertRects[#self.alertRects + 1] = { x = 12, y = y, w = w, h = h, alert = a }
-        y = y + h + 4
+        local r = { x = 12 + w + 8, y = y, w = logW, h = math.max(h, self.quickH) }
+        self:button(r, 'LOG', false)
+        self.alertLog = r
+        y = y + math.max(h, r.h) + 4
     end
 end
 
@@ -957,7 +1019,8 @@ function UI:drawToolIcon(tool, x, y, size, affordable)
         love.graphics.draw(icon, x, y, 0, size / 16, size / 16)
         return
     end
-    if tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
+    if tool == ABILITY_MINE then self:iconSpade(x, y, size)
+    elseif tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
     elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
     elseif tool == ABILITY_BED then self:iconBed(x, y, size)
     elseif tool == ABILITY_WALL then self:iconWall(x, y, size)
@@ -972,6 +1035,8 @@ end
 
 function UI:drawBottomBar(game)
     local abilities = game.abilities
+    self.jobsButton = nil
+    self.followButton = nil
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
@@ -1031,13 +1096,35 @@ function UI:drawBottomBar(game)
     if self.portrait then
         -- the strip above the tools
         local ix, iy, iw = 16, self.vh - BOTTOM_BAR_H + 8, self.vw - 32
-        if w and w.alive then
+        if w and w.alive and w.jobSet then
+            -- free play: name (JOBS opens the job screen), its three jobs,
+            -- what it is doing, how it is
+            local lh = self.fonts.small:getHeight() + 6
+            local jw, fw = 72, 96
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species, ix, iy, iw - jw - fw - 8 - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
+            self:followButtonDraw(game, { x = ix + iw - jw - 8 - fw, y = iy - 4, w = fw, h = 28 })
+            self:jobsButtonDraw({ x = ix + iw - jw, y = iy - 4, w = jw, h = 28 })
+            self:printLine(self:jobsSummary(w), ix, iy + lh + 6, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:printLine(w:describeState(), ix, iy + 2 * lh + 6, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+            local word, color = hungerLook(w)
+            self:printLine(word .. ', ' .. w:mood(), ix, iy + 3 * lh + 6, iw, 'left', color, { self.fonts.small, self.fonts.tiny })
+        elseif w and w.alive then
             local lh = self.fonts.small:getHeight() + 8
+            local fw = 96
+            self:followButtonDraw(game, { x = ix + iw - fw, y = iy - 4, w = fw, h = 28 })
+            if w:isBaby() then
+                -- TEND opens Tamagotchi mode for this baby
+                self:jobsButtonDraw({ x = ix + iw - fw - 8 - 80, y = iy - 4, w = 80, h = 28 }, 'TEND')
+                fw = fw + 8 + 80
+            end
             -- the name line, with what it eats at the end, as on the units list
-            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - 24, 'left', C.good, { self.fonts.hud, self.fonts.small })
+            local _, nw = self:printLine(w.name .. ', the ' .. w.species .. ', ' .. w.roleInfo.label:lower(), ix, iy, iw - fw - 32, 'left', C.good, { self.fonts.hud, self.fonts.small })
             self:iconFoodKind(w.diet, ix + nw + 6, iy - 1, 18)
             self:printLine(w:describeState(), ix, iy + lh + 4, iw, 'left', C.text, { self.fonts.small, self.fonts.tiny })
-            if w.arcade then
+            if w:isBaby() then
+                self:printLine(w:babySummary(), ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            elseif w.arcade then
                 self:printLine(w.ate and 'has eaten' or 'not eaten yet', ix, iy + 2 * lh + 4, iw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             else
                 local word, color = hungerLook(w)
@@ -1060,8 +1147,15 @@ function UI:drawBottomBar(game)
             setColor(C.good)
             love.graphics.print(w.name, px, py)
             local nx = px + self.fonts.hud:getWidth(w.name) + 10
-            self:printLine('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats', nx, py + 3, px + pw - 160 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
-            self:iconFoodKind(w.diet, px + pw - 160, py - 2, 18)
+            -- FOLLOW (and JOBS in free play) at the top right, what it eats before them
+            local jw = (w.jobSet or w:isBaby()) and 56 or 0
+            local fw = 76
+            local bx0 = px + pw - jw - (jw > 0 and 6 or 0) - fw
+            self:followButtonDraw(game, { x = bx0, y = py - 4, w = fw, h = 22 })
+            if w.jobSet or w:isBaby() then self:jobsButtonDraw({ x = px + pw - jw, y = py - 4, w = jw, h = 22 }, w:isBaby() and 'TEND' or 'JOBS') end
+            local words = w.jobSet and ('the ' .. w.species .. ', eats') or ('the ' .. w.species .. ', ' .. w.roleInfo.label:lower() .. ', eats')
+            self:printLine(words, nx, py + 3, bx0 - 26 - 6 - nx, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            self:iconFoodKind(w.diet, bx0 - 24, py - 2, 18)
             self:printLine(w:describeState(), px, py + 22, pw - 150, 'left', C.text, { self.fonts.small, self.fonts.tiny })
             local sx = px
             for i = 1, INVENTORY_SLOTS do
@@ -1073,7 +1167,8 @@ function UI:drawBottomBar(game)
                 if item then self:iconForKind(item.kind, sx + 3, py + 43, 18) end
                 sx = sx + 30
             end
-            self:printLine('hauled ' .. w.delivered .. '  hardships ' .. w.complaintCount, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            local under = w:isBaby() and w:babySummary() or w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
+            self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
@@ -1086,7 +1181,7 @@ function UI:drawBottomBar(game)
                 local word, color = hungerLook(w)
                 self:printLine(word, bx, py + 34, 140, 'left', color, { self.fonts.small, self.fonts.tiny })
                 setColor(C.dim)
-                love.graphics.print('MORALE ' .. w:mood(), bx, py + 50)
+                love.graphics.print('MOOD ' .. w:mood(), bx, py + 50)
                 love.graphics.setColor(0, 0, 0, 0.6)
                 love.graphics.rectangle('fill', bx, py + 61, 140, 6)
                 if w.morale < MORALE_LOW then setColor(C.warn) else setColor(C.accent) end
@@ -1120,7 +1215,15 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        self:printLine(line, 14, ty + 4, self.vw - 28, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        local room = self.vw - 28 - 76
+        local fx = self.vw - 8 - 70
+        if w.jobSet or w:isBaby() then
+            room = room - 70
+            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
+            fx = fx - 70
+        end
+        self:followButtonDraw(game, { x = fx, y = ty, w = 70, h = 20 })
+        self:printLine(line, 14, ty + 4, room, 'left', C.text, { self.fonts.small, self.fonts.tiny })
     end
     if self.toastText then
         local f = self.fonts.tiny
@@ -1131,11 +1234,497 @@ function UI:drawBottomBar(game)
         local tx = self.vw / 2 - tw / 2
         local th = f:getHeight() + 12
         local ty = self.vh - BOTTOM_BAR_H - th - 14
+        -- above the < > buttons when they show
+        local nav = self.followNav and self.followNav[1]
+        if nav then ty = math.min(ty, nav.y - th - 6) end
         love.graphics.setColor(0, 0, 0, 0.75)
         love.graphics.rectangle('fill', tx, ty, tw, th)
         self:printLine(self.toastText, tx + 10, ty + 6, tw - 20, 'left', C.warn, { f })
         love.graphics.setFont(self.fonts.hud)
     end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The FOLLOW button on the picked morphi's strip: lit while following.
+function UI:followButtonDraw(game, r)
+    self:button(r, 'FOLLOW', game.follow == true)
+    self.followButton = r
+end
+
+function UI:followButtonAt(mx, my)
+    return hit(self.followButton, mx, my)
+end
+
+-- The JOBS button on the picked morphi's strip (free play only).
+function UI:jobsButtonDraw(r, label)
+    self:button(r, label or 'JOBS', false)
+    self.jobsButton = r
+end
+
+-- Tamagotchi mode: one baby in its nest. The scene shows it, any food put
+-- down in front of it, and how it takes to the food: hearts and a hop for
+-- a food it loves, a question mark and a careful creep for one it has
+-- never seen, a green yuck for one it hates. Around it: its needs (bar,
+-- number, word), what it eats, and a card per action saying what it does,
+-- costs and what you have (Worker:tendInfo). On a wide short screen the
+-- scene is on the left and the rest on the right. In the test harness
+-- (game.tamaSandbox) a shelf of every food sits under the scene: tap one
+-- to put it down for free. Buttons: 'tama:feed' 'tama:clean' 'tama:play'
+-- 'tama:nap', 'tamafood:<food>', 'tama:close' (MEADOW).
+local TAMA_NEEDS = { { 'hunger', 'TUMMY' }, { 'fun', 'FUN' }, { 'clean', 'CLEAN' }, { 'sleep', 'SLEEP' } }
+
+local function heart(x, y, s, a)
+    love.graphics.setColor(0.95, 0.4, 0.55, a)
+    love.graphics.circle('fill', x - s * 0.25, y, s * 0.3)
+    love.graphics.circle('fill', x + s * 0.25, y, s * 0.3)
+    love.graphics.polygon('fill', x - s * 0.53, y + s * 0.08, x + s * 0.53, y + s * 0.08, x, y + s * 0.6)
+end
+
+local function yuckFace(x, y, s, a)
+    love.graphics.setColor(0.55, 0.78, 0.35, a)
+    love.graphics.circle('fill', x, y, s * 0.5)
+    love.graphics.setColor(0.2, 0.3, 0.15, a)
+    love.graphics.rectangle('fill', x - s * 0.22, y - s * 0.18, s * 0.1, s * 0.1)
+    love.graphics.rectangle('fill', x + s * 0.12, y - s * 0.18, s * 0.1, s * 0.1)
+    love.graphics.setLineWidth(math.max(1, s * 0.07))
+    love.graphics.line(x - s * 0.25, y + s * 0.2, x - s * 0.1, y + s * 0.1, x, y + s * 0.2, x + s * 0.1, y + s * 0.1, x + s * 0.25, y + s * 0.2)
+    love.graphics.setLineWidth(1)
+end
+
+-- Where the baby is, how it is squashed, and the feeling over its head, at
+-- time t into a scene. Returns dx (0 home, 1 at the food), lift (0-1), the
+-- squash, and a list of {kind, a, rise} emotes.
+local function sceneState(sc)
+    if not sc then return 0, 0, 1, {} end
+    local t = sc.t
+    if sc.kind == 'love' then
+        if t < 0.5 then
+            local f = t / 0.5
+            return f, math.sin(f * math.pi), 1.1, { { 'heart', 1, f } }
+        end
+        local m = (t - 0.5) / 1.1
+        return 1, 0, 1 + 0.12 * math.sin(t * 18), { { 'heart', 1 - m * 0.5, 0.4 + m }, { 'heart', 1 - m, 0.1 + m } }
+    elseif sc.kind == 'ok' then
+        if t < 1 then return t * 0.85, math.abs(math.sin(t * 9)) * 0.15, 1, {} end
+        return 0.85, 0, 1 + 0.08 * math.sin(t * 16), { { 'smile', 1, (t - 1) } }
+    elseif sc.kind == 'curious' then
+        if t < 2 then return t / 2 * 0.7, 0, 0.92, { { 'question', 1, 0 } } end
+        if t < 2.8 then return 0.7 + 0.05 * math.sin(t * 20), 0, 0.92, { { 'question', 1, 0.1 } } end
+        if t < 3.4 then return 0.8, 0, 1 + 0.06 * math.sin(t * 14), {} end
+        local m = (t - 3.4) / 1.2
+        if sc.taste == 'hated' then return 0.8 - m * 0.8, 0, 0.9 + 0.08 * math.sin(t * 30), { { 'yuck', 1, m * 0.5 } } end
+        if sc.taste == 'loved' then return 0.85, math.abs(math.sin(m * math.pi * 2)) * 0.5, 1.05, { { 'exclaim', 1 - m * 0.4, 0 }, { 'heart', 1 - m, m } } end
+        return 0.8, 0, 1 + 0.08 * math.sin(t * 16), { { 'smile', 1, m * 0.5 } }
+    elseif sc.kind == 'hate' then
+        local back = math.min(1, t / 0.6)
+        return -0.35 * back, 0, 0.9 + 0.06 * math.sin(t * 30), { { 'yuck', 1, math.min(1, t / 2) * 0.4 } }
+    end
+    return 0, 0, 1, {}
+end
+
+local function drawEmote(self, kind, x, y, s, a)
+    if kind == 'heart' then heart(x, y, s, a)
+    elseif kind == 'yuck' then yuckFace(x, y, s, a)
+    else
+        local glyph = kind == 'question' and '?' or (kind == 'exclaim' and '!' or (kind == 'zzz' and 'z' or ':)'))
+        local f = self.fonts.big
+        local w = f:getWidth(glyph) + 12
+        love.graphics.setColor(1, 1, 1, 0.9 * a)
+        love.graphics.rectangle('fill', x - w / 2, y - f:getHeight() / 2 - 4, w, f:getHeight() + 8, 6, 6)
+        love.graphics.setFont(f)
+        love.graphics.setColor(0.25, 0.2, 0.3, a)
+        love.graphics.print(glyph, x - f:getWidth(glyph) / 2, y - f:getHeight() / 2)
+    end
+end
+
+function UI:drawTamaScene(game, view, w, sx, sy, sw, sh)
+    local sc = game.tamaScene
+    local cx = sx + sw / 2
+    local ny = sy + sh * 0.68
+    local nestW = math.min(sw * 0.26, sh * 0.5)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.ellipse('fill', cx, ny, nestW, nestW * 0.42)
+    love.graphics.setColor(0.95, 0.88, 0.68)
+    love.graphics.ellipse('fill', cx, ny - nestW * 0.04, nestW * 0.72, nestW * 0.26)
+    local toss = game.tamaToss
+    local side = sc and sc.side or (toss and toss.side) or 1
+    local foodX = cx + side * nestW * 1.55
+    local scale = math.max(2, math.min(8, math.floor(math.min(sh * 0.55, nestW * 1.2) / 16)))
+    if sc then
+        -- the food on the ground beside the nest (gone once eaten, faded if refused)
+        local img = self.foodImages[sc.food]
+        local fa = 1
+        if sc.kind == 'hate' then fa = math.max(0.3, 1 - math.max(0, sc.t - 1.6)) end
+        local eating = (sc.kind == 'love' and sc.t > 0.6) or (sc.kind == 'ok' and sc.t > 1.2) or (sc.kind == 'curious' and sc.t > 3.4 and sc.taste ~= 'hated')
+        local fs = scale * 10
+        if eating then fs = fs * math.max(0.2, 1 - (sc.t % 1)) end
+        if img then
+            love.graphics.setColor(1, 1, 1, fa)
+            love.graphics.draw(img, foodX - fs / 2, ny - fs * 0.6, 0, fs / 16, fs / 16)
+        end
+    end
+    if toss then
+        local f = math.min(1, toss.t / 0.6)
+        local fx = sx + sw * 0.5 + (foodX - (sx + sw * 0.5)) * f
+        local fy = (sy + sh) + (ny - (sy + sh)) * f - math.sin(f * math.pi) * sh * 0.45
+        local img = self.foodImages[toss.food]
+        local fs = scale * 10
+        if img then
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(img, fx, fy - fs * 0.6, f * 6, fs / 16, fs / 16, 8, 8)
+        end
+    end
+    local dx, lift, sq, emotes = sceneState(sc)
+    if toss then emotes = { { 'exclaim', 1, 0 } } end
+    local nap = game.tamaNap
+    if nap then
+        -- asleep in the nest: squashed down, breathing, a z or two drifting up
+        sq = 0.82 + 0.03 * math.sin(nap.t * 2.5)
+        emotes = { { 'zzz', 1, (nap.t * 0.4) % 1 } }
+    end
+    local bx = cx + dx * (foodX - cx) * 0.75
+    local by = ny - nestW * 0.05 - lift * scale * 8
+    local t = love.timer.getTime()
+    if not sc and not nap then
+        local napping = w.state == 'breaking' or w.tuckedIn
+        sq = napping and 0.85 or (1 + 0.05 * math.sin(t * 4))
+        by = by + (napping and 0 or math.sin(t * 3) * scale * 0.5)
+    end
+    local sheet = view and view.sheets[w.sheet]
+    if sheet then
+        love.graphics.setColor(1, 1, 1, 1)
+        local face = (sc and side < 0) and -1 or 1
+        love.graphics.draw(sheet.image, sheet.quads[1], bx, by, 0, face * scale * (2 - sq), scale * sq, 8, 16)
+    end
+    -- the feeling over its head
+    for i, e in ipairs(emotes) do
+        local ex = bx + (i - 1) * scale * 5 - (#emotes - 1) * scale * 2.5
+        local ey = by - scale * 19 - e[3] * scale * 6
+        drawEmote(self, e[1], ex, ey, scale * 5, math.max(0, math.min(1, e[2])))
+    end
+end
+
+-- The Tamagotchi screen: the baby big in its nest; above it what the
+-- colony has to care with (meals in the stashes, grass), with a -1 that
+-- pops when you use some; under it the needs and four buttons: FOOD (opens
+-- the food bag), CLEAN, PLAY, NAP, each with its cost. The food bag lists
+-- every food in the stashes with how many there are and what this baby
+-- thinks of it; tap one to toss it over. Waking a sleeping baby asks first.
+local TAMA_BUTTONS = { { 'food', 'FOOD' }, { 'clean', 'CLEAN' }, { 'play', 'PLAY' }, { 'nap', 'NAP' } }
+function UI:drawTama(game, view)
+    local w = game.tending
+    if not (w and w.alive and w:isBaby()) then return end
+    local small, tiny, hud = self.fonts.small, self.fonts.tiny, self.fonts.hud
+    local lh, th = small:getHeight(), tiny:getHeight()
+    local wide = self.vw > self.vh * 1.25
+    local x, y, pw, ph = self:panel(wide and math.min(980, self.vw - 16) or math.min(620, self.vw - 16), self.vh - 16)
+    self.tamaPanel = { x = x, y = y, w = pw, h = ph }
+    local inner = pw - 36
+    local lx = x + 18
+    -- header: name, MEADOW
+    local btnW = math.max(110, small:getWidth('MEADOW') + 28)
+    self:panelButton('tama:close', { x = x + pw - btnW - 14, y = y + 10, w = btnW, h = 32 }, 'MEADOW', false)
+    self:printLine(w.name .. (game.tamaSandbox and '  (test)' or ''), lx, y + 12, pw - btnW - 46, 'left', C.good, { self.fonts.big, hud, small })
+    local cy = y + 50
+    -- what the colony has to care with
+    local meals = 0
+    for _, it in ipairs(game.world.items) do if it.kind == ITEM_FOOD then meals = meals + 1 end end
+    local grass = game.world.stock.grass or 0
+    local res = { { 'meals', UI.iconFood, game.tamaSandbox and 'free (test)' or (meals .. ' meals stored') }, { 'grass', UI.iconGrass, grass .. ' grass' } }
+    local rx = lx
+    for _, r in ipairs(res) do
+        r[2](self, rx, cy - 2, 18)
+        -- room for a -1 to pop at the end of the column
+        local popW = small:getWidth('-1') + 10
+        local tw = math.min(small:getWidth(r[3]) + 4, inner / 2 - 26 - popW)
+        self:printLine(r[3], rx + 22, cy, tw, 'left', C.text, { small, tiny })
+        local d = game.tamaDelta
+        if d and d.what == r[1] then
+            local a = math.max(0, 1 - d.t / 1.5)
+            love.graphics.setColor(C.warn[1], C.warn[2], C.warn[3], a)
+            love.graphics.setFont(small)
+            love.graphics.print('-1', rx + 22 + tw + 6, cy - d.t * 6)
+        end
+        rx = rx + inner / 2
+    end
+    cy = cy + lh + 8
+    local left = math.max(0, math.ceil(BABY_SECONDS - w.age))
+    local doing = game.tamaNap and 'asleep' or 'awake'
+    cy = cy + self:printWrap('Baby ' .. w.species .. ', ' .. doing .. ', grows up in ' .. math.floor(left / 60) .. ':' .. string.format('%02d', left % 60)
+        .. '. Loves ' .. Worker.foodName(w.diet) .. ', hates ' .. Worker.foodName(w.hates) .. '.', lx, cy, inner, C.dim, { small, tiny }, 2)
+    cy = cy + 6
+    -- bottom up: buttons (cost under each), last line, needs
+    local bottom = y + ph - 14
+    local cols = 4
+    local gap = 8
+    local bw = math.floor((inner - (cols - 1) * gap) / cols)
+    local bh = self.touch and 40 or 34
+    local by = bottom - bh - th - 4
+    local napping = game.tamaNap ~= nil
+    for i, a in ipairs(TAMA_BUTTONS) do
+        local bx = lx + (i - 1) * (bw + gap)
+        local info = a[1] ~= 'food' and w:tendInfo(a[1], game.world) or nil
+        local ok = a[1] == 'food' and (game.tamaSandbox or meals > 0) or (info and info.ok)
+        local label = (a[1] == 'nap' and napping) and 'WAKE' or a[2]
+        local busy = game.tamaScene or game.tamaToss
+        local dim = (a[1] == 'nap' and napping) and nil or ((not ok or busy or napping) and C.dim or nil)
+        self:panelButton('tama:' .. a[1], { x = bx, y = by, w = bw, h = bh }, label, a[1] == 'nap' and napping, dim)
+        local under
+        if a[1] == 'food' then under = game.tamaSandbox and 'free' or (meals > 0 and 'pick a meal' or 'none stored')
+        elseif a[1] == 'nap' and napping then under = math.max(0, math.ceil(TAMA_NAP_SECONDS - game.tamaNap.t)) .. ' s left'
+        else under = ok and info.cost or info.have end
+        self:printLine(under, bx, by + bh + 2, bw, 'center', ok and C.amber or C.warn, { tiny })
+    end
+    local ry = by - 6
+    if game.tamaLast then
+        ry = ry - lh
+        self:printLine(game.tamaLast, lx, ry, inner, 'left', C.good, { small, tiny })
+        ry = ry - 6
+    end
+    -- the needs, two to a row when it is wide enough
+    local needCols = inner >= 520 and 2 or 1
+    local nw = math.floor((inner - (needCols - 1) * 16) / needCols)
+    local labelW = small:getWidth('TUMMY') + 10
+    local valueW = small:getWidth('100 delighted') + 8
+    local rowsN = math.ceil(#TAMA_NEEDS / needCols)
+    ry = ry - rowsN * (lh + 6)
+    for i, nd in ipairs(TAMA_NEEDS) do
+        local r, c = math.floor((i - 1) / needCols), (i - 1) % needCols
+        local nx, ny = lx + c * (nw + 16), ry + r * (lh + 6)
+        local v = nd[1] == 'hunger' and w.hunger or w.needs[nd[1]]
+        self:printLine(nd[2], nx, ny, labelW, 'left', C.text, { small, tiny })
+        local bx, bwid = nx + labelW, nw - labelW - valueW
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle('fill', bx, ny + 1, bwid, lh)
+        local f = math.max(0, math.min(1, v / 100))
+        local col = f > 0.6 and C.good or (f > 0.3 and C.amber or C.warn)
+        setColor(col)
+        love.graphics.rectangle('fill', bx, ny + 1, bwid * f, lh)
+        if nd[1] == 'sleep' and game.tamaNap then
+            local napFill = game.tamaNap.from + (100 - game.tamaNap.from) * math.min(1, game.tamaNap.t / TAMA_NAP_SECONDS)
+            love.graphics.setColor(col[1], col[2], col[3], 0.35)
+            love.graphics.rectangle('fill', bx + bwid * f, ny + 1, bwid * (napFill / 100 - f), lh)
+        end
+        self:printLine(math.floor(v + 0.5) .. ' ' .. Worker.needWord(nd[1], v), bx + bwid + 6, ny, valueW - 6, 'left', col, { small, tiny })
+    end
+    -- the baby in its nest, in all the room between
+    -- (room on top for the bubble over its head)
+    local sceneTop, sceneBottom = cy + math.floor(lh * 1.6), ry - 8
+    if sceneBottom - sceneTop >= 48 then
+        self:drawTamaScene(game, view, w, lx, sceneTop, inner, sceneBottom - sceneTop)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    if game.tamaMenu == 'food' then self:drawTamaFoodBag(game, w)
+    elseif (game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave') and game.tamaNap then self:drawTamaWake(game, w) end
+end
+
+-- The food bag: every food in the stashes, how many, what this baby thinks
+-- of it and what a meal of it does. Tap one to toss it. In the test
+-- harness every food is there, free.
+function UI:drawTamaFoodBag(game, w)
+    local small, tiny = self.fonts.small, self.fonts.tiny
+    local list = {}
+    if game.tamaSandbox then
+        for _, f in ipairs(FOOD_KINDS) do list[#list + 1] = { food = f, n = nil } end
+    else
+        list = Worker.pantry(game.world)
+    end
+    -- one column, or two when it is too tall for one and wide enough;
+    -- rows shrink to fit a short screen
+    local minRow = small:getHeight() + tiny:getHeight() + 8
+    local rowH = math.max(self.touch and 44 or 36, minRow)
+    local room = self.vh - 24 - 66 - 14
+    local cols = 1
+    local n = math.max(1, #list)
+    if n * (rowH + 6) > room and self.vw >= 700 then cols = 2 end
+    local rows = math.ceil(n / cols)
+    rowH = math.max(minRow, math.min(rowH, math.floor(room / rows) - 6))
+    local pw = math.min(cols == 2 and 900 or 520, self.vw - 24)
+    local ph = 66 + rows * (rowH + 6) + 14
+    if #list == 0 then ph = ph + 40 end
+    local x, y
+    x, y, pw, ph = self:panel(pw, ph)
+    local colW = math.floor((pw - 28 - (cols - 1) * 10) / cols)
+    self.tamaMenu = { x = x, y = y, w = pw, h = ph }
+    self:printLine('FOOD BAG', x + 18, y + 14, pw - 140, 'left', C.text, { self.fonts.hud, small })
+    self:panelButton('tamamenu:close', { x = x + pw - 110, y = y + 10, w = 96, h = 30 }, 'CLOSE', false)
+    self:printLine('Tap a food to toss it to ' .. w.name .. '.', x + 18, y + 44, pw - 36, 'left', C.dim, { small, tiny })
+    local ry = y + 66
+    if #list == 0 then
+        self:printWrap('Nothing in the stashes. Foragers pick berries and hunters bring meat home to a STASH or BASKET.', x + 18, ry, pw - 36, C.warn, { small, tiny }, 3)
+    end
+    for i, e in ipairs(list) do
+        local word, gain, taste = w:opinionOf(e.food)
+        local col, row = math.floor((i - 1) / rows), (i - 1) % rows
+        local r = { x = x + 14 + col * (colW + 10), y = ry + row * (rowH + 6), w = colW, h = rowH }
+        love.graphics.setColor(0, 0, 0, 0.35)
+        love.graphics.rectangle('fill', r.x, r.y, r.w, r.h)
+        local is = math.min(28, rowH - 4)
+        self:iconFoodKind(e.food, r.x + 6, r.y + math.floor((rowH - is) / 2), is)
+        local nameX = r.x + 44
+        local count = e.n and (e.n .. ' in the stashes, ' .. (e.n - 1) .. ' after') or 'free (test)'
+        self:printLine(Worker.foodName(e.food), nameX, r.y + 4, r.w - 44 - 150, 'left', C.text, { small, tiny })
+        self:printLine(count, nameX, r.y + 6 + small:getHeight(), r.w - 44 - 150, 'left', C.dim, { tiny })
+        local col = taste == 'loved' and word ~= 'never tried' and C.good or (word == 'hates it' and C.warn or C.amber)
+        local what = word .. (gain > 0 and word ~= 'never tried' and ('  +' .. gain) or '')
+        self:printLine(what, r.x + r.w - 146, r.y + math.floor((rowH - small:getHeight()) / 2), 140, 'right', col, { small, tiny })
+        self.panelButtons[#self.panelButtons + 1] = { id = 'tamafood:' .. e.food, x = r.x, y = r.y, w = r.w, h = r.h }
+    end
+end
+
+-- Waking a sleeping baby (WAKE, or leaving): asks first, and says why.
+function UI:drawTamaWake(game, w)
+    local small = self.fonts.small
+    local leave = game.tamaMenu == 'wakeLeave'
+    local x, y, pw, ph = self:panel(math.min(480, self.vw - 24), 200)
+    self.tamaMenu = { x = x, y = y, w = pw, h = ph }
+    self:printLine('Wake ' .. w.name .. '?', x + 18, y + 16, pw - 36, 'left', C.warn, { self.fonts.hud, small })
+    local left = math.max(0, math.ceil(TAMA_NAP_SECONDS - game.tamaNap.t))
+    self:printWrap('It is asleep, ' .. left .. ' s from the end of its nap. Waking it now undoes the nap: it gets no rest at all.'
+        .. (leave and ' Leaving wakes it.' or ''), x + 18, y + 50, pw - 36, C.text, { small, self.fonts.tiny }, 4)
+    self:panelButtonRow(x, y, pw, ph, { { 'tamawake:no', 'LET IT SLEEP', true }, { 'tamawake:yes', leave and 'WAKE, LEAVE' or 'WAKE IT', false, C.warn } })
+end
+
+function UI:insideTamaMenu(mx, my)
+    return hit(self.tamaMenu, mx, my)
+end
+
+function UI:insideTamaPanel(mx, my)
+    return hit(self.tamaPanel, mx, my)
+end
+
+function UI:jobsButtonAt(mx, my)
+    return hit(self.jobsButton, mx, my)
+end
+
+function UI:insideJobPanel(mx, my)
+    return hit(self.jobPanel, mx, my)
+end
+
+-- A morphi's three jobs in a line: 'forager, then miner, dislikes builder'.
+-- short is for the tight desk strip.
+function UI:jobsSummary(w, short)
+    local js = w.jobSet
+    if not js then return w.roleInfo.label:lower() end
+    if short then
+        return JobSets.label(js.main) .. ' / ' .. (js.neutral and JobSets.label(js.neutral) or 'no fallback') .. ' / not ' .. JobSets.label(js.disliked)
+    end
+    -- 'lumberjack, then builder, dislikes miner': main, neutral, disliked
+    local neutral = js.neutral and ('then ' .. JobSets.label(js.neutral)) or 'no fallback'
+    return JobSets.label(js.main) .. ', ' .. neutral .. ', dislikes ' .. JobSets.label(js.disliked)
+end
+
+-- The job screen for the picked morphi: tap a MAIN job and a NEUTRAL job
+-- (or NONE); the DISLIKED job is shown and cannot be changed. A choice that
+-- is not allowed is drawn in the warning colour and says why when tapped.
+-- Buttons are panel buttons with ids 'job:<slot>:<job or none>'.
+function UI:drawJobs(game)
+    local w = game.selectedWorker
+    if not (w and w.alive and w.jobSet) then return end
+    local js = w.jobSet
+    -- a short screen (a phone on its side) packs the rows a little tighter
+    local short = self.vh < 420
+    local gap = short and 6 or 8
+    local bh = (self.touch and not short) and 38 or 30
+    local small = self.fonts.small
+    -- < and > for the previous and next morphi sit at the panel's sides
+    -- (the screen's sides on a phone); the choices go between them
+    local navW = math.max(36, small:getWidth('<') + 20)
+    local side = 10 + navW + 8
+    local pw = math.min(760 + 2 * (side - 18), self.vw - 16)
+    local inner = pw - 2 * side
+    local minW = small:getWidth('LUMBERJACK') + 12
+    local cols = Util.clamp(math.floor((inner + gap) / (minW + gap)), 1, 5)
+    local bw = math.floor((inner - (cols - 1) * gap) / cols)
+    local function rowsFor(n) return math.ceil(n / cols) end
+    -- the explanations wrap in the small face (a phone held upright has no
+    -- room for them on one line, and the tiny face is hard to read)
+    local hints = {
+        main = 'MAIN JOB: done first, whenever there is any',
+        neutral = 'NEUTRAL JOB: done when the main job has nothing',
+    }
+    hints.disliked = js.main == js.disliked and 'DISLIKED JOB: it is the main job now'
+        or 'DISLIKED JOB: done only when nothing else is left'
+    local trait = 'Part of who ' .. w.name .. ' is. It never changes.'
+    local function wrapH(text, width)
+        local _, lines = small:getWrap(text, width or inner)
+        return #lines * small:getHeight()
+    end
+    local stateH = small:getHeight() + 6
+    -- the header: UNITS (back to the list) and CLOSE on the right; the
+    -- title beside them when it fits, else on a row of its own below
+    local btnW = 100
+    local unitsW = small:getWidth('UNITS') + 24
+    local buttonsW = unitsW + btnW + 8
+    local title = w.name .. "'s jobs"
+    local titleRow = small:getWidth(title) > pw - 36 - buttonsW - 10
+    local top = titleRow and 52 + self.fonts.hud:getHeight() + 6 or 52
+    local function height()
+        return top + stateH + 6
+            + wrapH(hints.main) + 6 + rowsFor(#JobSets.JOBS) * (bh + gap) + 6
+            + wrapH(hints.neutral) + 6 + rowsFor(#JobSets.JOBS + 1) * (bh + gap) + 6
+            + wrapH(hints.disliked) + 6 + math.max(bh, wrapH(trait, inner - bw - 12)) + 12
+    end
+    -- too tall for the screen (six jobs on a tablet held upright, a phone on
+    -- its side): tighter rows, then the shortest buttons that still read
+    local room = self.vh - 16
+    if height() > room then gap, bh = 6, 30 end
+    if height() > room then gap, bh = 4, 26 end
+    local ph = height()
+    local x, y
+    x, y, pw, ph = self:panel(pw, ph)
+    self.jobPanel = { x = x, y = y, w = pw, h = ph }
+    local unitsX = x + pw - btnW - 18 - 8 - unitsW
+    if titleRow then
+        self:printLine(title, x + 18, y + 52, pw - 36, 'left', C.good, { self.fonts.hud, self.fonts.small })
+    else
+        self:printLine(title, x + 18, y + 16, unitsX - x - 18 - 10, 'left', C.good, { self.fonts.big, self.fonts.hud, self.fonts.small })
+    end
+    self:panelButton('units', { x = unitsX, y = y + 12, w = unitsW, h = 30 }, 'UNITS', false)
+    -- the previous and next morphi, at the screen's sides, level with the panel's middle
+    local navH = 72
+    local navY = y + top + math.floor((ph - top - navH) / 2)
+    self:panelButton('jobprev', { x = x + 10, y = navY, w = navW, h = navH }, '<', false)
+    self:panelButton('jobnext', { x = x + pw - 10 - navW, y = navY, w = navW, h = navH }, '>', false)
+    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    local cy = y + top
+    local lx = x + side
+    self:printLine(w:describeState(), lx, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+    cy = cy + stateH + 6
+    -- one block of choices; choices[i] = false stands for NONE. The job in
+    -- the slot is lit; the others are dimmed so it stands out, a choice that
+    -- is not allowed dimmer still in red, the disliked job (allowed as main)
+    -- in a dim amber.
+    local DIM_WARN, DIM_AMBER = { 0.55, 0.33, 0.28 }, { 0.68, 0.53, 0.25 }
+    local function grid(slot, choices)
+        cy = cy + self:printWrap(hints[slot], lx, cy, inner, C.text, { small }, 3) + 6
+        for i, choice in ipairs(choices) do
+            local job = choice or nil
+            local r, c = math.floor((i - 1) / cols), (i - 1) % cols
+            local rect = { x = lx + c * (bw + gap), y = cy + r * (bh + gap), w = bw, h = bh }
+            local current = js[slot] == job
+            local ok = current or JobSets.canSet(js, slot, job)
+            local label = job and JobSets.label(job):upper() or 'NONE'
+            local color = nil
+            if not current then
+                color = (not ok) and DIM_WARN or (job and job == js.disliked and DIM_AMBER) or C.dim
+            end
+            self:panelButton('job:' .. slot .. ':' .. (job or 'none'), rect, label, current, color)
+        end
+        cy = cy + rowsFor(#choices) * (bh + gap) + 6
+    end
+    grid('main', JobSets.JOBS)
+    local neutral = { false }
+    for _, job in ipairs(JobSets.JOBS) do neutral[#neutral + 1] = job end
+    grid('neutral', neutral)
+    -- the disliked job in a box like the others, so it reads the same;
+    -- tapping it only says why it cannot change
+    cy = cy + self:printWrap(hints.disliked, lx, cy, inner, C.text, { small }, 3) + 6
+    self:panelButton('job:disliked:' .. js.disliked, { x = lx, y = cy, w = bw, h = bh }, JobSets.label(js.disliked):upper(), false, C.warn)
+    -- why it cannot change, beside the box (a short screen has no row to spare)
+    local tw = inner - bw - 12
+    local th = wrapH(trait, tw)
+    self:printWrap(trait, lx + bw + 12, cy + math.max(0, math.floor((bh - th) / 2)), tw, C.dim, { small }, 4)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1228,18 +1817,27 @@ function UI:drawUnits(game, view)
     x, y, pw, ph = self:panel(pw, ph)
     self.unitPanel = { x = x, y = y, w = pw, h = ph }
     local btnW = compact and 100 or 120
+    -- free play rows also have JOBS beside FOLLOW
+    local anyJobs = false
+    for _, w in ipairs(units) do if w.jobSet then anyJobs = true end end
+    local jobsW = anyJobs and (compact and 64 or 72) or 0
     self:printLine('UNITS  (' .. #units .. ' morphis)', x + 18, y + 16, pw - btnW - 52, 'left', C.text, { self.fonts.big, self.fonts.hud, self.fonts.small })
     local cName = x + 18 + rowH
+    local right = x + pw - btnW - 24 - (jobsW > 0 and jobsW + 8 or 0)
     local cTask = compact and x + math.floor(pw * 0.42) or x + math.floor(pw * 0.34)
-    local cHunger, cMorale = x + math.floor(pw * 0.62), x + math.floor(pw * 0.76)
-    local right = x + pw - btnW - 24
+    -- the hunger and morale columns share out what the buttons leave
+    local cHunger, cMorale = x + math.floor((right - x) * 0.72), x + math.floor((right - x) * 0.88)
+    -- a phone with JOBS and FOLLOW on each row: the task goes under the
+    -- name instead of in a column of its own
+    local stacked = compact and jobsW > 0
+    if stacked then cTask = right end
     local wide = pw >= 760
     local arcade = game.mode == 'arcade'
     self:printLine('MORPHI', cName, y + 56, cTask - cName - 8, 'left', C.dim, { self.fonts.tiny })
-    self:printLine('TASK', cTask, y + 56, (compact and right or cHunger) - cTask - 8, 'left', C.dim, { self.fonts.tiny })
+    if not stacked then self:printLine('TASK', cTask, y + 56, (compact and right or cHunger) - cTask - 8, 'left', C.dim, { self.fonts.tiny }) end
     if not compact then
         self:printLine(arcade and 'MEAL' or 'HUNGER', cHunger, y + 56, (wide and not arcade and cMorale or right) - cHunger - 8, 'left', C.dim, { self.fonts.tiny })
-        if wide and not arcade then self:printLine('MORALE', cMorale, y + 56, right - cMorale - 8, 'left', C.dim, { self.fonts.tiny }) end
+        if wide and not arcade then self:printLine('MOOD', cMorale, y + 56, right - cMorale - 8, 'left', C.dim, { self.fonts.tiny }) end
     end
     self.unitButtons = {}
     local ry = y + 70
@@ -1259,14 +1857,22 @@ function UI:drawUnits(game, view)
         end
         local nameFonts = rowH >= 44 and { self.fonts.hud, self.fonts.small, self.fonts.tiny } or { self.fonts.small, self.fonts.tiny }
         local nameW = cTask - cName - 30
-        self:printLine(w.name, cName, ry + 4, nameW, 'left', C.good, nameFonts)
-        local nf = love.graphics.getFont()
-        self:iconFoodKind(w.diet, cName + math.min(nf:getWidth(w.name), nameW) + 6, ry + 2, 16)
+        if stacked and rowH < 44 then
+            -- one line: name and what it is doing
+            self:printLine(w.name .. ': ' .. w:describeState(), cName, ry + 8, cTask - cName - 8, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        else
+            self:printLine(w.name, cName, ry + 4, nameW, 'left', C.good, nameFonts)
+            local nf = love.graphics.getFont()
+            self:iconFoodKind(w.diet, cName + math.min(nf:getWidth(w.name), nameW) + 6, ry + 2, 16)
+        end
         if rowH >= 44 then
-            self:printLine(w.species .. ', ' .. w.roleInfo.label:lower(), cName, ry + 26, cTask - cName - 8, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            local second = stacked and w:describeState() or (w.species .. ', ' .. w.roleInfo.label:lower())
+            self:printLine(second, cName, ry + 26, cTask - cName - 8, 'left', stacked and C.text or C.dim, { self.fonts.small, self.fonts.tiny })
         end
         local taskRight = compact and right or cHunger
-        self:printLine(w:describeState(), cTask, ry + 8, taskRight - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        if not stacked then
+            self:printLine(w:describeState(), cTask, ry + 8, taskRight - cTask - 10, 'left', C.text, { self.fonts.small, self.fonts.tiny })
+        end
         if not compact then
             local barW = (wide and not arcade and cMorale or right) - cHunger - 12
             if arcade then
@@ -1290,7 +1896,12 @@ function UI:drawUnits(game, view)
         local following = game.follow and selected
         local r = { x = x + pw - btnW - 18, y = ry + math.floor((rowH - 4 - 28) / 2), w = btnW, h = 28 }
         self:button(r, following and 'FOLLOWING' or 'FOLLOW', following)
-        self.unitButtons[#self.unitButtons + 1] = { worker = w, x = r.x, y = r.y, w = r.w, h = r.h }
+        self.unitButtons[#self.unitButtons + 1] = { worker = w, what = 'follow', x = r.x, y = r.y, w = r.w, h = r.h }
+        if w.jobSet then
+            local jr = { x = r.x - jobsW - 8, y = r.y, w = jobsW, h = 28 }
+            self:button(jr, 'JOBS', false)
+            self.unitButtons[#self.unitButtons + 1] = { worker = w, what = 'jobs', x = jr.x, y = jr.y, w = jr.w, h = jr.h }
+        end
         ry = ry + rowH
     end
     self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
@@ -1301,7 +1912,7 @@ end
 -- a LOOK button for anything that happened somewhere. At the top, this
 -- season's hardships by kind.
 local LOG_KIND = {
-    hardship = { 'HARDSHIP', 'warn' }, warning = { 'FED UP', 'warn' }, left = { 'LEFT', 'warn' }, news = { 'NEWS', 'dim' },
+    hardship = { 'GRUMBLE', 'warn' }, warning = { 'GRUMPY', 'warn' }, left = { 'LEFT', 'warn' }, news = { 'NEWS', 'dim' },
 }
 function UI:drawLog(game)
     local log = game.log or {}
@@ -1319,16 +1930,16 @@ function UI:drawLog(game)
     local counts, order = {}, {}
     for _, e in ipairs(log) do
         if e.season == season and e.kind ~= 'news' then
-            local key = e.kind == 'hardship' and (e.text:find('gave up walking') and 'gave up a long walk' or e.text:find('walled off') and 'hungry, food walled off'
+            local key = e.kind == 'hardship' and (e.text:find('is hungry and') and 'hungry, food out of reach'
                 or e.text:find('nothing to do') and 'nothing to do' or 'could not reach')
-                or (e.kind == 'left' and 'left the band' or 'fed up')
+                or (e.kind == 'left' and 'left' or 'very grumpy')
             if not counts[key] then order[#order + 1] = key end
             counts[key] = (counts[key] or 0) + 1
         end
     end
     if game.mode == 'arcade' then season = '' end -- arcade has no seasons
     local summary = (season ~= '' and season or 'So far') .. ': '
-    if #order == 0 then summary = summary .. 'no hardships yet'
+    if #order == 0 then summary = summary .. 'no grumbles yet'
     else
         local parts = {}
         for _, k in ipairs(order) do parts[#parts + 1] = counts[k] .. ' ' .. k end
@@ -1345,7 +1956,7 @@ function UI:drawLog(game)
     end
     local small, tiny = self.fonts.small, self.fonts.tiny
     local lookW = self.touch and 78 or 70
-    local kindW = tiny:getWidth('HARDSHIP') + 10
+    local kindW = tiny:getWidth('GRUMBLE') + 10
     for i = #log, 1, -1 do
         local e = log[i]
         local textX = x + 18 + kindW
@@ -1368,9 +1979,11 @@ function UI:insideLogPanel(mx, my)
     return hit(self.logPanel, mx, my)
 end
 
+-- The morphi whose row button is under the pointer, and which button:
+-- 'follow' or 'jobs'.
 function UI:unitButtonAt(mx, my)
     for _, b in ipairs(self.unitButtons) do
-        if hit(b, mx, my) then return b.worker end
+        if hit(b, mx, my) then return b.worker, b.what end
     end
     return nil
 end
@@ -1403,12 +2016,12 @@ function UI:drawReport(report, scoring)
     local rows = {
         { 'Hauled in', tostring(report.output) },
         { 'Food stored', tostring(report.food), UI.iconFood },
-        { 'Logs', tostring(report.logs), UI.iconLog },
-        { 'Gold', tostring(report.gold), UI.iconGold },
+        { 'Sticks', tostring(report.logs), UI.iconLog },
+        { 'Shinies', tostring(report.gold), UI.iconGold },
         { 'Fed', report.fedPct .. '%' },
-        { 'Hardships', tostring(report.complaints), UI.iconComplaint },
-        { 'Lost to the wilds', tostring(report.attrition) },
-        { 'Migrants arriving', '+' .. report.hires, UI.iconMorphi },
+        { 'Grumbles', tostring(report.complaints), UI.iconComplaint },
+        { 'Wandered off', tostring(report.attrition) },
+        { 'New eggs', '+' .. (report.eggs or report.hires or 0), UI.iconMorphi },
     }
     local rs = math.min(30, math.floor((ph - 130) / #rows))
     local ry = y + 70
@@ -1444,7 +2057,7 @@ function UI:drawTitle(title, highScore)
     local _, th = self:centered('MORPHIS', y, self.fonts.title, C.text, self.vw - 2 * 100)
     y = y + th + gap(14)
     if not short then
-        y = y + self:centeredFit('A small band settling the harsh wilds.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + 2
+        y = y + self:centeredFit('A bunch of little blobs in a big meadow.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + 2
         y = y + self:centeredFit('They will look after themselves. Badly.', y, self.vw - 24, C.dim, { self.fonts.hud, self.fonts.small }) + gap(36)
     else
         y = y + 6
@@ -1459,10 +2072,14 @@ function UI:drawTitle(title, highScore)
     end
     local aw, ah = 44, 40
     local nw, nh = self:centered(row1, y + 6, self.fonts.big, opt.locked and C.dim or C.text, self.vw - 2 * (aw + 20) - 16)
-    self.titleButtons.left = { x = math.floor(cx - nw / 2 - 12 - aw), y = y - 1, w = aw, h = ah }
-    self.titleButtons.right = { x = math.floor(cx + nw / 2 + 12), y = y - 1, w = aw, h = ah }
-    self:button(self.titleButtons.left, '<', false)
-    self:button(self.titleButtons.right, '>', false)
+    -- arrows only when there is something to choose between
+    self.titleButtons.left, self.titleButtons.right = nil, nil
+    if #title.options > 1 then
+        self.titleButtons.left = { x = math.floor(cx - nw / 2 - 12 - aw), y = y - 1, w = aw, h = ah }
+        self.titleButtons.right = { x = math.floor(cx + nw / 2 + 12), y = y - 1, w = aw, h = ah }
+        self:button(self.titleButtons.left, '<', false)
+        self:button(self.titleButtons.right, '>', false)
+    end
     y = y + ah + 14 -- clear of the arrows above
     local function diffRow(name)
         local dw, dh = self:centered(name, y, self.fonts.hud, C.text, self.vw - 2 * (36 + 16) - 16)
@@ -1502,7 +2119,7 @@ function UI:drawTitle(title, highScore)
             local _, dh = self:centered(diff.name:upper(), y, self.fonts.hud, C.text)
             y = y + dh + 8
         end
-        y = y + self:centeredFit(diff.workers .. ' settlers, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and migrants', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
+        y = y + self:centeredFit(diff.workers .. ' little blobs, hunger ' .. diff.drain .. '/s, score x' .. diff.multiplier .. ', seasons and newcomers', y, self.vw - 24, C.dim, { self.fonts.small, self.fonts.tiny }) + gap(30)
         local seedText = 'SEED: ' .. title.seed
         if title.editingSeed then seedText = seedText .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ') end
         local sw = self:centered(seedText, y, self.fonts.big, title.editingSeed and C.good or C.text)
@@ -1531,10 +2148,12 @@ function UI:drawTitle(title, highScore)
     y = y + 54 + gap(14)
     -- the small print, as much of it as there is room for
     local notes = {
-        'ARCADE: every morphi wants one meal. Give the band what it insists on, spend as few points as you can.',
-        'SURVIVAL (retired): keep everyone fed to the clock. You never control a morphi.',
+        'Three little blobs and a baby, a big meadow, four seasons. Mark the work; they do the rest.',
     }
-    if not self.touch then table.insert(notes, 1, 'arrow keys pick the level and the difficulty') end
+    if #title.options > 1 then
+        table.insert(notes, 'ARCADE: every morphi wants one meal. Give the bunch what it insists on, spend as few points as you can.')
+        if not self.touch then table.insert(notes, 1, 'arrow keys pick the level and the difficulty') end
+    end
     for _, note in ipairs(notes) do
         local fonts = { self.fonts.small, self.fonts.tiny }
         local f = self.fonts.tiny
@@ -1633,14 +2252,14 @@ function UI:drawGoal(game)
         lines = {
             { def.intro, C.text },
             { 'Keep everyone fed until the clock runs out. Nobody may be lost.', C.text },
-            { def.points .. ' points to spend, par ' .. def.par .. '. Bridges, bins and beds cost points. Mining is free. Logs are points.', C.dim },
+            { def.points .. ' points to spend, par ' .. def.par .. '. Bridges, baskets and nests cost points. Digging is free. Sticks are points.', C.dim },
         }
     else
         title = 'FREE PLAY'
         lines = {
-            { 'A random map, four seasons, migrants when the haul is good. Hardships and hunger wear morale down; at zero a morphi leaves.', C.text },
-            { 'Bushes wear out and new growth comes up out of reach. A morphi with nothing it can get at grows bored: MINE and BRIDGE to open the way, and mark FLOOR spots or BINS for the food.', C.text },
-            { 'Each morphi loves one food (a big meal and a better mood) and hates one. Gold from the miners buys happy thoughts at camp.', C.dim },
+            { 'A random meadow, four seasons, newcomers when the haul is good. Grumbles and hunger wear their mood down; at zero a morphi leaves.', C.text },
+            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored: DIG through the clay (shinies hide in it) and BRIDGE to open the way, and lay a STASH or a BASKET for the berries.', C.text },
+            { 'Each morphi loves one food (a big meal and a better mood) and hates one. Shinies from the diggers buy happy thoughts at the home nest.', C.dim },
         }
     end
     local eaters, seen = {}, {}
@@ -1793,7 +2412,7 @@ function UI:drawLevelFailed(game)
     local lv = game.level
     local x, y, pw, ph = self:panel(720, 260)
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
-    self:centeredFit(game.failReason or 'Somebody left the band.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
+    self:centeredFit(game.failReason or 'Somebody wandered off.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
@@ -1825,7 +2444,7 @@ end
 
 function UI:drawGameOver(scoring, highScore, isNew, stats)
     local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0))
-    self:centeredFit('The wilds took them all.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('Everyone wandered off.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 80, pw - 40, C.dim)
     self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + math.floor(ph * 0.42), pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if isNew then
@@ -1847,7 +2466,7 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
         setColor(C.dim)
         love.graphics.setFont(self.fonts.hud)
         love.graphics.print(Scoring.seasonName(r.quarter):sub(1, 3):upper(), x + 30, ry)
-        self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  logs ' .. r.logs .. '  gold ' .. r.gold .. '  hard ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
+        self:printFit('haul ' .. r.output .. '  food ' .. r.food .. '  sticks ' .. r.logs .. '  shinies ' .. r.gold .. '  grumbles ' .. r.complaints .. '  lost ' .. r.attrition .. '  grade ' .. r.grade,
             x + 90, ry + 2, pw - 110, 'left', C.text, { self.fonts.small, self.fonts.tiny })
         ry = ry + rs
     end
@@ -1861,20 +2480,57 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
     self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
--- The tester's corner: FINGERS, PLAY NOW (free play: the two nearest free
--- morphis play straight away) and the run's audit log.
-function UI:drawTools(fingerDebug, canPlayNow)
-    local bh = self.touch and 44 or 36
-    local x, y, pw, ph = self:panel(620, canPlayNow and 300 + bh + 12 or 300)
+-- The tester's corner: FINGERS, and the run's audit log.
+function UI:drawTools(fingerDebug, canFunTest)
+    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44) + (canFunTest and (self.touch and 52 or 44) or 0))
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
-    self:centeredFit('For finding bugs and tuning the wilds.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
-    local bw = math.min(260, pw - 40)
+    self:centeredFit('For finding bugs and tuning the meadow.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
     local bx = x + math.floor((pw - bw) / 2)
     self:panelButton('fingers', { x = bx, y = y + 110, w = bw, h = bh }, fingerDebug and 'FINGERS: ON' or 'FINGERS: OFF', fingerDebug)
-    if canPlayNow then
-        self:panelButton('playnow', { x = bx, y = y + 110 + bh + 12, w = bw, h = bh }, 'PLAY NOW', false)
+    -- Tamagotchi test harness, and every resource for testing
+    local hw = math.floor((bw - 8) / 2)
+    self:panelButton('tamatest', { x = bx, y = y + 118 + bh, w = hw, h = bh }, 'TAMA TEST', false)
+    self:panelButton('stockup', { x = bx + hw + 8, y = y + 118 + bh, w = hw, h = bh }, 'STOCK UP', false)
+    -- free play: pick two morphis and a kind of fun for them to have now
+    if canFunTest then
+        self:panelButton('funtest', { x = bx, y = y + 126 + 2 * bh, w = bw, h = bh }, 'FUN TEST', false)
     end
     self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
+end
+
+-- FUN TEST: the band as buttons (tap two), then a kind of fun to start for
+-- them. a and b are the picked workers. A * marks one that cannot play now.
+function UI:drawFunTest(workers, a, b)
+    local list = {}
+    for _, w in ipairs(workers) do
+        if w:isWorking() then list[#list + 1] = w end
+    end
+    local rows = 6
+    local cols = math.max(1, math.min(3, math.ceil(#list / rows)))
+    local bh = self.touch and 44 or 34
+    local ph0 = 130 + rows * (bh + 6) + 20 + bh + 90
+    local x, y, pw, ph = self:panel(760, ph0)
+    self:centeredFit('FUN TEST', y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    local picked = (a and a.name or '...') .. '  +  ' .. (b and b.name or '...')
+    self:centeredFit(picked, y + 62, pw - 40, C.good, { self.fonts.hud, self.fonts.small })
+    local gap = 8
+    local bw = math.floor((pw - 40 - gap * (cols - 1)) / cols)
+    for i, w in ipairs(list) do
+        if i > rows * cols then break end
+        local col, row = math.floor((i - 1) / rows), (i - 1) % rows
+        local r = { x = x + 20 + col * (bw + gap), y = y + 100 + row * (bh + 6), w = bw, h = bh }
+        local label = w.name .. (w:canBePaired() and '' or ' *')
+        self:panelButton('fm:' .. i, r, label, w == a or w == b)
+    end
+    local ky = y + 100 + rows * (bh + 6) + 8
+    self:centeredFit('Then pick the fun   (* = hungry, busy or away)', ky, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    local kinds = PLAY_CATEGORIES
+    local kw = math.floor((pw - 40 - gap * (#kinds - 1)) / #kinds)
+    for i, kind in ipairs(kinds) do
+        self:panelButton('fk:' .. kind, { x = x + 20 + (i - 1) * (kw + gap), y = ky + 24, w = kw, h = bh }, PLAY_KIND_NAMES[kind] or kind:upper(), false)
+    end
+    self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true } })
 end
 
 -- EXPORT: a few words from the player, then the run is written out.

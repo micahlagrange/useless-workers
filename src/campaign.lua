@@ -91,7 +91,7 @@ function Campaign.load(index, rng, set, difficulty)
     rng = rng or Rng.new(index)
     local world = World.fromGrid(def.grid, rng)
     local points = Campaign.points(def, set, difficulty)
-    world.stock = { logs = points, gold = 0 }
+    world.stock = { logs = points, gold = 0, grass = 0, leaves = 0 }
     world.spent = 0
     if set == 'arcade' then
         world.arcade = true
@@ -152,17 +152,17 @@ function Campaign.goals(run, workers)
     local pop = #def.morphis
     local out = {}
     if needs.bins then
-        out[#out + 1] = { label = 'a BIN to eat from', done = world:arcadeNeedMet('bins') }
+        out[#out + 1] = { label = 'a BASKET to eat from', done = world:arcadeNeedMet('bins') }
     end
     if needs.floors then
-        out[#out + 1] = { label = 'a FLOOR tile each (' .. math.min(#world.floors, pop) .. '/' .. pop .. ')', done = world:arcadeNeedMet('floors') }
+        out[#out + 1] = { label = 'a STASH each (' .. math.min(#world.floors, pop) .. '/' .. pop .. ')', done = world:arcadeNeedMet('floors') }
     end
     if needs.enclosed then
-        out[#out + 1] = { label = 'WALLS round the floors, a DOOR', done = world:arcadeNeedMet('enclosed') }
+        out[#out + 1] = { label = 'WALLS round the stashes, a DOOR', done = world:arcadeNeedMet('enclosed') }
     end
     if needs.binsInside then
         local bins = world:binCount()
-        out[#out + 1] = { label = 'every BIN inside (' .. world:binsInsideCount() .. '/' .. bins .. ')', done = world:arcadeNeedMet('binsInside') }
+        out[#out + 1] = { label = 'every BASKET inside (' .. world:binsInsideCount() .. '/' .. bins .. ')', done = world:arcadeNeedMet('binsInside') }
     end
     local ate = Campaign.ateCount(workers)
     out[#out + 1] = { label = 'everyone has eaten (' .. ate .. '/' .. pop .. ')', done = ate >= pop }

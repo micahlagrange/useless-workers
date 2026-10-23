@@ -94,8 +94,7 @@ function View:rebuildCanvas()
                 love.graphics.rectangle('fill', px + 3, py + 4, 5, 2)
                 love.graphics.rectangle('fill', px + 9, py + 10, 4, 2)
             elseif t.type == TILE_BREAKROOM then
-                love.graphics.setColor(0.35, 0.28, 0.16)
-                love.graphics.rectangle('line', px + 0.5, py + 0.5, TILE_SIZE - 1, TILE_SIZE - 1)
+                -- plain trodden ground; the home nest is drawn over it, so no grid lines
             elseif t.type == TILE_WALL then
                 self:drawWallTile(px, py, 1)
             elseif t.type == TILE_DOOR then
@@ -117,23 +116,49 @@ function View:drawBreakroom()
     local br = self.world.breakroom
     if not br then return end
     local px, py = (br.x - 1) * TILE_SIZE, (br.y - 1) * TILE_SIZE
-    -- water cooler
-    love.graphics.setColor(0.45, 0.7, 0.9)
-    love.graphics.rectangle('fill', px + 4, py + 3, 5, 8)
-    love.graphics.setColor(0.8, 0.8, 0.85)
-    love.graphics.rectangle('fill', px + 3, py + 11, 7, 3)
-    -- coffee maker
-    love.graphics.setColor(0.25, 0.2, 0.18)
-    love.graphics.rectangle('fill', px + 20, py + 5, 8, 9)
-    love.graphics.setColor(0.9, 0.5, 0.3)
-    love.graphics.rectangle('fill', px + 22, py + 7, 4, 2)
-    -- table
-    love.graphics.setColor(0.55, 0.42, 0.25)
-    love.graphics.rectangle('fill', px + 6, py + 20, 20, 8)
+    -- the home nest: where the bunch settled (look only; the decision log's
+    -- settlement marker). A 3x3 marker of soft corners round the 2x2 camp
+    -- ground, and one big woven nest in the middle of it.
+    local T = TILE_SIZE
+    local mx, my, ms = px - T / 2, py - T / 2, 3 * T
+    love.graphics.setColor(1, 0.95, 0.75, 0.75)
+    love.graphics.setLineWidth(1.5)
+    local c = 6
+    for _, k in ipairs({ { 0, 0, 1, 1 }, { 1, 0, -1, 1 }, { 0, 1, 1, -1 }, { 1, 1, -1, -1 } }) do
+        local x0, y0 = mx + k[1] * ms, my + k[2] * ms
+        love.graphics.line(x0 + k[3] * c, y0, x0, y0, x0, y0 + k[4] * c)
+    end
+    local cx, cy = px + T, py + T
+    -- the nest, seen from above: a round ring of woven twigs round a soft
+    -- middle with four dents, one for each egg
+    local R = T
+    love.graphics.setColor(0, 0, 0, 0.15)
+    love.graphics.circle('fill', cx + 1, cy + 1.5, R)
+    love.graphics.setColor(0.6, 0.45, 0.28)
+    love.graphics.circle('fill', cx, cy, R)
+    love.graphics.setColor(0.72, 0.55, 0.34)
+    love.graphics.setLineWidth(1.2)
+    for i = 0, 15 do
+        local a = i / 16 * math.pi * 2
+        love.graphics.line(cx + math.cos(a) * R * 0.74, cy + math.sin(a) * R * 0.74,
+            cx + math.cos(a + 0.45) * R * 0.97, cy + math.sin(a + 0.45) * R * 0.97)
+    end
+    love.graphics.setColor(0.42, 0.3, 0.17)
+    love.graphics.setLineWidth(1)
+    love.graphics.circle('line', cx, cy, R - 0.5)
+    love.graphics.setColor(0.93, 0.85, 0.62)
+    love.graphics.circle('fill', cx, cy, R * 0.74)
+    for _, d in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+        local dx, dy = cx + d[1] * T * 0.5, cy + d[2] * T * 0.5
+        love.graphics.setColor(0.78, 0.67, 0.44)
+        love.graphics.circle('fill', dx, dy, 5.5)
+        love.graphics.setColor(0.97, 0.92, 0.74)
+        love.graphics.circle('fill', dx + 0.8, dy + 0.8, 4.2)
+    end
     -- sign
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
-    local label = 'CAMP'
+    local label = 'HOME'
     local w = self.bubbleFont:getWidth(label) + 4
     love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
     love.graphics.rectangle('fill', px + TILE_SIZE - w / 2, py - 11, w, 10)
@@ -170,13 +195,38 @@ function View:drawNodes(clock)
                 love.graphics.setColor(0.18, 0.32, 0.14)
                 love.graphics.circle('line', px + 8, py + 5, 7)
             else
-                -- stump
-                love.graphics.setColor(0.45, 0.32, 0.18)
-                love.graphics.rectangle('fill', px + 5, py + 9, 6, 5)
-                love.graphics.setColor(0.7, 0.55, 0.32)
-                love.graphics.ellipse('fill', px + 8, py + 9, 3.5, 2)
-                love.graphics.setColor(0.45, 0.32, 0.18)
-                love.graphics.ellipse('line', px + 8, py + 9, 2, 1)
+                -- shaken bare: the tree stays, its twigs grow back
+                love.graphics.setColor(0.42, 0.3, 0.16)
+                love.graphics.rectangle('fill', px + 7, py + 6, 2, 10)
+                love.graphics.line(px + 8, py + 8, px + 4, py + 3)
+                love.graphics.line(px + 8, py + 7, px + 12, py + 2)
+                love.graphics.line(px + 8, py + 10, px + 12, py + 7)
+                love.graphics.setColor(0.32, 0.56, 0.26, 0.6)
+                love.graphics.circle('fill', px + 4, py + 3, 1.5)
+                love.graphics.circle('fill', px + 12, py + 2, 1.5)
+            end
+        elseif node.kind == NODE_GRASS then
+            local h = node.ready and 7 or 2
+            love.graphics.setColor(0.36, 0.62, 0.3)
+            for i = 0, 4 do
+                local gx = px + 4 + i * 2
+                love.graphics.line(gx, py + 13, gx + (i - 2) * 0.8, py + 13 - h - (i % 2) * 2)
+            end
+        elseif node.kind == NODE_CRITTER then
+            -- a little round critter with long ears, bobbing
+            local hop = math.abs(math.sin((clock or 0) * 5 + node.id)) * 1.5
+            love.graphics.setColor(0, 0, 0, 0.18)
+            love.graphics.ellipse('fill', px + 8, py + 13, 4, 1.5)
+            love.graphics.setColor(0.93, 0.88, 0.8)
+            love.graphics.ellipse('fill', px + 8, py + 10 - hop, 4, 3)
+            love.graphics.ellipse('fill', px + 6.5, py + 6 - hop, 1, 2.5)
+            love.graphics.ellipse('fill', px + 9.5, py + 6 - hop, 1, 2.5)
+            love.graphics.setColor(0.2, 0.15, 0.15)
+            love.graphics.rectangle('fill', px + 9, py + 9 - hop, 1, 1)
+        elseif node.kind == NODE_LEAVES then
+            for i, c in ipairs({ { 6, 10, 0.86, 0.55, 0.3 }, { 10, 11, 0.93, 0.72, 0.32 }, { 8, 8, 0.78, 0.42, 0.25 } }) do
+                love.graphics.setColor(c[3], c[4], c[5])
+                love.graphics.ellipse('fill', px + c[1], py + c[2], 3, 1.8)
             end
         elseif node.kind == NODE_ORE then
             local glint = 0.75 + 0.25 * math.sin((clock or 0) * 3 + node.id)
@@ -198,39 +248,33 @@ end
 
 -- Floor storage: a chalked square on the ground.
 function View:drawFloorSpot(px, py, a)
-    love.graphics.setColor(0, 0, 0, 0.18 * a)
-    love.graphics.rectangle('fill', px + 2, py + 2, 12, 12)
-    love.graphics.setColor(0.9, 0.85, 0.65, 0.8 * a)
-    love.graphics.rectangle('line', px + 2.5, py + 2.5, 11, 11)
-    love.graphics.line(px + 2.5, py + 2.5, px + 6, py + 2.5)
-    love.graphics.line(px + 2.5, py + 2.5, px + 2.5, py + 6)
-    love.graphics.line(px + 13.5, py + 13.5, px + 10, py + 13.5)
-    love.graphics.line(px + 13.5, py + 13.5, px + 13.5, py + 10)
+    -- a stash: a big soft leaf laid flat, with its vein
+    love.graphics.setColor(0, 0, 0, 0.15 * a)
+    love.graphics.ellipse('fill', px + 8.5, py + 9, 6.5, 5.5)
+    love.graphics.setColor(0.55, 0.8, 0.45, 0.9 * a)
+    love.graphics.ellipse('fill', px + 8, py + 8, 6.5, 5.5)
+    love.graphics.setColor(0.4, 0.65, 0.33, 0.9 * a)
+    love.graphics.line(px + 2.5, py + 9.5, px + 13.5, py + 6.5)
 end
 
 -- A bin seen from above: a wooden frame with a dark open inside, lit from
 -- the top left. Items sit in the four quadrants of the opening.
 -- A bin, top down, two tiles wide from (px, py).
 function View:drawBin(px, py, a)
+    -- a basket of woven grass, two tiles wide; things sit in its four
+    -- quarters, so the open middle keeps the bin's shape
     local w = 2 * TILE_SIZE - 2
-    love.graphics.setColor(0, 0, 0, 0.2 * a)
-    love.graphics.rectangle('fill', px + 2, py + 2, w, 14)
-    love.graphics.setColor(0.55, 0.42, 0.24, a)
-    love.graphics.rectangle('fill', px + 1, py + 1, w, 14)
-    love.graphics.setColor(0.16, 0.12, 0.06, a)
-    love.graphics.rectangle('fill', px + 3, py + 3, w - 4, 10)
-    love.graphics.setColor(0.8, 0.64, 0.38, a)
-    love.graphics.rectangle('fill', px + 1, py + 1, w, 1)
-    love.graphics.rectangle('fill', px + 1, py + 1, 1, 14)
-    love.graphics.setColor(0.36, 0.26, 0.14, a)
-    love.graphics.rectangle('fill', px + 1, py + 14, w, 1)
-    love.graphics.rectangle('fill', px + w, py + 1, 1, 14)
-    -- a plank down the middle and iron corners
-    love.graphics.setColor(0.55, 0.42, 0.24, a)
-    love.graphics.rectangle('fill', px + TILE_SIZE - 1, py + 3, 2, 10)
-    love.graphics.setColor(0.42, 0.31, 0.17, a)
-    for _, c in ipairs({ { 1, 1 }, { w - 1, 1 }, { 1, 13 }, { w - 1, 13 } }) do
-        love.graphics.rectangle('fill', px + c[1], py + c[2], 2, 2)
+    love.graphics.setColor(0, 0, 0, 0.18 * a)
+    love.graphics.rectangle('fill', px + 2, py + 2, w, 14, 4, 4)
+    love.graphics.setColor(0.86, 0.72, 0.45, a)
+    love.graphics.rectangle('fill', px + 1, py + 1, w, 14, 4, 4)
+    love.graphics.setColor(0.55, 0.4, 0.22, a)
+    love.graphics.rectangle('fill', px + 3, py + 3, w - 4, 10, 3, 3)
+    -- the weave round the rim
+    love.graphics.setColor(0.72, 0.56, 0.32, a)
+    for i = 0, math.floor(w / 3) do
+        love.graphics.rectangle('fill', px + 2 + i * 3, py + 1, 1, 2)
+        love.graphics.rectangle('fill', px + 2 + i * 3, py + 13, 1, 2)
     end
 end
 
@@ -252,16 +296,21 @@ function View:drawGhost(kind, tx, ty, ok)
 end
 
 function View:drawBed(px, py, a)
-    love.graphics.setColor(0.4, 0.28, 0.16, a)
-    love.graphics.rectangle('fill', px + 2, py + 1, 12, 14)
-    love.graphics.setColor(0.93, 0.9, 0.8, a)
-    love.graphics.rectangle('fill', px + 3, py + 2, 10, 12)
-    love.graphics.setColor(1, 1, 1, a)
-    love.graphics.rectangle('fill', px + 4, py + 3, 8, 3)
-    love.graphics.setColor(0.3, 0.45, 0.75, a)
-    love.graphics.rectangle('fill', px + 3, py + 7, 10, 7)
-    love.graphics.setColor(0.24, 0.36, 0.62, a)
-    love.graphics.rectangle('fill', px + 3, py + 7, 10, 1)
+    -- a nest seen from above: a round ring of twigs round a soft, downy dent
+    love.graphics.setColor(0, 0, 0, 0.15 * a)
+    love.graphics.circle('fill', px + 8.5, py + 8.8, 7)
+    love.graphics.setColor(0.6, 0.45, 0.28, a)
+    love.graphics.circle('fill', px + 8, py + 8, 7)
+    love.graphics.setColor(0.72, 0.55, 0.34, a)
+    for i = 0, 7 do
+        local t = i / 8 * math.pi * 2
+        love.graphics.line(px + 8 + math.cos(t) * 4.8, py + 8 + math.sin(t) * 4.8,
+            px + 8 + math.cos(t + 0.5) * 6.7, py + 8 + math.sin(t + 0.5) * 6.7)
+    end
+    love.graphics.setColor(0.95, 0.88, 0.68, a)
+    love.graphics.circle('fill', px + 8, py + 8, 4.3)
+    love.graphics.setColor(0.99, 0.95, 0.8, a)
+    love.graphics.circle('fill', px + 8.6, py + 8.6, 2.8)
 end
 
 -- A wall from above: dark timber courses with the mortar showing, lit
@@ -447,28 +496,26 @@ function View:drawTool(kind, x, y, angle, sx)
     love.graphics.translate(x, y)
     love.graphics.scale(sx, 1)
     love.graphics.rotate(angle)
-    if kind == 'axe' then
-        love.graphics.setColor(0.45, 0.3, 0.15)
-        love.graphics.rectangle('fill', -1, -7, 2, 9)
-        love.graphics.setColor(0.7, 0.72, 0.75)
-        love.graphics.polygon('fill', 1, -8, 5, -7, 5, -3, 1, -4)
-    elseif kind == 'pickaxe' then
-        love.graphics.setColor(0.45, 0.3, 0.15)
-        love.graphics.rectangle('fill', -1, -7, 2, 9)
-        love.graphics.setColor(0.6, 0.62, 0.66)
-        love.graphics.polygon('fill', -5, -6, 5, -6, 4, -8, -4, -8)
-    elseif kind == 'saw' then
-        love.graphics.setColor(0.45, 0.3, 0.15)
-        love.graphics.rectangle('fill', -2, -2, 3, 4)
-        love.graphics.setColor(0.78, 0.8, 0.82)
-        love.graphics.polygon('fill', 1, -2, 9, -2, 9, 1, 1, 2)
-        love.graphics.setColor(0.5, 0.52, 0.55)
-        for i = 2, 8, 2 do love.graphics.rectangle('fill', i, 1, 1, 1) end
-    elseif kind == 'log' then
-        love.graphics.setColor(0.5, 0.35, 0.18)
-        love.graphics.rectangle('fill', -4, -3, 9, 4)
-        love.graphics.setColor(0.78, 0.6, 0.34)
-        love.graphics.rectangle('fill', 4, -3, 2, 4)
+    if kind == 'twigs' then
+        -- a little bundle of sticks, tied with a grass bow
+        love.graphics.setColor(0.62, 0.45, 0.28)
+        love.graphics.line(-4, -1, 5, -4)
+        love.graphics.line(-4, 0, 5, -1)
+        love.graphics.line(-3, 2, 5, 1)
+        love.graphics.setColor(0.55, 0.78, 0.45)
+        love.graphics.rectangle('fill', 0, -3, 2, 4)
+    elseif kind == 'spade' then
+        -- a tiny round spade
+        love.graphics.setColor(0.62, 0.45, 0.28)
+        love.graphics.rectangle('fill', -1, -7, 2, 7)
+        love.graphics.setColor(0.86, 0.82, 0.74)
+        love.graphics.ellipse('fill', 0, 1, 3, 3.5)
+    elseif kind == 'leaf' then
+        -- a big leaf for weaving a nest
+        love.graphics.setColor(0.5, 0.78, 0.42)
+        love.graphics.ellipse('fill', 2, -3, 4, 2.2)
+        love.graphics.setColor(0.36, 0.6, 0.3)
+        love.graphics.line(-2, -3, 6, -3)
     end
     love.graphics.pop()
 end
@@ -502,7 +549,7 @@ function View:drawWorker(w, clock, selected)
         end
     -- hunger as a dot in its status colour: blue satiated, green fed, amber
     -- hungry, red (blinking) starving
-    elseif w:isWorking() then
+    elseif w:isWorking() or w.stage == 'baby' then
         local status = w:hungerStatus()
         local col = ({ satiated = { 0.5, 0.75, 1.0 }, fed = { 0.45, 0.8, 0.4 }, hungry = { 0.95, 0.72, 0.25 }, starving = { 0.95, 0.25, 0.2 } })[status]
         if status ~= 'starving' or math.floor(clock * 3) % 2 == 0 then
@@ -531,7 +578,26 @@ function View:drawWorkerBody(w, clock, sx, feetY)
     else
         love.graphics.setColor(1, 1, 1, 1)
     end
-    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx, 1, 8, 16)
+    -- standing about, a little blob breathes: a soft squash and stretch
+    local sy = 1
+    if not w.moving then sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7) end
+    if w.stage == 'egg' then
+        -- a speckled egg, wobbling now and then
+        local wob = math.sin((clock or 0) * 9 + w.id) * (math.floor((clock or 0) + w.id) % 4 == 0 and 0.25 or 0)
+        love.graphics.push()
+        love.graphics.translate(w.x, feetY - 5)
+        love.graphics.rotate(wob)
+        love.graphics.setColor(0.98, 0.95, 0.86)
+        love.graphics.ellipse('fill', 0, 0, 4, 5)
+        love.graphics.setColor(0.72, 0.6, 0.5)
+        love.graphics.circle('fill', -1.5, -1, 0.7)
+        love.graphics.circle('fill', 1.2, 1.5, 0.6)
+        love.graphics.circle('fill', 1, -2.5, 0.5)
+        love.graphics.pop()
+        return
+    end
+    local size = w.stage == 'baby' and BABY_SCALE or 1
+    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx * (2 - sy) * size, sy * size, 8, 16)
     local tool = w:toolInHand()
     if tool then
         local swing = 0
@@ -554,10 +620,17 @@ function View:drawWorkerCargo(w, clock, sx, feetY)
                 love.graphics.draw(img, w.x, cy, 0, 0.7, 0.7, 8, 8)
             end
         elseif cargo.kind == CARGO_LOGS then
-            love.graphics.setColor(0.5, 0.35, 0.18)
-            love.graphics.rectangle('fill', w.x - 6, cy - 2, 12, 4)
-            love.graphics.setColor(0.75, 0.58, 0.32)
-            love.graphics.rectangle('fill', w.x + 4, cy - 2, 2, 4)
+            love.graphics.setColor(0.62, 0.45, 0.28)
+            love.graphics.line(w.x - 5, cy + 1, w.x + 5, cy - 2)
+            love.graphics.line(w.x - 5, cy - 1, w.x + 5, cy + 1)
+        elseif cargo.kind == CARGO_GRASS then
+            love.graphics.setColor(0.42, 0.7, 0.34)
+            for i = -2, 2 do love.graphics.line(w.x + i, cy + 2, w.x + i * 2, cy - 3) end
+        elseif cargo.kind == CARGO_LEAVES then
+            love.graphics.setColor(0.9, 0.62, 0.3)
+            love.graphics.ellipse('fill', w.x - 2, cy, 3, 1.8)
+            love.graphics.setColor(0.8, 0.45, 0.25)
+            love.graphics.ellipse('fill', w.x + 2, cy - 1, 3, 1.8)
         else
             love.graphics.setColor(0.95, 0.8, 0.2)
             love.graphics.rectangle('fill', w.x - 3, cy - 3, 6, 5)
@@ -575,7 +648,23 @@ function View:drawWorkerCargo(w, clock, sx, feetY)
     end
 end
 
+function View:drawGraves()
+    for _, g in ipairs(self.world.graves or {}) do
+        local px, py = (g.x - 1) * TILE_SIZE, (g.y - 1) * TILE_SIZE
+        love.graphics.setColor(0.4, 0.62, 0.32)
+        love.graphics.line(px + 8, py + 14, px + 8, py + 8)
+        love.graphics.setColor(0.95, 0.75, 0.85)
+        for i = 0, 4 do
+            local a = i / 5 * math.pi * 2
+            love.graphics.circle('fill', px + 8 + math.cos(a) * 2, py + 7 + math.sin(a) * 2, 1.4)
+        end
+        love.graphics.setColor(1, 0.92, 0.5)
+        love.graphics.circle('fill', px + 8, py + 7, 1)
+    end
+end
+
 function View:drawWorkers(workers, clock, selectedWorker)
+    self:drawGraves()
     local sorted = {}
     for _, w in ipairs(workers) do
         if w.alive then sorted[#sorted + 1] = w end

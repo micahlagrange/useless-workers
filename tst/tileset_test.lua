@@ -132,7 +132,7 @@ function TestTileset:testRogueDrawsEveryKindOfThing()
     view:drawWorkers(game.workers, 1, game.workers[1])
     local seen = {}
     for _, t in ipairs(Stub.texts) do seen[t.text] = true end
-    for _, g in ipairs({ Rogue.GLYPH.binLeft, Rogue.GLYPH.binRight, Rogue.GLYPH.bed, Rogue.GLYPH.wall, Rogue.GLYPH.door, Rogue.GLYPH.bridge, Rogue.GLYPH.floorSpot, Rogue.GLYPH.fire, Rogue.SPECIES_GLYPH[game.workers[1].sheet], 'CAMP' }) do
+    for _, g in ipairs({ Rogue.GLYPH.binLeft, Rogue.GLYPH.binRight, Rogue.GLYPH.bed, Rogue.GLYPH.wall, Rogue.GLYPH.door, Rogue.GLYPH.bridge, Rogue.GLYPH.floorSpot, Rogue.GLYPH.fire, Rogue.SPECIES_GLYPH[game.workers[1].sheet], 'HOME' }) do
         lu.assertTrue(seen[g], 'never drew ' .. g)
     end
     -- the font the HUD had is the font it gets back

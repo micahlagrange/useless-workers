@@ -29,7 +29,7 @@ for _, player in ipairs(SIM_PLAYERS) do
             if st == 'report' then
                 seasons = seasons + 1
                 if player ~= 'none' then
-                    if game.world.stock.logs >= COSTS.bin.logs then Player.placeStorage(game, 1, true) end
+                    if game.world:canAfford(costOf(game.world, 'bin')) then Player.placeStorage(game, 1, true) end
                     Player.placeStorage(game, 3)
                 end
                 if player == 'routes' then Player.clearRoutes(game, 4) end

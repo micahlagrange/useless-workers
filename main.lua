@@ -5,6 +5,7 @@ local Rng = require('src.rng')
 local World = require('src.world')
 local Jobs = require('src.jobs')
 local Worker = require('src.worker')
+local JobSets = require('src.jobsets')
 local Scoring = require('src.scoring')
 local Abilities = require('src.abilities')
 local Highscore = require('src.highscore')
@@ -31,9 +32,14 @@ local function levelsUnlocked(set)
     return math.max(1, Highscore.load(Campaign.unlockKey[set]))
 end
 
+-- The title offers free play only (Micah, 2026-10-22). The hand built
+-- arcade and survival levels and their code stay (tst/arcade_test.lua,
+-- tst/levels_test.lua) for the coming hunting events; TITLE_LEVELS = true
+-- puts them back on the title for testing.
+TITLE_LEVELS = false
 local function buildTitleOptions()
     title.options = {}
-    for _, set in ipairs({ 'arcade', 'survival' }) do
+    for _, set in ipairs(TITLE_LEVELS and { 'arcade', 'survival' } or {}) do
         local unlocked = levelsUnlocked(set)
         local key = Campaign.saveKey[set]
         for i = 1, Campaign.count(set) do
@@ -110,12 +116,15 @@ end
 
 -- Game setup ---------------------------------------------------------------
 
-local NODE_WORDS = { bush = 'bush', tree = 'tree', ore = 'gold' }
+local NODE_WORDS = { bush = 'berry bush', tree = 'tree', ore = 'shiny', grass = 'grass tuft', leaves = 'leaf pile', critter = 'critter' }
 
--- Everything announced also goes into the log (LOG up top), with when,
--- what kind and where, so it can be read later and looked at on the map.
+-- Everything announced goes into the log (LOG up top), with when, what
+-- kind and where, so it can be read later and looked at on the map. Only
+-- bad news pops up over the map (Micah, 2026-10-21: alerts got in the way):
+-- a morphi fed up and close to leaving, or one that left or starved.
+local ALERT_KINDS = { warning = true, left = true }
 local function announce(text, tile, kind)
-    ui:alert(text, tile)
+    if ALERT_KINDS[kind] then ui:alert(text, tile) end
     if not game.log then return end
     game.log[#game.log + 1] = {
         text = text, tile = tile, kind = kind or 'news',
@@ -125,24 +134,28 @@ local function announce(text, tile, kind)
 end
 
 local function onComplain(worker, reason, node)
-    local where = node and (NODE_WORDS[node.kind] .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
+    local where = node and ((NODE_WORDS[node.kind] or node.kind or 'work') .. ' at ' .. node.x .. ',' .. node.y) or 'somewhere'
     local text
     if reason == 'hungry' then
-        text = worker.name .. ' is hungry and the ' .. where .. ' is walled off'
+        text = worker.name .. ' is hungry and the ' .. where .. ' is out of reach'
     elseif reason == 'slow' then
         text = worker.name .. ' gave up walking to the ' .. where
     elseif reason == 'bored' then
-        local trade = ({ forager = 'bush', lumberjack = 'tree', miner = 'ore' })[worker.role] or 'work'
-        if worker.boredReason == 'storage' then
-            text = worker.name .. ' has nothing to do: nowhere to put food. Mark a FLOOR spot or a BIN'
-        elseif node then
-            text = worker.name .. ' has nothing to do: the nearest ' .. trade .. ' is out of reach at ' .. node.x .. ',' .. node.y
+        -- why, naming the jobs: the main one and the neutral one (the
+        -- disliked job is the last resort, not worth an alert)
+        local shown = {}
+        for _, r in ipairs(worker.idleWhy or {}) do
+            if r.slot ~= 'disliked' then shown[#shown + 1] = r end
+        end
+        if #shown > 0 then
+            text = worker.name .. ' has nothing to do. ' .. Worker.idleText(shown, worker.jobSet and not worker.jobSet.neutral, worker.unstaffed)
         else
             text = worker.name .. ' has nothing to do'
         end
     else
         text = worker.name .. " can't reach the " .. where
     end
+    -- a hardship pointing at a site (out of reach work to build or dig) has no node kind
     announce(text, node and { x = node.x, y = node.y } or nil, 'hardship')
     if game.stats then game.stats:event('hardship', game, worker.name, reason) end
     Audio.playSFX('complain')
@@ -153,6 +166,37 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
+    elseif name == 'babyWarning' then
+        local t = worker:tile()
+        local text = data == 'hungry' and (worker.name .. ' is a hungry baby with an empty tummy. Feed it, or set a CARETAKER.')
+            or (worker.name .. ' is a baby nobody is looking after. Set a CARETAKER, or tend it yourself.')
+        announce(text, { x = t.x, y = t.y }, 'warning')
+    elseif name == 'died' then
+        Audio.playSFX('quit')
+        local t = worker:tile()
+        if game.stats then game.stats:event('died', game, worker.name, data.cause .. '/' .. data.stage, t) end
+        local why = data.cause == 'neglect' and 'nobody looked after it' or 'it got far too hungry'
+        announce(worker.name .. ' is gone: ' .. why .. '. A little flower grows where it was.', { x = t.x, y = t.y }, 'left')
+    elseif name == 'hatched' then
+        Audio.playSFX('hire')
+        local t = worker:tile()
+        announce(worker.name .. ' hatched! A new baby in the nest.', { x = t.x, y = t.y }, 'news')
+        if game.stats then game.stats:event('hatched', game, worker.name, 'egg', t) end
+    elseif name == 'cared' then Audio.playSFX('click')
+    elseif name == 'grewUp' then
+        -- dealt its jobs the way a newcomer is, favouring what the bunch lacks
+        local band = {}
+        for _, w in ipairs(game.workers) do
+            if w.jobSet and w:isWorking() then band[#band + 1] = w.jobSet end
+        end
+        worker:growUp(JobSets.dealOne(game.jobRng, band))
+        Audio.playSFX('hire')
+        local t = worker:tile()
+        announce(worker.name .. ' grew up! Now a little ' .. JobSets.label(worker.jobSet.main) .. '.', { x = t.x, y = t.y }, 'news')
+        if game.stats then game.stats:event('grewUp', game, worker.name, worker.jobSet.main) end
+    elseif name == 'shiny' and game.mode == 'free' then
+        Audio.playSFX('deliver')
+        announce(worker.name .. ' dug up a shiny!', data, 'news')
     elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
@@ -160,27 +204,27 @@ local function onWorkerEvent(worker, name, data)
         local t = worker:tile()
         Audio.playSFX('hire')
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
-        announce(worker.name .. ' and ' .. data.partner.name .. ' struck a deal at camp'
-            .. (data.gifts > 0 and (', ' .. data.gifts .. ' gift' .. (data.gifts == 1 and '' or 's') .. ' of their favourite food sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' swapped snacks at the home nest'
+            .. (data.gifts > 0 and (', ' .. data.gifts .. ' favourite treat' .. (data.gifts == 1 and '' or 's') .. ' sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'play' and game.mode == 'free' then
-        -- fun together: a talk had at camp, both cheered up
+        -- fun together: a talk or a dance had at the nest, both cheered up
         local t = worker:tile()
         local who = worker.name .. ' and ' .. data.partner.name
         if game.stats then game.stats:event('play', game, who, data.category .. ': ' .. tostring(data.title), t) end
         announce(who .. ' ' .. (PLAY_NEWS[data.title] or PLAY_NEWS_KIND[data.category] or 'played together') .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
-        announce(worker.name .. ' is fed up and close to leaving the band.', { x = t.x, y = t.y }, 'warning')
+        announce(worker.name .. ' is very grumpy and thinking about leaving.', { x = t.x, y = t.y }, 'warning')
     elseif name == 'quit' then
         Audio.playSFX('quit')
         local t = worker:tile()
         if game.stats then game.stats:event(data == 'morale' and 'left' or 'starved', game, worker.name, nil, t) end
         if data == 'morale' then
-            announce(worker.name .. ' left the band. Too many hardships, too little care.', { x = t.x, y = t.y }, 'left')
+            announce(worker.name .. ' packed a tiny bag and left. Too many grumbles, not enough cuddles.', { x = t.x, y = t.y }, 'left')
         else
-            announce(worker.name .. ' starved and wandered off into the wilds.', { x = t.x, y = t.y }, 'left')
+            announce(worker.name .. ' got far too hungry and toddled off to find snacks elsewhere.', { x = t.x, y = t.y }, 'left')
         end
-        if game.mode == 'level' and (state == 'playing' or state == 'units') then
+        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
             state = 'levelfailed'
             love.mouse.setVisible(true)
@@ -188,28 +232,39 @@ local function onWorkerEvent(worker, name, data)
     end
 end
 
--- DEV's PLAY NOW is for free play, where morphis have morale to lift.
-local function canPlayNow()
-    return game ~= nil and game.mode == 'free' and game.workers ~= nil
+-- The job sets of the band as it stands, for dealing an immigrant's.
+local function bandJobSets()
+    local out = {}
+    for _, w in ipairs(game.workers) do
+        if w.jobSet and w:isWorking() then out[#out + 1] = w.jobSet end
+    end
+    return out
 end
 
--- migrants: true for arrivals after the start, which the stats count
+-- migrants: true for arrivals after the start, which the stats count. Free
+-- play deals each arrival's jobs (src/jobsets.lua) from a random stream of
+-- its own, so nothing else about the seed changes; the species comes round
+-- in HIRE_SHEETS order and decides only looks and tastes.
 local function hire(n, migrants)
     local spots = game.world:spawnTiles(3)
     if #spots == 0 then spots = { { x = game.world.breakroom.x, y = game.world.breakroom.y } } end
-    for _ = 1, n do
+    local free = game.mode == 'free'
+    local dealt = (free and not migrants) and JobSets.dealStart(game.jobRng, n) or nil
+    for i = 1, n do
         game.hired = game.hired + 1
         local spot = spots[(game.hired - 1) % #spots + 1]
-        local role = HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
-        local sheets = ROLES[role].sheets
-        game.roleHires[role] = (game.roleHires[role] or 0) + 1
+        local jobs = free and (dealt and dealt[i] or JobSets.dealOne(game.jobRng, bandJobSets())) or nil
+        local role = jobs and jobs.main or HIRE_ORDER[(game.hired - 1) % #HIRE_ORDER + 1]
+        local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
         -- arrivals come in a little less fed one after another, so the band
         -- does not all get hungry at once
         local start = (game.scoring.difficulty.startHunger or STARTING_HUNGER) - ((game.hired - 1) % 5) * 6
         local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
             x = spot.x, y = spot.y,
             role = role,
-            sheet = sheets[(game.roleHires[role] - 1) % #sheets + 1],
+            jobs = jobs,
+            band = game.workers,
+            sheet = sheet,
             name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
             drain = game.scoring.drain,
             hunger = start,
@@ -218,8 +273,79 @@ local function hire(n, migrants)
             onEvent = onWorkerEvent,
         })
         table.insert(game.workers, worker)
-        if migrants and game.stats then game.stats:event('arrived', game, worker.name, role) end
+        if migrants and game.stats then
+            game.stats:event('arrived', game, worker.name, jobs and (jobs.main .. '/' .. (jobs.neutral or 'none') .. '/' .. jobs.disliked) or role)
+        end
     end
+end
+
+-- Nests with nobody in them: built nests and the home nest, one egg or baby each.
+local function freeNests()
+    local taken = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.nest and (w:isEgg() or w:isBaby()) then taken[w.nest.x .. ',' .. w.nest.y] = true end
+    end
+    local out = {}
+    local br = game.world.breakroom
+    if br and not taken[br.x .. ',' .. br.y] then out[#out + 1] = { x = br.x, y = br.y, home = true } end
+    for _, b in ipairs(game.world.beds) do
+        if not taken[b.x .. ',' .. b.y] then out[#out + 1] = { x = b.x, y = b.y } end
+    end
+    return out
+end
+
+-- A pair of grown-ups lays an egg in a free nest; the egg takes one
+-- parent's looks and tastes.
+local function layEgg(a, b, nest)
+    game.hired = game.hired + 1
+    local parent = game.jobRng:int(1, 2) == 1 and a or b
+    local egg = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+        x = nest.x, y = nest.y, stage = 'egg', sheet = parent.sheet, band = game.workers,
+        nest = { x = nest.x, y = nest.y }, parents = { a.name, b.name },
+        name = MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
+        drain = game.scoring.drain, hunger = HUNGER_MAX,
+        wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
+    })
+    table.insert(game.workers, egg)
+    if game.stats then game.stats:event('laid', game, egg.name, a.name .. ' and ' .. b.name, { x = nest.x, y = nest.y }) end
+    return egg
+end
+
+-- The change of season: random pairs lay eggs while there are free nests.
+-- Returns how many were laid, and whether a pair went without for want of a nest.
+local function layEggs()
+    local laid, wanted = 0, false
+    for _ = 1, EGGS_PER_SEASON do
+        local grown = {}
+        for _, w in ipairs(game.workers) do if w:isWorking() then grown[#grown + 1] = w end end
+        local alive = 0
+        for _, w in ipairs(game.workers) do if w.alive then alive = alive + 1 end end
+        if #grown < 2 or alive >= MAX_WORKERS then break end
+        local nests = freeNests()
+        if #nests == 0 then wanted = true break end
+        local i = game.jobRng:int(1, #grown)
+        local a = table.remove(grown, i)
+        local b = grown[game.jobRng:int(1, #grown)]
+        layEgg(a, b, nests[1])
+        laid = laid + 1
+    end
+    return laid, wanted
+end
+
+-- A baby (free play starts with one, Morphi) in the home nest.
+local function hireBaby(name)
+    local br = game.world.breakroom
+    game.hired = game.hired + 1
+    local sheet = HIRE_SHEETS[(game.hired - 1) % #HIRE_SHEETS + 1]
+    local worker = Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+        x = br.x, y = br.y, stage = 'baby', sheet = sheet, band = game.workers, nest = { x = br.x, y = br.y },
+        name = name or MORPHI_NAMES[(game.hired - 1) % #MORPHI_NAMES + 1],
+        drain = game.scoring.drain, hunger = HUNGER_MAX,
+        wilds = true, onComplain = onComplain, onEvent = onWorkerEvent,
+    })
+    table.insert(game.workers, worker)
+    if game.stats then game.stats:event('hatched', game, worker.name, 'baby') end
+    return worker
 end
 
 local function onReady(node)
@@ -229,7 +355,7 @@ end
 local function onEffect(name, data)
     if name == 'mine' then
         Audio.playSFX('click')
-        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for mining')
+        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for digging')
     elseif name == 'unmark' then
         Audio.playSFX('click')
         if data.kind then
@@ -251,7 +377,7 @@ local function newGame(seedString, difficultyIndex)
     game.scoring = Scoring.new(difficultyIndex)
     game.world = World.generate(game.seedNumber, game.rng)
     game.jobs = Jobs.new()
-    game.world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold }
+    game.world.stock = { logs = STARTING_STOCK.logs, gold = STARTING_STOCK.gold, grass = STARTING_STOCK.grass, leaves = STARTING_STOCK.leaves }
     game.world:spawnAllNodes(NODES_INITIAL)
     -- everything standing at the start is already workable
     for _, node in ipairs(game.world.nodes) do
@@ -259,7 +385,7 @@ local function newGame(seedString, difficultyIndex)
     end
     game.workers = {}
     game.hired = 0
-    game.roleHires = {}
+    game.jobRng = JobSets.rngFor(game.seedNumber)
     game.clock = 0
     game.staffCount = 0
     game.averageHunger = 100
@@ -283,8 +409,10 @@ local function newGame(seedString, difficultyIndex)
     ui:clear()
     game.stats = Stats.new({ mode = 'free', seed = seedString, difficulty = DIFFICULTIES[difficultyIndex].name, build = Version.build })
     hire(DIFFICULTIES[difficultyIndex].workers)
+    -- and one baby in the home nest
+    for i = 1, START_BABIES do hireBaby(i == 1 and FIRST_BABY_NAME or nil) end
     game.log = {}
-    announce('Mark a free FLOOR spot (or a BIN, 1 log, holds 4) so foragers can put food down. BRIDGE the rivers to reach the far banks.')
+    announce('Mark a STASH (or a BASKET, 1 grass, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)
@@ -315,7 +443,6 @@ local function newLevel(index, set, difficulty)
     end
     game.workers = {}
     game.hired = #run.specs
-    game.roleHires = {}
     game.clock = 0
     game.staffCount = #run.specs
     game.averageHunger = run.def.hunger or HUNGER_MAX
@@ -398,11 +525,20 @@ local function closeQuarter()
     local count = staffStats()
     game.report = game.scoring:closeQuarter(count)
     -- new growth comes up mostly where nobody can get at it yet
-    for _, node in ipairs(game.world:spawnAllNodes(NODES_PER_QUARTER, game.mode == 'free' and NODE_ENCLOSED_LATER or nil)) do
+    -- leaves blow in most at the start of Autumn (the third season)
+    local counts = {}
+    for k, v in pairs(NODES_PER_QUARTER) do counts[k] = v end
+    if (game.scoring.quarter - 1) % 4 + 1 == 3 then counts.leaves = counts.leaves * LEAVES_AUTUMN end
+    for _, node in ipairs(game.world:spawnAllNodes(counts, game.mode == 'free' and NODE_ENCLOSED_LATER or nil)) do
         if node.ready then game.jobs:postNode(node) end
     end
     for _, w in ipairs(game.workers) do w.drain = game.scoring.drain end
-    if game.report.hires > 0 then
+    if game.mode == 'free' then
+        -- eggs, not migrants
+        game.report.hires = 0
+        game.report.eggs, game.report.noNest = layEggs()
+        if game.report.eggs > 0 then Audio.playSFX('hire') end
+    elseif game.report.hires > 0 then
         hire(game.report.hires, true)
         Audio.playSFX('hire')
     end
@@ -418,7 +554,16 @@ local function continueFromReport()
     else
         state = 'playing'
         hideCursor()
-        announce(game.scoring:seasonLabel() .. ' begins. ' .. game.report.hires .. ' migrant' .. (game.report.hires == 1 and '' or 's') .. ' joined the band.')
+        local eggs = game.report.eggs or 0
+        local line = game.scoring:seasonLabel() .. ' begins. '
+        if eggs > 0 then
+            line = line .. (eggs == 1 and 'A new egg' or (eggs .. ' new eggs')) .. ' in the nest' .. (eggs == 1 and '' or 's') .. '!'
+        elseif game.report.noNest then
+            line = line .. 'No egg this time: every nest is full. Weave a NEST.'
+        else
+            line = line .. 'No new eggs this season.'
+        end
+        announce(line)
     end
 end
 
@@ -516,6 +661,17 @@ local function updatePlaying(dt, substep)
     game.clock = game.clock + dt
     game.jobs:update(dt)
     game.world:update(dt, onReady)
+    -- babies that need looking after go on the queue for a caretaker
+    game.careTimer = (game.careTimer or 0) - dt
+    if game.careTimer <= 0 then
+        game.careTimer = 1
+        for _, w in ipairs(game.workers) do
+            if w.alive and w:isBaby() and not w.caredBy and (w:careNow() < CARE_POST_BELOW or w.hunger < CARE_FEED_BELOW)
+                and not game.jobs:hasJobForBaby(w) then
+                game.jobs:postBaby(w)
+            end
+        end
+    end
     for _, w in ipairs(game.workers) do
         w:update(dt, game.clock)
     end
@@ -587,7 +743,7 @@ function love.update(dt)
     debugClock = debugClock + dt
     Audio.update(dt)
     syncTouches()
-    if state == 'playing' or state == 'units' or state == 'log' then
+    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' then
         game.speed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
@@ -596,10 +752,12 @@ function love.update(dt)
         else
             for step = 1, simSpeed do
                 updatePlaying(dt, step > 1)
-                if state ~= 'playing' and state ~= 'units' and state ~= 'log' then break end
+                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' then break end
             end
         end
         ui:update(dt)
+    elseif state == 'tama' then
+        updateTamaScene(dt)
     elseif state == 'report' then
         reportTimer = reportTimer + dt
         if reportTimer > 15 then continueFromReport() end
@@ -703,7 +861,9 @@ local function drawScene()
     elseif state == 'annual' then
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh, game.stats)
     elseif state == 'tools' then
-        ui:drawTools(fingerDebug, canPlayNow())
+        ui:drawTools(fingerDebug, game.mode == 'free')
+    elseif state == 'funtest' then
+        ui:drawFunTest(game.workers, sub.funA, sub.funB)
     elseif state == 'export' then
         ui:drawExport(sub.text, sub.saved)
     elseif state == 'history' then
@@ -718,6 +878,10 @@ local function drawScene()
         ui:drawLevelFailed(game)
     elseif state == 'units' then
         ui:drawUnits(game, game.view)
+    elseif state == 'jobs' then
+        ui:drawJobs(game)
+    elseif state == 'tama' then
+        ui:drawTama(game, game.view)
     elseif state == 'log' then
         ui:drawLog(game)
     end
@@ -827,9 +991,16 @@ local function followNext(step)
     if at == 0 then at = step > 0 and 0 or 1 end
     local w = band[(at - 1 + step) % #band + 1]
     game.selectedWorker = w
-    game.follow = true
     game.abilities:select(ABILITY_SELECT)
-    ui:toast('Following ' .. w.name)
+    if game.follow then
+        ui:toast('Following ' .. w.name)
+    else
+        -- not following: pick it and look at it, the camera stays free
+        game.focus = nil
+        local t = w:tile()
+        game.camera:centerOn((t.x - 0.5) * TILE_SIZE, (t.y - 0.5) * TILE_SIZE)
+        ui:toast(w.name)
+    end
 end
 
 local function toggleFollow()
@@ -844,6 +1015,249 @@ end
 local function openUnits()
     state = 'units'
     love.mouse.setVisible(true)
+end
+
+-- The job screen for the picked morphi (free play: main, neutral, disliked).
+-- Tamagotchi mode: tend one baby on a screen of its own. The meadow does
+-- not run (love.update steps it only in 'playing', 'units', 'log', 'jobs').
+local tamaCan
+local function openTama(w)
+    if not (w and w.alive and w:isBaby()) then return end
+    game.tending = w
+    game.tamaCan = tamaCan
+    game.tamaLast = nil
+    game.tamaScene = nil
+    game.tamaNap = nil
+    game.tamaToss = nil
+    game.tamaMenu = nil
+    game.tamaDelta = nil
+    state = 'tama'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local wakeNap
+local function closeTama()
+    if game.tamaToss then game.tamaToss = nil end
+    game.tamaMenu = nil
+    if game.tamaScene then finishScene() end
+    if game.tamaNap then wakeNap() end -- leaving wakes it: no rest
+    game.tending = nil
+    game.tamaSandbox = nil
+    state = 'playing'
+    hideCursor()
+end
+
+-- What each button does to the baby being tended, and whether it can now.
+tamaCan = function(action)
+    local b = game.tending
+    if not b then return false end
+    if game.tamaNap then return false, b.name .. ' is asleep' end
+    local info = b:tendInfo(action, game.world)
+    return info.ok, info.have
+end
+
+-- A nap on the screen: it takes TAMA_NAP_SECONDS and locks every other
+-- button. Sleep only fills when it ends; woken early (WAKE, or MEADOW),
+-- the baby gets no rest at all.
+local function startNap()
+    local b = game.tending
+    game.tamaNap = { t = 0, from = b.needs.sleep }
+    game.tamaLast = b.name .. ' curls up in the nest for a nap...'
+end
+
+wakeNap = function()
+    local nap, b = game.tamaNap, game.tending
+    game.tamaNap = nil
+    if not (nap and b) then return end
+    b.needs.sleep = nap.from
+    game.tamaLast = 'Woken up early: ' .. b.name .. ' got no rest. Sleep still ' .. math.floor(nap.from + 0.5) .. '.'
+end
+
+local function finishNap()
+    local nap, b = game.tamaNap, game.tending
+    game.tamaNap = nil
+    -- it woke on its own: a 'wake it?' box still open has nothing to ask
+    if game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave' then game.tamaMenu = nil end
+    if not (nap and b) then return end
+    b.needs.sleep = 100
+    game.tamaLast = b.name .. ' slept well: sleep ' .. math.floor(nap.from + 0.5) .. ' -> 100.'
+end
+
+-- A food put down in front of the baby: it reacts (Worker:reactTo) and the
+-- screen plays it out (game.tamaScene, UI:drawTama); at the end it eats it
+-- or does not.
+local SCENE_SECONDS = { love = 1.6, ok = 2.2, curious = 4.6, hate = 2.6 }
+local function dropFood(food)
+    local b = game.tending
+    if not b then return end
+    local kind, taste = b:reactTo(food)
+    game.tamaScene = { food = food, t = 0, kind = kind, taste = taste, side = (game.tamaSide or 1) }
+    game.tamaSide = -(game.tamaSide or 1)
+    local name = Worker.foodName(food)
+    game.tamaLast = kind == 'love' and (b.name .. ' knows ' .. name .. ' and jumps right on it!')
+        or kind == 'hate' and (b.name .. ' remembers ' .. name .. '. Yuck!')
+        or kind == 'ok' and (b.name .. ' trots over to the ' .. name .. '.')
+        or (b.name .. ' has never seen ' .. name .. ' before...')
+end
+
+local function finishScene()
+    local sc, b = game.tamaScene, game.tending
+    game.tamaScene = nil
+    if not (sc and b) then return end
+    local before = b.hunger
+    local name = Worker.foodName(sc.food)
+    local ate = b:tryFood(sc.food)
+    local tummy = string.format(' Tummy %d -> %d.', math.floor(before + 0.5), math.floor(b.hunger + 0.5))
+    if not ate then
+        game.tamaLast = b.name .. ' will not touch the ' .. name .. ': it hates it.'
+    elseif sc.kind == 'curious' then
+        game.tamaLast = (sc.taste == 'loved' and ('A new favourite! ' .. b.name .. ' loves ' .. name .. '.')
+            or ('Not bad. ' .. b.name .. ' will eat ' .. name .. ' now.')) .. tummy
+    else
+        game.tamaLast = b.name .. ' ate the ' .. name .. (sc.taste == 'loved' and ', happily.' or '.') .. tummy
+    end
+end
+
+local TOSS_SECONDS = 0.6 -- a tossed food's flight
+function updateTamaScene(dt)
+    if game.tamaDelta then
+        game.tamaDelta.t = game.tamaDelta.t + dt
+        if game.tamaDelta.t > 1.5 then game.tamaDelta = nil end
+    end
+    local toss = game.tamaToss
+    if toss then
+        toss.t = toss.t + dt
+        if toss.t >= TOSS_SECONDS then
+            game.tamaToss = nil
+            dropFood(toss.food)
+        end
+    end
+    local nap = game.tamaNap
+    if nap then
+        nap.t = nap.t + dt
+        if nap.t >= TAMA_NAP_SECONDS then finishNap() end
+    end
+    local sc = game.tamaScene
+    if not sc then return end
+    sc.t = sc.t + dt
+    if sc.t >= SCENE_SECONDS[sc.kind] then finishScene() end
+end
+
+-- A food pulled out of the bag and tossed to the baby: it flies over in an
+-- arc (game.tamaToss) and lands by the nest, then the baby takes to it
+-- (dropFood). From a stash it is one meal fewer; in the test harness, free.
+local function tossFood(food)
+    local b = game.tending
+    if not b or game.tamaScene or game.tamaToss or game.tamaNap then return end
+    if not game.tamaSandbox then
+        local took = false
+        for _, item in ipairs(game.world.items) do
+            if item.kind == ITEM_FOOD and item.food == food then
+                game.world:takeItem(item.x, item.y, item)
+                took = true
+                break
+            end
+        end
+        if not took then return end
+        game.tamaDelta = { what = 'meals', t = 0 }
+    end
+    game.tamaMenu = nil
+    game.tamaToss = { food = food, t = 0, side = game.tamaSide or 1 }
+    game.tamaLast = 'You toss some ' .. Worker.foodName(food) .. ' to ' .. b.name .. '...'
+    Audio.playSFX('click')
+end
+
+local function pressTama(action)
+    local b = game.tending
+    if not (b and b.alive and b:isBaby()) then closeTama() return end
+    if game.tamaScene or game.tamaToss then return end -- let it finish its meal
+    if action == 'nap' and game.tamaNap then game.tamaMenu = 'wake' return end -- WAKE: check first
+    if action == 'food' then
+        if game.tamaNap then game.tamaLast = 'Can not: ' .. b.name .. ' is asleep.' return end
+        game.tamaMenu = 'food'
+        return
+    end
+    local ok, why = tamaCan(action)
+    if not ok then
+        game.tamaLast = 'Can not: ' .. why .. '.'
+        return
+    end
+    if action == 'nap' then
+        startNap()
+        Audio.playSFX('click')
+        return
+    end
+    local grassBefore = game.world.stock.grass or 0
+    local line, food = b:tend(action, game.world)
+    game.tamaLast = line
+    if (game.world.stock.grass or 0) < grassBefore then game.tamaDelta = { what = 'grass', t = 0 } end
+    if food then dropFood(food) end
+    Audio.playSFX('click')
+end
+
+-- DEV: every kind of resource, to test with: 20 of each material in the
+-- pile and one stored meal of every food (on stashes laid out near home).
+function stockUp()
+    if not game.world then return end
+    local st = game.world.stock
+    for _, k in ipairs({ 'logs', 'grass', 'leaves', 'gold' }) do st[k] = (st[k] or 0) + 20 end
+    local br = game.world.breakroom
+    local placed = 0
+    for r = 2, 6 do
+        for dy = -r, r do
+            for dx = -r, r do
+                if placed < #FOOD_KINDS and math.max(math.abs(dx), math.abs(dy)) == r then
+                    local x, y = br.x + dx, br.y + dy
+                    if game.world:canSite(SITE_STORAGE, x, y) and game.world:isReachable(x, y) then
+                        game.world:markStorage(x, y, STORAGE_FLOOR_CAPACITY)
+                        placed = placed + 1
+                        game.world:storeItem(ITEM_FOOD, x, y, FOOD_KINDS[placed])
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function openJobs()
+    local w = game.selectedWorker
+    if w and w.alive and w:isBaby() then
+        openTama(w)
+        return
+    end
+    if w and w.alive and (w:isBaby() or w:isEgg()) then
+        ui:toast(w.name .. (w:isEgg() and ' is still an egg' or ' is a baby') .. ': no jobs yet, it grows up in a season')
+        return
+    end
+    if not (w and w.alive and w.jobSet) then
+        ui:toast(game.mode == 'free' and 'Select a morphi first (SELECT tool, then tap one)' or 'Each morphi here has one fixed job')
+        return
+    end
+    state = 'jobs'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local function closeJobs()
+    state = 'playing'
+    hideCursor()
+end
+
+-- A tap on the job screen: 'job:<slot>:<job or none>'.
+local function pressJob(id)
+    local w = game.selectedWorker
+    if not (w and w.jobSet) then closeJobs() return end
+    local slot, job = id:match('^job:(%a+):(%a+)$')
+    if job == 'none' then job = nil end
+    local before = w.jobSet[slot]
+    local ok, why = w:setJob(slot, job)
+    if not ok then
+        ui:toast(w.name .. ': ' .. why)
+    elseif before ~= w.jobSet[slot] then
+        ui:toast(w.name .. "'s " .. slot .. ' job: ' .. (job and ROLES[job].label:lower() or 'none'))
+        if game.stats then game.stats:event('jobs', game, w.name, w.jobSet.main .. '/' .. (w.jobSet.neutral or 'none') .. '/' .. w.jobSet.disliked) end
+    end
 end
 
 local function openMenu()
@@ -873,19 +1287,32 @@ local function closeSub()
     backTo(sub.back)
 end
 
--- DEV, PLAY NOW: the two free morphis nearest each other play straight
--- away, this season's chance or not, and the tester is taken back to the
--- game to watch them.
-local function playNow()
-    if not canPlayNow() then return end
-    local pl = Worker.playNow(game.workers)
+-- DEV, FUN TEST: pick two morphis, then a kind of fun; they start at once,
+-- this season's chance or not, and the tester is taken back to the game to
+-- watch.
+local function funTestPick(i)
+    local w = game.workers[i]
+    if not w then return end
+    if sub.funA == w then sub.funA = nil
+    elseif sub.funB == w then sub.funB = nil
+    elseif not sub.funA then sub.funA = w
+    elseif not sub.funB then sub.funB = w
+    else sub.funA, sub.funB = sub.funB, w end
+end
+
+local function funTestStart(kind)
+    if not (sub.funA and sub.funB) then
+        ui:toast('Pick two morphis first')
+        return
+    end
+    local pl = Worker.playPair(sub.funA, sub.funB, kind)
     if not pl then
-        ui:toast('Nobody free: two fed morphis must be about')
+        ui:toast('Both must be fed and free (not hungry, trading or away)')
         return
     end
     backTo(sub.toolsBack)
     game.selectedWorker = pl.a
-    ui:toast(pl.a.name .. ' and ' .. pl.b.name .. ' play')
+    ui:toast(pl.a.name .. ' and ' .. pl.b.name .. ': ' .. PLAY_KIND_NAMES[kind]:lower())
     if game.camera then game.camera:centerOn(pl.a.x, pl.a.y) end
 end
 
@@ -1090,9 +1517,42 @@ local function pointerPressed(x, y, button, istouch)
     if state == 'gameover' then
         if pb == 'title' then goToTitle() end
         return
+    elseif state == 'funtest' then
+        if pb == 'back' then state = 'tools'
+        elseif pb and pb:sub(1, 3) == 'fm:' then funTestPick(tonumber(pb:sub(4)))
+        elseif pb and pb:sub(1, 3) == 'fk:' then funTestStart(pb:sub(4)) end
+        return
     elseif state == 'tools' then
+        if pb == 'funtest' then
+            sub.funA, sub.funB = nil, nil
+            state = 'funtest'
+            return
+        end
+        if pb == 'tamatest' then
+            -- a fresh meadow with Morphi, straight into Tamagotchi mode, with a
+            -- shelf of every food to put down for free
+            newGame(DEFAULT_SEED, 1)
+            closeGoal()
+            for _, w in ipairs(game.workers) do
+                if w:isBaby() then
+                    -- a bit hungry, bored, grubby and sleepy, so every
+                    -- button has something to do; some grass to wash with
+                    w.hunger = 40
+                    w.needs.fun, w.needs.clean, w.needs.sleep = 50, 50, 40
+                    openTama(w)
+                    break
+                end
+            end
+            game.world.stock.grass = math.max(game.world.stock.grass or 0, 10)
+            game.tamaSandbox = true
+            return
+        elseif pb == 'stockup' then
+            stockUp()
+            ui:toast('Stocked up: 20 of every material, a meal of every food')
+            backTo(sub.toolsBack)
+            return
+        end
         if pb == 'fingers' then fingerDebug = not fingerDebug
-        elseif pb == 'playnow' then playNow()
         elseif pb == 'back' then backTo(sub.toolsBack) end
         return
     elseif state == 'export' then
@@ -1146,9 +1606,46 @@ local function pointerPressed(x, y, button, istouch)
             hideCursor()
         end
         return
+    elseif state == 'tama' then
+        if game.tamaMenu == 'food' then
+            if pb and pb:sub(1, 9) == 'tamafood:' then tossFood(pb:sub(10))
+            elseif pb == 'tamamenu:close' or not ui:insideTamaMenu(vx, vy) then game.tamaMenu = nil end
+            return
+        elseif game.tamaMenu == 'wake' or game.tamaMenu == 'wakeLeave' then
+            if pb == 'tamawake:yes' then
+                local leave = game.tamaMenu == 'wakeLeave'
+                game.tamaMenu = nil
+                wakeNap()
+                if leave then closeTama() end
+            elseif pb == 'tamawake:no' or not ui:insideTamaMenu(vx, vy) then
+                game.tamaMenu = nil
+            end
+            return
+        end
+        if pb == 'tama:close' or (not pb and not ui:insideTamaPanel(vx, vy)) then
+            if game.tamaNap then game.tamaMenu = 'wakeLeave' else closeTama() end
+        elseif pb and pb:sub(1, 5) == 'tama:' then
+            pressTama(pb:sub(6))
+        end
+        return
+    elseif state == 'jobs' then
+        if pb and pb:sub(1, 4) == 'job:' then
+            pressJob(pb)
+        elseif pb == 'jobprev' or pb == 'jobnext' then
+            followNext(pb == 'jobnext' and 1 or -1)
+        elseif pb == 'units' then
+            openUnits()
+        elseif pb == 'close' or not ui:insideJobPanel(vx, vy) then
+            closeJobs()
+        end
+        return
     elseif state == 'units' then
-        local w = ui:unitButtonAt(vx, vy)
-        if w then
+        local w, what = ui:unitButtonAt(vx, vy)
+        if w and what == 'jobs' then
+            game.selectedWorker = w
+            game.abilities:select(ABILITY_SELECT)
+            openJobs()
+        elseif w then
             game.selectedWorker = w
             game.follow = true
             game.abilities:select(ABILITY_SELECT)
@@ -1195,10 +1692,23 @@ local function pointerPressed(x, y, button, istouch)
         Audio.playSFX('click')
         return
     end
+    if ui:alertLogAt(vx, vy) then
+        openLog()
+        return
+    end
+    if ui:followButtonAt(vx, vy) then
+        toggleFollow()
+        Audio.playSFX('click')
+        return
+    end
     -- an announcement with a place: look at it
     local alert = ui:alertAt(vx, vy)
     if alert then
         if alert.tile then lookAt(alert.tile) else openLog() end
+        return
+    end
+    if ui:jobsButtonAt(vx, vy) then
+        openJobs()
         return
     end
     if vy > ui.vh - BOTTOM_BAR_H then
@@ -1433,6 +1943,8 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'u' then
             openUnits()
+        elseif key == 'j' then
+            openJobs()
         elseif key == 'g' then
             openGoal()
         elseif key == 'l' then
@@ -1450,6 +1962,21 @@ function love.keypressed(key)
         if key == 'l' or key == 'escape' then state = 'playing'; hideCursor() end
     elseif state == 'units' then
         if key == 'u' or key == 'escape' then closeUnits() end
+    elseif state == 'tama' then
+        if key == 'escape' or key == 'j' then
+            if game.tamaMenu then game.tamaMenu = nil
+            elseif game.tamaNap then game.tamaMenu = 'wakeLeave'
+            else closeTama() end
+        end
+    elseif state == 'jobs' then
+        if key == 'j' or key == 'escape' then
+            closeJobs()
+        elseif key == 'u' then
+            openUnits()
+        elseif key == ']' or key == '[' then
+            followNext(key == ']' and 1 or -1)
+            Audio.playSFX('click')
+        end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
@@ -1470,6 +1997,8 @@ function love.keypressed(key)
         elseif key == 'e' then openSub('export') end
     elseif state == 'export' then
         if key == 'return' or key == 'kpenter' or key == 'escape' then closeExport() end
+    elseif state == 'funtest' then
+        if key == 'escape' then state = 'tools' end
     elseif state == 'tools' then
         if key == 'escape' then backTo(sub.toolsBack) end
     elseif state == 'history' then
@@ -1546,5 +2075,13 @@ if TEST_HOOKS then
         openSub = openSub,
         exportRun = exportRun,
         sub = sub,
+        openJobs = function() openJobs() end,
+        openTama = function(w) openTama(w) end,
+        dropFood = function(f) dropFood(f) end,
+        tossFood = function(f) tossFood(f) end,
+        updateTamaScene = function(dt) updateTamaScene(dt) end,
+        stockUp = function() stockUp() end,
+        pressTama = function(a) pressTama(a) end,
+        pressJob = function(id) pressJob(id) end,
     }
 end

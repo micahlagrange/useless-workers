@@ -151,7 +151,7 @@ function TestWorker:testPickedFoodWithNowhereToGoIsKept()
     lu.assertEquals(w.state, 'idle')
     run({ w }, world, self.jobs, 5)
     lu.assertNotNil(w:carrying())
-    lu.assertStrContains(w:describeState(), 'no storage')
+    lu.assertStrContains(w:describeState(), 'no stash')
     -- a bin goes up: the food goes into it
     world.stock.logs = 2
     local site = world:addSite(SITE_STORAGE, 3, 4)
@@ -272,7 +272,7 @@ function TestWorker:testLogsAndGoldGoToTheStockpile()
     lu.assertEquals(self.scoring.delivered.gold, 1)
 end
 
-function TestWorker:testLumberjackChopsTreeIntoStump()
+function TestWorker:testGathererShakesSticksAndTheTreeGrowsBack()
     local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK))
     self.jobs:postNode(self.bush)   -- not my job
     self.jobs:postNode(self.tree)
@@ -283,6 +283,12 @@ function TestWorker:testLumberjackChopsTreeIntoStump()
     lu.assertEquals(self.tree.timer > 0, true)
     lu.assertTrue(self.jobs:hasJobFor(self.bush)) -- still queued for a forager
     lu.assertEquals(self.events[2], 'deliver:logs')
+    -- the tree stays where it was, bare, and grows its twigs back
+    local still = false
+    for _, n in ipairs(self.world.nodes) do if n == self.tree then still = true end end
+    lu.assertTrue(still, 'a shaken tree stays standing')
+    self.world:update(TREE_REGROW_SECONDS + 1, function() end)
+    lu.assertTrue(self.tree.ready, 'its twigs grew back')
 end
 
 function TestWorker:testMinerWorksOreFromNextDoorAndOpensTheTile()
@@ -383,7 +389,7 @@ function TestWorker:testBedIsAShorterBetterBreak()
         run({ w }, self.world, self.jobs, 0.1)
         if w.state == 'breaking' then
             napStart = i
-            lu.assertEquals(w:describeState(), 'Napping in a bed')
+            lu.assertEquals(w:describeState(), 'Napping in a nest')
             lu.assertEquals({ w:tile().x, w:tile().y }, { 7, 2 })
             break
         end
@@ -441,7 +447,7 @@ function TestWorker:testOnlyALumberjackBuildsABed()
     local sawTool = false
     for _ = 1, 100 do
         run({ jack }, self.world, self.jobs, 0.1)
-        if jack:toolInHand() == 'saw' then sawTool = true end
+        if jack:toolInHand() == 'leaf' then sawTool = true end
         if self.world:get(7, 2).bed then break end
     end
     lu.assertTrue(self.world:get(7, 2).bed, 'lumberjack should build the bed')
@@ -453,16 +459,16 @@ function TestWorker:testToolsInHand()
     local jack = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_LUMBERJACK, 8, 2))
     self.jobs:postNode(self.tree)
     run({ jack }, self.world, self.jobs, 0.6)
-    lu.assertEquals(jack:toolInHand(), 'axe')
+    lu.assertEquals(jack:toolInHand(), 'twigs')
     local miner = Worker.new(self.world, self.jobs, self.scoring, Rng.new(3), self.opts(ROLE_MINER, 3, 5))
     self.jobs:postNode(self.ore)
     run({ miner }, self.world, self.jobs, 0.6)
-    lu.assertEquals(miner:toolInHand(), 'pickaxe')
+    lu.assertEquals(miner:toolInHand(), 'spade')
     local forager = Worker.new(self.world, self.jobs, self.scoring, Rng.new(4), self.opts(ROLE_FORAGER, 2, 3))
     local site = self.world:addSite(SITE_STORAGE, 2, 1)
     self.jobs:postSite(site)
     run({ forager }, self.world, self.jobs, 0.6)
-    lu.assertEquals(forager:toolInHand(), 'log')
+    lu.assertEquals(forager:toolInHand(), 'twigs')
 end
 
 function TestWorker:testHungryMorphiEatsFromABushWhenStorageIsEmpty()
@@ -592,8 +598,10 @@ local function simulateQuarter(difficultyIndex)
     local dt = 1 / 30
     local ended = false
     local start = os.clock()
+    local quitsEarly = nil -- quits in the first 90 s, the season length this test was written for
     while clock < QUARTER_SECONDS + 1 and not ended do
         clock = clock + dt
+        if not quitsEarly and clock >= 90 then quitsEarly = scoring.quits end
         jobs:update(dt)
         world:update(dt, function(n) jobs:postNode(n) end)
         local count, sum = 0, 0
@@ -615,6 +623,7 @@ local function simulateQuarter(difficultyIndex)
         DIFFICULTIES[difficultyIndex].name, DEFAULT_SEED, report.food, report.logs, report.gold, report.complaints, rs,
         report.attrition, report.fedPct, world:storedCount(ITEM_FOOD), report.grade, elapsed))
     print(string.format('    stockpile: logs %d gold %d', world.stock.logs, world.stock.gold))
+    report.quitsEarly = quitsEarly
     return report
 end
 function TestSimulation:testFullQuarterOnGeneratedWorld()
@@ -622,9 +631,11 @@ function TestSimulation:testFullQuarterOnGeneratedWorld()
         local report = simulateQuarter(d)
         if d == 2 then
             lu.assertTrue(report.output >= 6, 'morphis delivered only ' .. report.output)
-            lu.assertTrue(report.logs >= 1 and report.gold >= 1 and report.food >= 1, 'every role should deliver')
+            -- (nobody marks clay here, so no shinies: they are found only by digging)
+            lu.assertTrue(report.logs >= 1 and report.food >= 1, 'gatherers and foragers should deliver')
             lu.assertTrue(report.complaints <= 14, 'complaint spam: ' .. report.complaints)
-            lu.assertTrue(report.attrition == 0, 'quits with nobody helping: ' .. report.attrition)
+            -- a five-minute season unaided may cost a morphi; the first 90 s must not
+            lu.assertTrue(report.quitsEarly == 0, 'quits in 90 s with nobody helping: ' .. tostring(report.quitsEarly))
         end
     end
 end
@@ -754,11 +765,13 @@ function TestPlay:setUp()
     self.scoring = Scoring.new(1)
     self.complaints, self.events = {}, {}
     self.make = function(name, x, y, sheet)
-        return Worker.new(self.world, self.jobs, self.scoring, Rng.new(#name + (x or 5) * 7), {
+        local w = Worker.new(self.world, self.jobs, self.scoring, Rng.new(#name + (x or 5) * 7), {
             x = x or 5, y = y or 4, role = ROLE_MINER, sheet = sheet or 'cwab', name = name, drain = 0.5, wilds = true, hunger = 90,
             onComplain = function(_, reason) self.complaints[#self.complaints + 1] = reason end,
             onEvent = function(w, ev, data) self.events[#self.events + 1] = { who = w, name = ev, data = data } end,
         })
+        w.funAt = 0 -- due for some fun, unless a test says otherwise
+        return w
     end
     self.played = function()
         local list = {}
@@ -767,29 +780,32 @@ function TestPlay:setUp()
     end
 end
 
-function TestPlay:testOneChanceASeasonAndItDoesNotCarryOver()
+function TestPlay:testFunComesAtRandomAboutOncePerSeason()
     local a, b, c = self.make('Pip'), self.make('Dave', 6, 4), self.make('Gus', 6, 5)
     lu.assertTrue(a:hasPlayChance())
     lu.assertTrue(a:offerPlay())
     lu.assertTrue(b:joinPlay())
-    lu.assertFalse(a:hasPlayChance(), 'joining spends the chance')
+    lu.assertFalse(a:hasPlayChance(), 'having fun sets the next one a while off')
     lu.assertFalse(b:hasPlayChance())
+    -- the gap is a half to one and a half seasons, drawn at random
+    local lo, hi = math.huge, 0
+    for i = 1, 200 do
+        local w = self.make('Pip', 5, 4)
+        w.rng = Rng.new(i * 7919)
+        local gap = w:nextFunGap()
+        lo, hi = math.min(lo, gap), math.max(hi, gap)
+    end
+    lu.assertTrue(lo >= PLAY_MEAN_SECONDS * 0.5 and hi <= PLAY_MEAN_SECONDS * 1.5)
+    lu.assertTrue(hi - lo > PLAY_MEAN_SECONDS * 0.5, 'a spread, not one fixed gap')
+    -- a is not due again until its gap has passed
     a:endPlay(true)
-    lu.assertFalse(a:offerPlay(), 'one chance a season')
-    lu.assertTrue(c:offerPlay())
-    lu.assertFalse(a:joinPlay(), 'nor can it join another')
-    lu.assertFalse(b:joinPlay())
-    c:endPlay(false)
-    lu.assertTrue(c:hasPlayChance(), 'an offer nobody took keeps the chance')
-    -- next season: one chance each again, and the unused one did not pile up
-    self.scoring:closeQuarter(3)
+    lu.assertFalse(a:offerPlay())
+    a.clock = a.funAt
     lu.assertTrue(a:hasPlayChance())
+    -- an offer nobody takes does not spend the fun
+    lu.assertTrue(c:offerPlay())
+    c:endPlay(false)
     lu.assertTrue(c:hasPlayChance())
-    lu.assertTrue(a:offerPlay())
-    lu.assertTrue(c:joinPlay())
-    a:endPlay(true)
-    lu.assertFalse(c:hasPlayChance())
-    lu.assertFalse(c:offerPlay())
 end
 
 function TestPlay:testAnOfferIsJoinedByAFreeMorphiNotAHungryOne()
@@ -960,21 +976,52 @@ function TestPlay:testTradeAndPlayKeepTheirOwnOffers()
     lu.assertFalse(b:joinPlay())
 end
 
-function TestPlay:testPlayNowPairsTheNearestTwoWhateverTheSeason()
+function TestPlay:testPlayNowPairsTheNearestTwoWhateverTheGap()
     local a, b, c = self.make('Pip', 2, 3), self.make('Dave', 9, 3), self.make('Gus', 7, 3)
     local hungry = self.make('Hank', 9, 3)
     hungry.hunger = 5
-    for _, w in ipairs({ a, b, c, hungry }) do w.playedSeason = self.scoring.quarter end
+    for _, w in ipairs({ a, b, c, hungry }) do w.funAt = 1e9 end
     lu.assertNil(Worker.playNow({ a, hungry }), 'one free morphi is not two')
     local pl = Worker.playNow({ a, b, c, hungry })
-    lu.assertNotNil(pl, 'the season limit does not stop PLAY NOW')
+    lu.assertNotNil(pl, 'being not due does not stop PLAY NOW')
     lu.assertTrue((pl.a == b and pl.b == c) or (pl.a == c and pl.b == b))
     lu.assertNil(a.play)
     lu.assertNil(hungry.play)
-    lu.assertEquals(b.playedSeason, self.scoring.quarter)
+    lu.assertEquals(b.funAt, 1e9, 'a tester start does not move the next fun')
     run({ a, b, c, hungry }, self.world, self.jobs, 1)
     lu.assertTrue(pl.lines >= 1)
     lu.assertNotNil(pl.a.bubble or pl.b.bubble)
+end
+
+function TestPlay:testTheTestersPickOfTwoMorphisAndAKindOfFun()
+    local a, b, c = self.make('Pip', 4, 4), self.make('Dave', 8, 4), self.make('Gus', 6, 6)
+    for _, kind in ipairs(PLAY_CATEGORIES) do
+        local x, y = self.make('X' .. kind, 4, 4), self.make('Y' .. kind, 8, 4)
+        local pl = Worker.playPair(x, y, kind)
+        lu.assertNotNil(pl)
+        lu.assertEquals(pl.category, kind)
+        lu.assertEquals(#pl.convo, 12)
+        lu.assertEquals(x.play, pl)
+        lu.assertEquals(y.play, pl)
+        lu.assertStrContains(x:describeState(), PLAY_DOING[kind]:gsub('%s+$', ''))
+    end
+    lu.assertNil(Worker.playPair(a, a, 'dance'), 'two different morphis')
+    lu.assertNil(Worker.playPair(a, nil, 'dance'))
+    b.hunger = 5
+    lu.assertNil(Worker.playPair(a, b, 'dance'), 'a hungry one cannot')
+    a:quit('morale')
+    lu.assertNil(Worker.playPair(a, c, 'dance'), 'nor one that is leaving')
+    -- the pair is lifted at the end, like any other play
+    local p, q = self.make('Pip2', 4, 4), self.make('Dave2', 5, 4)
+    p.morale, q.morale = 40, 40
+    p.funAt, q.funAt = 1e9, 1e9
+    local pl = Worker.playPair(p, q, 'dance')
+    run({ p, q }, self.world, self.jobs, 12 * PLAY_LINE_SECONDS + 10)
+    lu.assertNil(p.play)
+    lu.assertTrue(p.morale > 40 + MORALE_PLAY - 5)
+    local played = self.played()
+    lu.assertEquals(played[#played].data.category, 'dance')
+    lu.assertEquals(played[#played].data.title, pl.convo.title)
 end
 
 function TestPlay:testTheTalkComesFromTheSeededRng()
@@ -983,6 +1030,7 @@ function TestPlay:testTheTalkComesFromTheSeededRng()
         local rng = Rng.new(seed)
         local a = Worker.new(world, Jobs.new(), self.scoring, rng, { x = 5, y = 4, wilds = true, hunger = 90 })
         local b = Worker.new(world, Jobs.new(), self.scoring, rng, { x = 6, y = 4, wilds = true, hunger = 90 })
+        a.funAt, b.funAt = 0, 0
         a:offerPlay()
         b:joinPlay()
         return a.play.category .. '/' .. a.play.convo.title
@@ -993,7 +1041,7 @@ function TestPlay:testTheTalkComesFromTheSeededRng()
         local k = pick(s)
         if not seen[k] then seen[k] = true; n = n + 1 end
     end
-    lu.assertEquals(n, 4, 'all four talks turn up')
+    lu.assertEquals(n, 6, 'all six talks turn up')
 end
 
 function TestPlay:testNoPlayOutsideFreePlay()

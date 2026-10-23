@@ -32,3 +32,11 @@ There are two kinds, bug and epic.
 - A run's audit log (`src/stats.lua`) leaves the game as text: EXPORT (the DEV button on the top bar, or the screen at the end of any game: game over, end of year, level clear or failed) shows the JSON with COPY and DOWNLOAD; in a browser it sits in a selectable text box over the game. Micah pastes it into the run viewer, https://claude.ai/artifact/MkPjsiF2xNFFwgc3SRYMMf (source `tools/stats_viewer.html`, published with `capabilities: {db: {}, user: {}}`), which saves it in its database as `<exported>-<first words of the note>-b<build>.json`.
 - To bring saved runs onto this machine: ArtifactData `list` on the run viewer, collection `runs`, `out_dir` `stats/inbox`; then `python tools/stats_archive.py --clean` writes each one to the archive, `C:/Users/sixst/Documents/morphis-stats-archive`, under that name. Read them there with `tools/stats_report.py`.
 - Run exports, sims and graphs are never committed: `stats/` is ignored but for its README.
+
+## Voice
+
+Morphis are little blobs in a meadow: whimsical, soft and a bit silly, never fantasy, frontier or grim. Every player-facing string (labels, news, alerts, hints, milestones, the README, devlogs) uses the meadow words: little blobs, the bunch, the home nest, stash, basket, nest, sticks, leaves, grass, shinies, digging, gatherer, digger, caretaker, grumbles, newcomers. Never use: dwarf, wilds, settler, migrant, lumber, chop, fell, log(s), stone, gold, ore, mine/mining/miner, camp, hardship, quit, the band. Internal identifiers (ROLE_LUMBERJACK, CARGO_LOGS, 'mine', world.breakroom, hires, quarter) may keep their old names until a story renames them; only what the player reads must change. `tst/words_test.lua` scans the string tables and a scripted free play log for the banned words.
+
+## Old levels
+
+The arcade and survival levels are kept for the coming hunting events (epic-hunting): `tst/arcade_test.lua` and `tst/levels_test.lua` play them with the real AI and must keep passing even after arcade leaves the title screen. Free play bests are saved as `meadowN.highscore` since the little blobs epic; the old `difficultyN.highscore` files are left unread.

@@ -24,22 +24,23 @@ end
 
 function Abilities:costText(tool)
     if tool == ABILITY_STORAGE then return self.world.arcade and 'free, living space' or 'free, 1 item' end
-    if tool == ABILITY_BIN then return COSTS.bin.logs .. ' log, 4 items' end
-    if tool == ABILITY_BED then return COSTS.bed.logs .. ' logs' end
-    if tool == ABILITY_WALL then return COSTS.wall.logs .. ' log' end
-    if tool == ABILITY_DOOR then return COSTS.door.logs .. ' log' end
-    if tool == ABILITY_BRIDGE then return COSTS.bridge.logs .. ' log/tile' end
+    local w = self.world
+    if tool == ABILITY_BIN then return costWords(costOf(w, 'bin')) .. ', 4 items' end
+    if tool == ABILITY_BED then return costWords(costOf(w, 'bed')) end
+    if tool == ABILITY_WALL then return costWords(costOf(w, 'wall')) end
+    if tool == ABILITY_DOOR then return costWords(costOf(w, 'door')) end
+    if tool == ABILITY_BRIDGE then return costWords(costOf(w, 'bridge')) .. '/tile' end
     if tool == ABILITY_MINE then return 'drag, free' end
     return 'free'
 end
 
 function Abilities:canAfford(tool)
-    if tool == ABILITY_STORAGE then return self.world:canAfford(COSTS.storage) end
-    if tool == ABILITY_BIN then return self.world:canAfford(COSTS.bin) end
-    if tool == ABILITY_BED then return self.world:canAfford(COSTS.bed) end
-    if tool == ABILITY_WALL then return self.world:canAfford(COSTS.wall) end
-    if tool == ABILITY_DOOR then return self.world:canAfford(COSTS.door) end
-    if tool == ABILITY_BRIDGE then return self.world:canAfford(COSTS.bridge) end
+    if tool == ABILITY_STORAGE then return self.world:canAfford(costOf(self.world, 'storage')) end
+    if tool == ABILITY_BIN then return self.world:canAfford(costOf(self.world, 'bin')) end
+    if tool == ABILITY_BED then return self.world:canAfford(costOf(self.world, 'bed')) end
+    if tool == ABILITY_WALL then return self.world:canAfford(costOf(self.world, 'wall')) end
+    if tool == ABILITY_DOOR then return self.world:canAfford(costOf(self.world, 'door')) end
+    if tool == ABILITY_BRIDGE then return self.world:canAfford(costOf(self.world, 'bridge')) end
     return true
 end
 
@@ -54,7 +55,7 @@ function Abilities:cancelSite(site)
     local refund = not site.working
     self.jobs:removeSite(site)
     self.world:removeSite(site)
-    if refund then self.world:refund(COSTS[site.kind] or {}) end
+    if refund then self.world:refund(costOf(self.world, site.kind)) end
     self:effect('unmark', { count = 1, kind = site.kind })
     return true
 end
@@ -64,7 +65,7 @@ function Abilities:use(tx, ty)
     local tool = self.selected
     if SITE_FOR_TOOL[tool] then
         local kind = SITE_FOR_TOOL[tool]
-        local cost = COSTS[kind]
+        local cost = costOf(self.world, kind)
         local t = self.world:get(tx, ty)
         if not t then return false, nil end
         -- clicking a designation with its own tool cancels it; with another
@@ -72,11 +73,13 @@ function Abilities:use(tx, ty)
         if t.site and t.site.kind == kind then return self:cancelSite(t.site) end
         if t.site and BUILD_KINDS[t.site.kind] and t.site.kind ~= SITE_BRIDGE then
             if t.site.working then return false, 'Someone is already building that' end
-            local refund = (COSTS[t.site.kind] or {}).logs or 0
-            if self.world.stock.logs + refund < cost.logs then return false, 'Need ' .. cost.logs .. ' logs in the stockpile' end
+            local back = costOf(self.world, t.site.kind)
+            for k, n in pairs(cost) do
+                if (self.world.stock[k] or 0) + (back[k] or 0) < n then return false, 'Need ' .. costWords(cost, ', ') .. ' in the pile' end
+            end
             self:cancelSite(t.site)
         end
-        if not self.world:canAfford(cost) then return false, 'Need ' .. cost.logs .. ' logs in the stockpile' end
+        if not self.world:canAfford(cost) then return false, 'Need ' .. costWords(cost, ', ') .. ' in the pile' end
         local site, why = self.world:addSite(kind, tx, ty)
         if not site then return false, why and (kind:sub(1, 1):upper() .. kind:sub(2) .. ' ' .. why) or nil end
         self.world:spend(cost)
@@ -116,7 +119,7 @@ function Abilities:designateMine(x1, y1, x2, y2)
         end
     end
     if count == 0 then
-        return false, clearing and nil or 'Drag over stone to mark it for mining'
+        return false, clearing and nil or 'Drag over clay to mark it for digging'
     end
     if area then self.jobs:postArea(area) end
     self:effect(clearing and 'unmark' or 'mine', { count = count, clearing = clearing })
@@ -137,8 +140,9 @@ function Abilities:useLine(x1, y1, x2, y2)
         if t and t.type == TILE_WATER and not t.site then water[#water + 1] = p end
     end
     if #water == 0 then return false, 'Bridges only go over water' end
-    local cost = { logs = #water * COSTS.bridge.logs }
-    if not self.world:spend(cost) then return false, 'Need ' .. cost.logs .. ' logs for that bridge' end
+    local cost = {}
+    for k, n in pairs(costOf(self.world, 'bridge')) do cost[k] = n * #water end
+    if not self.world:spend(cost) then return false, 'Need ' .. costWords(cost, ', ') .. ' for that bridge' end
     for _, p in ipairs(water) do
         local site = self.world:addSite(SITE_BRIDGE, p.x, p.y)
         if site then self.jobs:postSite(site) end
@@ -218,7 +222,7 @@ function Abilities:useDrag(x1, y1, x2, y2)
             if t and t.site and t.site.kind == kind and not t.site.working then
                 self.jobs:removeSite(t.site)
                 self.world:removeSite(t.site)
-                self.world:refund(COSTS[kind] or {})
+                self.world:refund(costOf(self.world, kind))
                 count = count + 1
             end
         end
@@ -248,7 +252,7 @@ function Abilities:lineQuote(x1, y1, x2, y2)
         local t = self.world:get(p.x, p.y)
         if t and t.type == TILE_WATER and not t.site then n = n + 1 end
     end
-    return tiles, n * COSTS.bridge.logs
+    return tiles, n * (costOf(self.world, 'bridge').logs or 0)
 end
 
 return Abilities

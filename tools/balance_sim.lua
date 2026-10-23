@@ -89,7 +89,7 @@ for _, diff in ipairs({ 1 }) do
           r.staff = r.staff + alive
           q = q + 1
           if player ~= 'none' then
-            if game.world.stock.logs >= COSTS.bin.logs then placeStorage(game, 1, true) end
+            if game.world:canAfford(costOf(game.world, 'bin')) then placeStorage(game, 1, true) end
             placeStorage(game, 3)
           end
           if player == 'routes' then clearRoutes(game, 4) end

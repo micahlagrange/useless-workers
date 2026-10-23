@@ -11,10 +11,12 @@ love.load()
 love.resize(1280, 720)
 
 -- Plays free play for a while with no player at all.
-local function play(seconds)
+local function play(seconds, due)
     H.newGame('PUPPER', 1)
     H.closeGoal()
     local game = H.game()
+    -- due: everybody is due for some fun at once, instead of at random
+    if due then for _, w in ipairs(game.workers) do w.funAt = 0 end end
     local dt = 1 / 15
     for _ = 1, math.floor(seconds / dt) do
         love.update(dt)
@@ -71,7 +73,7 @@ end
 -- Fun together: who played with whom, when, and what kind of play, so the
 -- run export shows it.
 function TestStats:test_play_is_recorded_with_who_and_what_kind()
-    local game = play(QUARTER_SECONDS - 5)
+    local game = play(QUARTER_SECONDS - 5, true)
     local s = game.stats
     local plays = {}
     for _, e in ipairs(s.events) do if e.kind == 'play' then plays[#plays + 1] = e end end
@@ -79,7 +81,7 @@ function TestStats:test_play_is_recorded_with_who_and_what_kind()
     lu.assertEquals(s.counts.play, #plays)
     for _, e in ipairs(plays) do
         lu.assertStrContains(e.who, ' and ')
-        lu.assertNotNil(e.text:match('^philosophize: ') or e.text:match('^socialize: '), e.text)
+        lu.assertNotNil(e.text:match('^philosophize: ') or e.text:match('^socialize: ') or e.text:match('^dance: '), e.text)
         lu.assertNotNil(e.day)
         lu.assertNotNil(e.x)
     end
@@ -120,8 +122,8 @@ function TestStats:test_history_reads_oldest_first()
     s:event('starved', { scoring = { quarter = 1, quarterTimer = QUARTER_SECONDS - DAY_SECONDS - 1 } }, 'Priya')
     s:event('arrived', { scoring = { quarter = 1, quarterTimer = QUARTER_SECONDS } }, 'Dave')
     local h = s:history()
-    lu.assertEquals(h[1], 'Day 1 (Spring): Dave arrived.')
-    lu.assertEquals(h[2], 'Day 2 (Spring): Priya starved and wandered off.')
+    lu.assertEquals(h[1], 'Day 1 (Spring): Dave wandered in.')
+    lu.assertEquals(h[2], 'Day 2 (Spring): Priya got too hungry and toddled off.')
 end
 
 function TestStats:test_an_arcade_level_counts_days_from_its_start()

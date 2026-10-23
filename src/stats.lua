@@ -16,11 +16,11 @@ Stats.TILE_CHARS = {
     water = '~', grass = '.', dirt = ',', stone = '#', snow = '*', bridge = '=',
     breakroom = 'C', wall = 'W', door = 'D',
 }
-Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g' }
+Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l', critter = 'r' }
 Stats.LEGEND = {
-    ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'stone', ['*'] = 'snow',
+    ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'clay', ['*'] = 'hard dirt',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
-    t = 'tree (stump T)', g = 'gold ore', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
+    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', r = 'critter', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
 }
 
 local function tileChar(t)
@@ -28,6 +28,7 @@ local function tileChar(t)
         local c = Stats.NODE_CHARS[t.node.kind] or '?'
         if t.node.ready and t.node.kind == NODE_BUSH then return 'B' end
         if not t.node.ready and t.node.kind == NODE_TREE then return 'T' end
+        if not t.node.ready and t.node.kind == NODE_GRASS then return 'V' end
         return c
     end
     if t.site and not t.site.done then return '+' end
@@ -52,19 +53,19 @@ end
 -- between several that pass on the same day; the rest wait their turn.
 -- s is the stats, r the day's row.
 Stats.MILESTONES = {
-    { id = 'year1', weight = 9, text = 'The band saw out its first year in the wilds.', test = function(s, r) return r.quarter > 4 end },
-    { id = 'year2', weight = 9, text = 'Two years. The wilds are starting to feel like home.', test = function(s, r) return r.quarter > 8 end },
-    { id = 'year3', weight = 9, text = 'Three years and still standing.', test = function(s, r) return r.quarter > 12 end },
-    { id = 'year5', weight = 10, text = 'Five years. Morphis tell stories about this band.', test = function(s, r) return r.quarter > 20 end },
-    { id = 'band8', weight = 6, text = 'Eight morphis around one campfire.', test = function(s, r) return r.pop >= 8 end },
-    { id = 'band12', weight = 7, text = 'A dozen morphis. A proper village.', test = function(s, r) return r.pop >= 12 end },
-    { id = 'gold50', weight = 5, text = 'Fifty gold dug out of the rock.', test = function(s, r) return r.gold >= 50 end },
-    { id = 'gold200', weight = 7, text = 'Two hundred gold. The morphis are rich and have nothing to buy.', test = function(s, r) return r.gold >= 200 end },
-    { id = 'logs100', weight = 5, text = 'A hundred logs felled.', test = function(s, r) return r.logs >= 100 end },
-    { id = 'food200', weight = 5, text = 'Two hundred meals gathered.', test = function(s, r) return r.food >= 200 end },
-    { id = 'food1000', weight = 8, text = 'A thousand meals gathered. Nobody counted the crumbs.', test = function(s, r) return r.food >= 1000 end },
-    { id = 'trades10', weight = 4, text = 'Ten deals struck at camp.', test = function(s, r) return s.counts.trade >= 10 end },
-    { id = 'arrivals10', weight = 4, text = 'Ten migrants took a chance on this band.', test = function(s, r) return s.counts.arrived >= 10 end },
+    { id = 'year1', weight = 9, text = 'The bunch made it through a whole year in the meadow.', test = function(s, r) return r.quarter > 4 end },
+    { id = 'year2', weight = 9, text = 'Two years. The meadow really feels like home now.', test = function(s, r) return r.quarter > 8 end },
+    { id = 'year3', weight = 9, text = 'Three years and still bouncing.', test = function(s, r) return r.quarter > 12 end },
+    { id = 'year5', weight = 10, text = 'Five years. Little blobs tell stories about this bunch.', test = function(s, r) return r.quarter > 20 end },
+    { id = 'band8', weight = 6, text = 'Eight morphis snuggled round the home nest.', test = function(s, r) return r.pop >= 8 end },
+    { id = 'band12', weight = 7, text = 'A dozen morphis. A proper little crowd.', test = function(s, r) return r.pop >= 12 end },
+    { id = 'gold50', weight = 5, text = 'Fifty shinies dug up.', test = function(s, r) return r.gold >= 50 end },
+    { id = 'gold200', weight = 7, text = 'Two hundred shinies. Very sparkly, nothing to spend them on.', test = function(s, r) return r.gold >= 200 end },
+    { id = 'logs100', weight = 5, text = 'A hundred sticks gathered.', test = function(s, r) return r.logs >= 100 end },
+    { id = 'food200', weight = 5, text = 'Two hundred snacks gathered.', test = function(s, r) return r.food >= 200 end },
+    { id = 'food1000', weight = 8, text = 'A thousand snacks gathered. Nobody counted the crumbs.', test = function(s, r) return r.food >= 1000 end },
+    { id = 'trades10', weight = 4, text = 'Ten snack swaps at the home nest.', test = function(s, r) return s.counts.trade >= 10 end },
+    { id = 'arrivals10', weight = 4, text = 'Ten little blobs wandered in to join the bunch.', test = function(s, r) return s.counts.arrived >= 10 end },
 }
 
 -- meta: seed, mode, difficulty, build and anything else worth keeping
@@ -85,12 +86,18 @@ function Stats.new(meta)
     return self
 end
 
+-- Is the clock a free play season? A level's clock is not a season, even
+-- when it runs shorter than one (survival levels run 90 s).
+function Stats.seasonal(game)
+    return (game.mode == nil or game.mode == 'free') and game.scoring.quarterTimer <= QUARTER_SECONDS
+end
+
 -- Days follow the season clock, so day 10 is always the first of Summer.
 -- A level's clock is not a season (arcade has none): its days just count
 -- up from the start.
 function Stats.dayOf(game)
     local scoring = game.scoring
-    if scoring.quarterTimer > QUARTER_SECONDS then
+    if not Stats.seasonal(game) then
         return math.floor((game.clock or 0) / DAY_SECONDS) + 1
     end
     local into = math.floor((QUARTER_SECONDS - scoring.quarterTimer) / DAY_SECONDS)
@@ -99,8 +106,7 @@ function Stats.dayOf(game)
 end
 
 -- Something happened: kind is 'arrived', 'starved', 'left', 'trade',
--- 'play' (text: the kind of play and the talk's title), 'hardship' or
--- 'news'; who and text are optional.
+-- 'hardship' or 'news'; who and text are optional.
 function Stats:event(kind, game, who, text, tile)
     self.counts[kind] = (self.counts[kind] or 0) + 1
     self.events[#self.events + 1] = {
@@ -114,7 +120,7 @@ local function bucket(w)
     if s == 'working' or (s == 'walking' and (g == 'work' or g == 'deliver')) then return 'work' end
     if s == 'eating' or (s == 'walking' and (g == 'eat' or g == 'fetch')) then return 'food' end
     -- playing together is a break of the fun kind, not standing about; but
-    -- waiting at camp for somebody to play with is
+    -- waiting at the nest for somebody to play with is
     if s == 'playing' and w.play and not w.play.b then return 'idle' end
     if s == 'breaking' or s == 'trading' or s == 'playing' or (s == 'walking' and (g == 'break' or g == 'play')) then return 'rest' end
     if s == 'sulking' then return 'sulk' end
@@ -134,22 +140,34 @@ function Stats:row(game, day)
         day = day, clock = round(game.clock or 0),
         quarter = scoring.quarter,
         -- named from the day: the season label stops at Winter once the year is over
-        season = scoring.quarterTimer > QUARTER_SECONDS and scoring:seasonLabel() or Stats.seasonOfDay(day),
+        season = (not Stats.seasonal(game)) and scoring:seasonLabel() or Stats.seasonOfDay(day),
         pop = 0, hunger = 0, morale = 0, hungry = 0, starving = 0, lowMorale = 0,
         work = 0, foodTime = 0, rest = 0, sulk = 0, idle = 0,
-        roles = {},
-        band = {},      -- where each morphi is and how it is doing: name, role, x, y, hunger, morale, doing
-        stockLogs = world.stock.logs, stockGold = world.stock.gold,
+        roles = {},     -- morphis by main job
+        idleByMain = {}, -- idle morphis by main job (format 2)
+        band = {},      -- where each morphi is and how it is doing: name, role (= main), main, neutral,
+                        -- disliked, job (what it is working at, if working), x, y, hunger, morale, doing
+        stockLogs = world.stock.logs, stockGold = world.stock.gold, stockGrass = world.stock.grass or 0, stockLeaves = world.stock.leaves or 0,
         storedFood = world:storedCount('food'),
         food = scoring.lifetimeDelivered.food or 0,
         logs = scoring.lifetimeDelivered.logs or 0,
         gold = scoring.lifetimeDelivered.gold or 0,
         arrived = self.counts.arrived, starved = self.counts.starved, left = self.counts.left,
+        laid = self.counts.laid, hatched = self.counts.hatched, grewUp = self.counts.grewUp, died = self.counts.died,
+        eggs = 0, babies = 0, little = {},  -- format 3: the eggs and babies, as {name, stage, x, y, hunger, care}
         trades = self.counts.trade, plays = self.counts.play, hardships = self.counts.hardship,
         drain = round(scoring.drain, 2),
         ripeBushes = world:readyNodeCount(NODE_BUSH), trees = world:readyNodeCount(NODE_TREE), ore = world:readyNodeCount(NODE_ORE),
     }
     for _, w in ipairs(game.workers) do
+        if w.alive and (w.stage == 'egg' or w.stage == 'baby') then
+            local t = w:tile()
+            if w.stage == 'egg' then r.eggs = r.eggs + 1 else r.babies = r.babies + 1 end
+            r.little[#r.little + 1] = {
+                name = w.name, stage = w.stage, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5),
+                care = w.stage == 'baby' and math.floor(w:careScore() + 0.5) or nil,
+            }
+        end
         if w:isWorking() then
             r.pop = r.pop + 1
             r.hunger = r.hunger + w.hunger
@@ -161,8 +179,15 @@ function Stats:row(game, day)
             if b == 'food' then b = 'foodTime' end
             r[b] = r[b] + 1
             r.roles[w.role] = (r.roles[w.role] or 0) + 1
+            local doing = bucket(w)
+            if doing == 'idle' then r.idleByMain[w.role] = (r.idleByMain[w.role] or 0) + 1 end
             local t = w:tile()
-            r.band[#r.band + 1] = { name = w.name, role = w.role, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5), morale = math.floor((w.morale or MORALE_MAX) + 0.5), doing = bucket(w) }
+            local js = w.jobSet
+            r.band[#r.band + 1] = {
+                name = w.name, role = w.role, x = t.x, y = t.y, hunger = math.floor(w.hunger + 0.5), morale = math.floor((w.morale or MORALE_MAX) + 0.5), doing = doing,
+                main = w.role, neutral = js and js.neutral or nil, disliked = js and js.disliked or nil,
+                job = doing == 'work' and (w.doing or w.role) or nil,
+            }
         end
     end
     if r.pop > 0 then
@@ -260,11 +285,13 @@ function Stats:history()
     for _, m in ipairs(self.milestones) do list[#list + 1] = { day = m.day, order = 0, text = m.text } end
     for _, e in ipairs(self.events) do
         if e.kind == 'arrived' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A migrant') .. ' arrived.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A little blob') .. ' wandered in.' }
         elseif e.kind == 'starved' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' starved and wandered off.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' got too hungry and toddled off.' }
+        elseif e.kind == 'died' then
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' is gone. A little flower grows there.' }
         elseif e.kind == 'left' then
-            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' had enough and left.' }
+            list[#list + 1] = { day = e.day, order = 1, text = (e.who or 'A morphi') .. ' packed a tiny bag and left.' }
         end
     end
     table.sort(list, function(a, b)

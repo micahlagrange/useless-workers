@@ -95,6 +95,40 @@ def season_table(run):
             gain('food'), gain('logs'), gain('gold'), gain('arrived'), gain('starved') + gain('left'), gain('hardships')))
         prev = last
     print('(each row: band at the end of the season, averages over its days, and what changed in it)')
+    idle_by_main(run)
+
+
+JOBS = ('forager', 'lumberjack', 'miner', 'builder')
+
+
+def main_of(m):
+    # format 2 exports carry main/neutral/disliked; older ones only role, which was the main job
+    return m.get('main') or m.get('role')
+
+
+def idle_by_main(run):
+    """Idle share of morphi-days by main job, season by season."""
+    days = run['days']
+    per = run['meta'].get('daysPerSeason', 9)
+    print('%-10s %s' % ('idle% by', '  '.join('%10s' % j for j in JOBS)))
+    for start in range(0, len(days), per):
+        chunk = days[start:start + per]
+        cells = []
+        for job in JOBS:
+            pop = idle = 0
+            for d in chunk:
+                band = d.get('band') or []
+                if not isinstance(band, list):
+                    band = []
+                pop += sum(1 for m in band if main_of(m) == job)
+                by = d.get('idleByMain')
+                if isinstance(by, dict):
+                    idle += by.get(job, 0)
+                else:
+                    idle += sum(1 for m in band if main_of(m) == job and m.get('doing') == 'idle')
+            cells.append('%10s' % ('-' if pop == 0 else '%.0f' % (100 * idle / pop)))
+        print('%-10s %s' % (chunk[0]['season'], '  '.join(cells)))
+    print("(share of each main job's morphi-days spent idle; - where nobody had that main job)")
 
 
 def summary(path, run, short=False):

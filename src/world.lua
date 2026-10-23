@@ -1,6 +1,7 @@
 require('src.constants')
 local Util = require('src.util')
 local Noise = require('src.noise')
+local Rng = require('src.rng')
 
 local World = {}
 World.__index = World
@@ -13,6 +14,9 @@ function World.new(w, h, rng)
     local self = setmetatable({}, World)
     self.w, self.h = w or WORLD_W, h or WORLD_H
     self.rng = rng
+    -- grass and leaves plant from a stream of their own, so a seed's map,
+    -- bushes, trees and ore are what they were before they existed
+    self.plantRng = Rng.new(((rng and rng.state) or 1) % 1000003 + 4242)
     self.tiles = {}
     self.nodes = {}
     self.nextNodeId = 1
@@ -30,7 +34,7 @@ function World.new(w, h, rng)
     self.arcadePopulation = 0
     self.enclosureCache = nil
     self.enclosureCacheVersion = -1
-    self.stock = { logs = 0, gold = 0 }
+    self.stock = { logs = 0, gold = 0, grass = 0, leaves = 0 }
     self.spent = 0 -- logs and gold spent on designations, net of refunds
     self.version = 0
     self.breakroom = nil
@@ -91,8 +95,27 @@ function World.generate(seedNumber, rng, w, h)
     end
     self:carveRivers(rng)
     self:placeBreakroom()
+    self:hideShinies(seedNumber)
     self.version = self.version + 1
     return self
+end
+
+-- Shinies hide in the clay and hard dirt (stone and snow, internally), on a
+-- random stream of their own so the map is what it was. Nothing shows until
+-- a digger digs the tile.
+function World:hideShinies(seedNumber)
+    local rng = Rng.new((tonumber(seedNumber) or 1) * 31 + 999)
+    self.hiddenShinies = 0
+    for x = 1, self.w do
+        for y = 1, self.h do
+            local t = self.tiles[x][y]
+            local diggable = t.type == TILE_STONE or t.type == TILE_SNOW
+            if diggable and rng:random() < SHINY_CHANCE then
+                t.shiny = true
+                self.hiddenShinies = self.hiddenShinies + 1
+            end
+        end
+    end
 end
 
 -- Rivers wander from one edge to the opposite one. The first runs top to
@@ -465,16 +488,21 @@ end
 
 -- Resource nodes ---------------------------------------------------------
 -- bush: grows food on grass, ripens again after it is picked
--- tree: stands on grass, a lumberjack cuts it for logs, regrows from a stump
+-- tree: stands on grass, a gatherer shakes sticks from it (logs, internally);
+-- it stays standing, bare, until its twigs grow back
 -- ore:  gold inside a stone tile, a miner works it from a neighbouring tile,
 --       the tile turns to dirt when it is mined out
 
 function World:addNode(kind, x, y, food)
     if kind == NODE_BUSH and not food then
-        -- spread the foods around so every morphi finds something
-        self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
-        food = FOOD_KINDS[self.foodCycle]
+        -- spread the foods around so every morphi finds something; in free
+        -- play meat ('steak') comes only from hunting, never a bush
+        repeat
+            self.foodCycle = (self.foodCycle or 0) % #FOOD_KINDS + 1
+            food = FOOD_KINDS[self.foodCycle]
+        until not (self.wilds and food == MEAT)
     end
+    if kind == NODE_CRITTER then food = MEAT end
     local node = {
         id = self.nextNodeId, kind = kind, x = x, y = y,
         ready = (kind ~= NODE_BUSH), timer = 0, claimedBy = nil,
@@ -566,7 +594,7 @@ end
 -- and most of that share sits across water so bridges are worth building.
 function World:spawnNodes(kind, count, enclosedFraction)
     enclosedFraction = enclosedFraction or NODE_ENCLOSED_FRACTION
-    local rng = self.rng
+    local rng = (kind == NODE_GRASS or kind == NODE_LEAVES or kind == NODE_CRITTER) and self.plantRng or self.rng
     local reach = self:reachableFromBreakroom()
     local reachable, enclosed, island = {}, {}, {}
     for x = 1, self.w do
@@ -635,6 +663,7 @@ end
 -- Bushes ripen and stumps regrow. onReady(node) fires when a node becomes workable.
 function World:update(dt, onReady)
     for _, node in ipairs(self.nodes) do
+        if node.kind == NODE_CRITTER and not node.claimedBy then self:hopCritter(node, dt) end
         if not node.ready then
             node.timer = node.timer - dt
             if node.timer <= 0 then
@@ -642,6 +671,23 @@ function World:update(dt, onReady)
                 if onReady then onReady(node) end
             end
         end
+    end
+end
+
+-- A critter nobody is after hops to a free grass tile next to it now and then.
+function World:hopCritter(node, dt)
+    node.hopTimer = (node.hopTimer or CRITTER_HOP_SECONDS * self.plantRng:random()) - dt
+    if node.hopTimer > 0 then return end
+    node.hopTimer = CRITTER_HOP_SECONDS * (0.6 + 0.8 * self.plantRng:random())
+    local dirs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+    local d = dirs[self.plantRng:int(1, 4)]
+    local x, y = node.x + d[1], node.y + d[2]
+    local t = self:get(x, y)
+    if t and t.type == TILE_GRASS and not t.node and not t.site and #t.items == 0 and (t.storage or 0) == 0 then
+        self.tiles[node.x][node.y].node = nil
+        node.x, node.y = x, y
+        t.node = node
+        node.hopped = 0.3
     end
 end
 
@@ -663,6 +709,18 @@ function World:harvestNode(node)
         node.ready = false
         node.timer = TREE_REGROW_SECONDS
         return CARGO_LOGS
+    elseif node.kind == NODE_GRASS then
+        node.ready = false
+        node.timer = GRASS_REGROW_SECONDS
+        return CARGO_GRASS
+    elseif node.kind == NODE_LEAVES then
+        self:removeNode(node)
+        node.ready = false
+        return CARGO_LEAVES
+    elseif node.kind == NODE_CRITTER then
+        self:removeNode(node)
+        node.ready = false
+        return CARGO_FOOD
     else
         self:removeNode(node)
         node.ready = false
@@ -1157,6 +1215,11 @@ function World:completeSite(site)
         if node and node.kind == NODE_ORE then
             self:removeNode(node)
             node.ready = false
+            cargo = CARGO_GOLD
+        elseif t.shiny then
+            -- dug up a hidden shiny
+            t.shiny = nil
+            self.hiddenShinies = (self.hiddenShinies or 1) - 1
             cargo = CARGO_GOLD
         end
         self:setType(site.x, site.y, TILE_DIRT)

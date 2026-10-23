@@ -67,8 +67,8 @@ Levels[2] = {
 
 Levels[3] = {
     name = 'Timber',
-    blurb = 'Twins joins and only eats cheese. Few points, but trees near camp.',
-    intro = 'Twins eats cheese and cuts trees into logs, and logs are points. You start with 4. The river is thin in one place.',
+    blurb = 'Twins joins and only eats cheese. Few points, but trees near home.',
+    intro = 'Twins eats cheese and gathers sticks from trees, and sticks are points. You start with 4. The stream is thin in one place.',
     morphis = { 'pupper', 'woofoof', 'twins' },
     points = 4, par = 1, seconds = 100, drain = 0.7, hunger = 48,
     grid = {
@@ -91,8 +91,8 @@ Levels[3] = {
 
 Levels[4] = {
     name = 'Stone',
-    blurb = 'Cwab joins, eats chili, and mines. Stone is free to dig.',
-    intro = 'Cwab eats chili and can MINE stone. Marked stone costs nothing but time. The walls are thinner than they look.',
+    blurb = 'Cwab joins, eats chili, and digs. Rock is free to dig.',
+    intro = 'Cwab eats chili and can DIG through rock. Marked rock costs nothing but time. The walls are thinner than they look.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab' },
     points = 6, par = 0, seconds = 100, drain = 0.75, hunger = 45,
     grid = {
@@ -118,9 +118,9 @@ Levels[4] = {
 }
 
 Levels[5] = {
-    name = 'The wilds',
+    name = 'The meadow',
     blurb = 'Blob joins and only eats candy. Everything at once.',
-    intro = 'Blob eats candy. Five mouths, five foods, rivers and stone in the way. Bridges cost, mining is free, trees are points.',
+    intro = 'Blob eats candy. Five mouths, five foods, streams and rock in the way. Bridges cost, digging is free, trees are points.',
     morphis = { 'pupper', 'woofoof', 'twins', 'cwab', 'blue' },
     points = 8, par = 3, seconds = 120, drain = 0.8, hunger = 45,
     grid = {

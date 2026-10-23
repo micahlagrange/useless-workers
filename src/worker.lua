@@ -1,5 +1,9 @@
--- A morphi. Has a role (forager, lumberjack, miner), gets hungry, takes jobs
--- of its own type off the shared queue, complains when it cannot reach them,
+-- A morphi. In free play it has three jobs (src/jobsets.lua): a main job it
+-- does whenever there is work of that kind, a neutral one it falls back to,
+-- and a disliked one it does only when nothing else is left; the player sets
+-- the first two. Arcade (and the retired survival levels) give it one job,
+-- its role. It gets hungry, takes jobs off the shared queue, complains when
+-- it cannot reach them,
 -- carries a work item in slot 1 and a personal snack in slot 2, and takes a
 -- break in the break room after enough work. Nothing interrupts a job:
 -- eating, fetching a snack and taking a break are all chosen while idle.
@@ -10,6 +14,7 @@
 require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
+local JobSets = require('src.jobsets')
 
 local Worker = {}
 Worker.__index = Worker
@@ -21,8 +26,29 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.id = nextId
     nextId = nextId + 1
     self.world, self.jobs, self.scoring, self.rng = world, jobs, scoring, rng
-    self.role = opts.role or ROLE_FORAGER
+    -- free play: main, neutral and disliked jobs (role mirrors the main one);
+    -- elsewhere one job, the role. doing is the job of the task in hand.
+    self.stage = opts.stage -- 'egg', 'baby', or nil for a grown-up
+    self.nest = opts.nest   -- an egg's or a baby's nest: {x, y}
+    self.parents = opts.parents
+    if self.stage == 'egg' then
+        self.role = 'baby'
+        self.hatchTimer = EGG_HATCH_SECONDS
+    end
+    if self.stage == 'baby' then
+        self.role = 'baby'
+        self.age = 0
+        self.needs = { fun = 100, clean = 100, sleep = 100 }
+        self.careSum, self.careTime = 0, 0
+    elseif opts.jobs then
+        self.jobSet = { main = opts.jobs.main, neutral = opts.jobs.neutral, disliked = opts.jobs.disliked }
+        self.role = self.jobSet.main
+    else
+        self.role = opts.role or ROLE_FORAGER
+    end
     self.roleInfo = ROLES[self.role]
+    self.doing = nil
+    self.band = opts.band -- the game's list of morphis, for 'nobody has builder set'
     self.sheet = opts.sheet or self.roleInfo.sheets[1]
     self.species = MORPHI_SHEET_NAMES[self.sheet] or self.sheet
     self.diet = opts.diet or MORPHI_DIET[self.sheet] or FOOD_KINDS[1]
@@ -143,11 +169,366 @@ function Worker:tile()
 end
 
 function Worker:isWorking()
-    return self.alive and self.state ~= 'quitting'
+    return self.alive and self.state ~= 'quitting' and self.stage == nil
+end
+
+-- Babies ---------------------------------------------------------------------
+
+function Worker:isBaby()
+    return self.stage == 'baby'
+end
+
+function Worker:isEgg()
+    return self.stage == 'egg'
+end
+
+-- Out of the egg: a baby now, in the same nest.
+function Worker:hatch()
+    self.stage = 'baby'
+    self.age = 0
+    self.needs = { fun = 100, clean = 100, sleep = 100 }
+    self.careSum, self.careTime = 0, 0
+    self.hunger = HUNGER_MAX
+    self:emit('hatched')
+end
+
+-- How well it is looked after right now, 0-100: the mean of its needs.
+function Worker:careNow()
+    local n = self.needs
+    return (self.hunger + n.fun + n.clean + n.sleep) / 4
+end
+
+-- Its care score so far: the mean of careNow over its babyhood.
+function Worker:careScore()
+    if (self.careTime or 0) <= 0 then return self:careNow() end
+    return self.careSum / self.careTime
+end
+
+-- Gone: a little flower marks the spot (world.graves).
+function Worker:die(cause)
+    if self.trade then self:endTrade(false) end
+    if self.play then self:endPlay(false) end
+    self:dropJob()
+    self.slots = {}
+    self.scoring:addQuit()
+    self.alive = false
+    self.state = 'gone'
+    local t = self:tile()
+    self.world.graves = self.world.graves or {}
+    self.world.graves[#self.world.graves + 1] = { x = t.x, y = t.y, name = self.name }
+    self:emit('died', { cause = cause, stage = self.stage or 'grown-up' })
+end
+
+function Worker:updateBaby(dt)
+    self.age = self.age + dt
+    -- danger: an empty belly, or every need empty, for long enough
+    local n = self.needs
+    if self.hunger <= 0 then self.emptyTime = (self.emptyTime or 0) + dt else self.emptyTime = 0 end
+    if self.hunger <= 0 and n.fun <= 0 and n.clean <= 0 and n.sleep <= 0 then
+        self.neglectTime = (self.neglectTime or 0) + dt
+    else
+        self.neglectTime = 0
+    end
+    if self.emptyTime >= BABY_STARVE_SECONDS then self:die('hunger') return end
+    if self.neglectTime >= BABY_NEGLECT_SECONDS then self:die('neglect') return end
+    if self.emptyTime >= BABY_STARVE_SECONDS / 2 and not self.warnedHungry then
+        self.warnedHungry = true
+        self:emit('babyWarning', 'hungry')
+    elseif self.emptyTime == 0 then
+        self.warnedHungry = nil
+    end
+    if self.neglectTime >= BABY_NEGLECT_SECONDS / 2 and not self.warnedNeglect then
+        self.warnedNeglect = true
+        self:emit('babyWarning', 'neglected')
+    elseif self.neglectTime == 0 then
+        self.warnedNeglect = nil
+    end
+    local n = self.needs
+    for k, rate in pairs(BABY_NEED_DRAIN) do n[k] = math.max(0, n[k] - rate * dt) end
+    if self.state == 'breaking' then n.sleep = math.min(100, n.sleep + BABY_NAP_RATE * dt) end
+    self.careSum = self.careSum + self:careNow() * dt
+    self.careTime = self.careTime + dt
+    if self.age >= BABY_SECONDS then self:emit('grewUp') end
+end
+
+-- Grown up: dealt its jobs (by the game), its mood from how it was cared for.
+function Worker:growUp(jobs)
+    self.morale = math.max(BABY_MORALE_MIN, math.min(MORALE_MAX, self:careScore()))
+    self.stage = nil
+    self.needs = nil
+    self.jobSet = { main = jobs.main, neutral = jobs.neutral, disliked = jobs.disliked }
+    self.role = self.jobSet.main
+    self.roleInfo = ROLES[self.role]
+    self.workTime = 0
+end
+
+-- A baby's needs in a line for the strip: 'fun 80 clean 70 sleep 90, grows up in 4:10'.
+function Worker:babySummary()
+    local n = self.needs
+    local left = math.max(0, math.ceil(BABY_SECONDS - self.age))
+    return string.format('fun %d clean %d sleep %d, grows up in %d:%02d', math.floor(n.fun + 0.5), math.floor(n.clean + 0.5), math.floor(n.sleep + 0.5), math.floor(left / 60), left % 60)
+end
+
+-- Somebody in the bunch has caretaker as main or neutral job.
+function Worker:hasCaretaker()
+    for _, w in ipairs(self.band or {}) do
+        if w.jobSet and w:isWorking() and (w.jobSet.main == ROLE_CARETAKER or w.jobSet.neutral == ROLE_CARETAKER) then return true end
+    end
+    return false
+end
+
+-- Tamagotchi mode: the player tends this baby, on the colony's real numbers.
+-- tendInfo(action, world) says what a button does, what it costs, what the
+-- colony has to pay with and whether it can be done now; tend() does it and
+-- returns a line saying what happened.
+
+local FOOD_NAME = function(food) return (FOOD_WORDS and FOOD_WORDS[food]) or food end
+Worker.foodName = FOOD_NAME
+
+-- The stored meals this baby will eat, best liked first: { {food, n, taste} }
+function Worker:mealsFor(world)
+    local by = {}
+    for _, item in ipairs(world.items) do
+        if item.kind == ITEM_FOOD and self:willEat(item.food) then by[item.food] = (by[item.food] or 0) + 1 end
+    end
+    local out = {}
+    for food, n in pairs(by) do out[#out + 1] = { food = food, n = n, taste = self:taste(food) } end
+    local rank = { loved = 1, fine = 2, hated = 3 }
+    table.sort(out, function(a, b)
+        if rank[a.taste] ~= rank[b.taste] then return rank[a.taste] < rank[b.taste] end
+        return a.food < b.food
+    end)
+    return out
+end
+
+-- How a baby takes to a food put down in front of it: 'love' (it knows
+-- and loves it: jumps right on it), 'hate' (knows it and hates it: yuck),
+-- 'ok' (knows it, it will do), or 'curious' (never seen it: creeps up,
+-- sniffs, nibbles, and then finds out). knownFoods remembers what it tried.
+function Worker:reactTo(food)
+    self.knownFoods = self.knownFoods or {}
+    local taste = self:taste(food)
+    if not self.knownFoods[food] then return 'curious', taste end
+    if taste == 'loved' then return 'love', taste end
+    if taste == 'hated' then return 'hate', taste end
+    return 'ok', taste
+end
+
+-- It tried the food: it knows it now, and eats it unless it hates it (and
+-- is not starving). Returns true if it ate.
+function Worker:tryFood(food)
+    self.knownFoods = self.knownFoods or {}
+    self.knownFoods[food] = true
+    if self:taste(food) == 'hated' and self.hunger >= HUNGER_STARVING then return false end
+    self:mealOf(food)
+    return true
+end
+
+-- What this baby thinks of a food, for the food bag: a word, and the
+-- tummy a meal of it gives ('loves it' +70, 'likes it' +35, 'hates it',
+-- 'never tried').
+function Worker:opinionOf(food)
+    self.knownFoods = self.knownFoods or {}
+    local taste = self:taste(food)
+    if not self.knownFoods[food] then return 'never tried', FOOD_VALUE[taste], taste end
+    if taste == 'loved' then return 'loves it', FOOD_VALUE.loved, taste end
+    if taste == 'hated' then return 'hates it', 0, taste end
+    return 'likes it', FOOD_VALUE.fine, taste
+end
+
+-- Every food in the stashes, kind by kind: { {food, n} }, most first.
+function Worker.pantry(world)
+    local by, out = {}, {}
+    for _, item in ipairs(world.items) do
+        if item.kind == ITEM_FOOD then by[item.food] = (by[item.food] or 0) + 1 end
+    end
+    for food, n in pairs(by) do out[#out + 1] = { food = food, n = n } end
+    table.sort(out, function(a, b) if a.n ~= b.n then return a.n > b.n end return a.food < b.food end)
+    return out
+end
+
+function Worker:tendInfo(action, world)
+    local n = self.needs
+    if action == 'feed' then
+        local meals = self:mealsFor(world)
+        local total = 0
+        local parts = {}
+        for _, m in ipairs(meals) do
+            total = total + m.n
+            parts[#parts + 1] = m.n .. ' ' .. FOOD_NAME(m.food)
+        end
+        local best = meals[1]
+        local gain = best and FOOD_VALUE[best.taste] or FOOD_VALUE.fine
+        return {
+            ok = total > 0,
+            does = '+' .. gain .. ' tummy' .. (best and best.taste == 'loved' and ', loved: a happier baby' or ''),
+            cost = '1 stored meal',
+            have = total > 0 and ('stashes: ' .. table.concat(parts, ', ')) or 'none in the stashes',
+        }
+    elseif action == 'clean' then
+        local grass = world.stock.grass or 0
+        return {
+            ok = grass >= 1,
+            does = '+' .. TAMA_CLEAN .. ' clean',
+            cost = '1 grass',
+            have = grass >= 1 and ('you have ' .. grass .. ' grass') or 'no grass yet',
+        }
+    elseif action == 'play' then
+        return {
+            ok = true,
+            does = '+' .. TAMA_FUN .. ' fun, -' .. TAMA_PLAY_COST .. ' clean & sleep',
+            cost = 'free',
+            have = 'tiring and messy',
+        }
+    elseif action == 'nap' then
+        local sleepy = n.sleep < TAMA_SLEEPY_BELOW
+        return {
+            ok = sleepy,
+            does = 'sleep to 100, if not woken',
+            cost = TAMA_NAP_SECONDS .. ' s asleep',
+            have = sleepy and 'ready for a nap' or 'not sleepy yet',
+        }
+    end
+    return { ok = false, does = '', cost = '', have = '' }
+end
+
+function Worker:tend(action, world)
+    local n = self.needs
+    if action == 'feed' then
+        -- the best-liked meal leaves the stash; the baby eats it on screen
+        -- (or not), see Worker:reactTo and tryFood
+        local best = self:mealsFor(world)[1]
+        if not best then return nil end
+        for _, item in ipairs(world.items) do
+            if item.kind == ITEM_FOOD and item.food == best.food then
+                world:takeItem(item.x, item.y, item)
+                return 'Put some ' .. FOOD_NAME(best.food) .. ' down for ' .. self.name .. '.', best.food
+            end
+        end
+        return nil
+    elseif action == 'clean' then
+        if (world.stock.grass or 0) < 1 then return nil end
+        local before = n.clean
+        world.stock.grass = world.stock.grass - 1
+        n.clean = math.min(100, n.clean + TAMA_CLEAN)
+        self:say('squeaky', 1.5)
+        return string.format('A wash with a tuft of grass: clean %d -> %d. %d grass left.', math.floor(before + 0.5), math.floor(n.clean + 0.5), world.stock.grass)
+    elseif action == 'play' then
+        local f = n.fun
+        n.fun = math.min(100, n.fun + TAMA_FUN)
+        n.clean = math.max(0, n.clean - TAMA_PLAY_COST)
+        n.sleep = math.max(0, n.sleep - TAMA_PLAY_COST)
+        self:say('hee hee', 1.5)
+        return string.format('Played together: fun %d -> %d, a little grubbier and sleepier.', math.floor(f + 0.5), math.floor(n.fun + 0.5))
+    end
+    return nil
+end
+
+-- How a need reads, in a word: 'full', 'peckish', 'hungry', 'starving'...
+local NEED_WORDS = {
+    hunger = { 'starving', 'hungry', 'peckish', 'full' },
+    fun = { 'miserable', 'bored', 'content', 'delighted' },
+    clean = { 'filthy', 'grubby', 'fine', 'spotless' },
+    sleep = { 'exhausted', 'sleepy', 'awake', 'rested' },
+}
+function Worker.needWord(kind, v)
+    local w = NEED_WORDS[kind]
+    if v < 15 then return w[1] elseif v < 45 then return w[2] elseif v < 75 then return w[3] end
+    return w[4]
+end
+
+-- A caretaker's visit: play, clean, feed when hungry, tuck in when sleepy.
+function Worker:careFor(b)
+    local n = b.needs
+    n.fun = math.min(100, n.fun + CARE_FUN)
+    local stock = self.world.stock
+    if (stock.grass or 0) >= 1 then
+        stock.grass = stock.grass - 1
+        n.clean = math.min(100, n.clean + CARE_CLEAN)
+    else
+        n.clean = math.min(100, n.clean + CARE_CLEAN / 3)
+    end
+    if b.hunger < CARE_FEED_BELOW then
+        for _, item in ipairs(self.world.items) do
+            if item.kind == ITEM_FOOD and b:willEat(item.food) then
+                self.world:takeItem(item.x, item.y, item)
+                b:mealOf(item.food)
+                break
+            end
+        end
+    end
+    if n.sleep < CARE_TUCK_BELOW then b.tuckedIn = true end
+    b:say('<3', 1.5)
+    self:emit('cared', b)
+end
+
+function Worker:releaseBaby()
+    if self.targetBaby and self.targetBaby.caredBy == self then self.targetBaby.caredBy = nil end
+    self.targetBaby = nil
+end
+
+-- A baby's day: eat when hungry, nap when sleepy, toddle about near home.
+function Worker:decideBaby()
+    local cared = self:hasCaretaker()
+    if self.hunger < (cared and BABY_SELF_FEED_BELOW or HUNGER_EAT_THRESHOLD) then
+        if self:eatSomething() then return end
+    end
+    if self.needs.sleep < BABY_NAP_BELOW or self.tuckedIn then
+        self.tuckedIn = nil
+        if self:startBreak() then return end
+    end
+    local home = self.nest or self.world.breakroom
+    local t = self:tile()
+    local cx, cy = home and home.x or t.x, home and home.y or t.y
+    local target = self.rng and self.world:randomNearbyPassable(self.rng, cx, cy, BABY_WANDER)
+    if target then
+        local path = self:pathTo(target.x, target.y)
+        if path then
+            self:setPath(path, 'wander')
+            return
+        end
+    end
+    self.decideTimer = DECIDE_INTERVAL * 3
 end
 
 function Worker:title()
     return self.name .. ' the ' .. self.species .. ' (' .. self.roleInfo.label:lower() .. ')'
+end
+
+-- Jobs ----------------------------------------------------------------------
+
+-- The jobs this morphi tries, in order: { {job, slot}, ... }. Free play:
+-- main, neutral, disliked. Elsewhere: its one role.
+function Worker:jobOrder()
+    if self.jobSet then return JobSets.order(self.jobSet) end
+    return { { job = self.role, slot = 'main' } }
+end
+
+-- Free play: set the main or neutral job (nil empties the neutral one). The
+-- disliked job never changes. Whatever is in hand is finished first: the
+-- next job it picks follows the new order. Returns ok, why.
+function Worker:setJob(slot, job)
+    if not self.jobSet then return false, 'this morphi has one fixed job' end
+    local ok, why = JobSets.set(self.jobSet, slot, job)
+    if ok then
+        self.role = self.jobSet.main
+        self.roleInfo = ROLES[self.role]
+    end
+    return ok, why
+end
+
+-- The job of the task in hand (or the main job when there is none).
+function Worker:doingInfo()
+    return ROLES[self.doing or self.role] or self.roleInfo
+end
+
+-- Which slot a job is in for this morphi: 'main', 'neutral', 'disliked' or nil.
+function Worker:slotOf(job)
+    if not self.jobSet then return job == self.role and 'main' or nil end
+    for _, slot in ipairs(JobSets.SLOTS) do
+        if self.jobSet[slot] == job then return slot end
+    end
+    return nil
 end
 
 function Worker:emit(name, data)
@@ -225,6 +606,7 @@ function Worker:dropJob()
     end
     self:releaseNode()
     self:releaseSite()
+    self:releaseBaby()
     self:releaseArea()
     self:releaseItem()
     if self.restSpot then
@@ -251,7 +633,7 @@ function Worker:offerTrade()
     self.trade = { a = self, timer = TRADE_WAIT_SECONDS }
     self.world.openTrade = self.trade
     self.state = 'trading'
-    self:say('trade?', 3)
+    self:say('swap?', 3)
     return true
 end
 
@@ -291,7 +673,7 @@ function Worker:joinTrade()
     -- turn to face each other
     self:face(tr.a.x - self.x, 0)
     tr.a:face(self.x - tr.a.x, 0)
-    self:say('trade!', 2)
+    self:say('swap!', 2)
     return true
 end
 
@@ -347,7 +729,7 @@ function Worker:endTrade(deal)
     for _, w in ipairs(who) do
         if deal then
             w.morale = math.min(MORALE_MAX, w.morale + MORALE_TRADE_BASE + MORALE_GIFT * tr.gifts)
-            w:say('deal!', 2.5)
+            w:say('yay!', 2.5)
         end
         w.trade = nil
         if w.state == 'trading' then w.state = 'idle'; w.decideTimer = 0 end
@@ -362,9 +744,18 @@ end
 -- script out of PLAY_CHAT, a line each, turn about. No gold, no meals. At
 -- the end both cheer up by MORALE_PLAY. The one who offered (play.a) runs it.
 
--- Still this season's chance to play?
+-- Fun comes at random: each morphi is due about once a season (a gap of
+-- half to one and a half PLAY_MEAN_SECONDS, drawn with the game's rng), and
+-- takes it at the next natural break at the home nest. Not required.
+function Worker:nextFunGap()
+    local r = self.rng and self.rng:random() or 0.5
+    return PLAY_MEAN_SECONDS * (0.5 + r)
+end
+
 function Worker:hasPlayChance()
-    return self.wilds and self.playedSeason ~= (self.scoring and self.scoring.quarter or 1)
+    if not self.wilds then return false end
+    if not self.funAt then self.funAt = self.clock + self:nextFunGap() end
+    return self.clock >= self.funAt
 end
 
 -- Free to play: here, fed enough to last the talk, hands empty, and not
@@ -417,7 +808,7 @@ end
 -- a and b play. Spends this season's chance for both, unless dev (the
 -- tester's PLAY NOW) says otherwise. A talk is picked with the game's rng,
 -- and b walks to stand beside a; the talk starts when b gets there.
-function Worker.beginPlay(a, b, pl, dev)
+function Worker.beginPlay(a, b, pl, dev, category, convo)
     pl = pl or { a = a }
     for _, w in ipairs({ a, b }) do
         -- a site being worked on is let go, so cancelling it refunds as usual
@@ -428,14 +819,14 @@ function Worker.beginPlay(a, b, pl, dev)
         w.state = 'playing'
         w.moving = false
         w.idleSince = nil
-        if not dev then w.playedSeason = w.scoring and w.scoring.quarter or 1 end
+        if not dev then w.funAt = w.clock + w:nextFunGap() end
     end
     pl.b = b
     pl.dev = dev
     local rng = a.rng or b.rng
-    pl.category = rng and rng:pick(PLAY_CATEGORIES) or PLAY_CATEGORIES[1]
+    pl.category = category or (rng and rng:pick(PLAY_CATEGORIES) or PLAY_CATEGORIES[1])
     local list = PLAY_CHAT[pl.category]
-    pl.convo = rng and rng:pick(list) or list[1]
+    pl.convo = convo or (rng and rng:pick(list) or list[1])
     pl.lines, pl.chat, pl.started = 0, 0, false
     pl.walk = PLAY_WALK_SECONDS
     b:say('sure!', 2)
@@ -532,7 +923,7 @@ end
 -- playing straight away, this season's chance or not. Free here means in
 -- the wilds, still here, not hungry and not already trading or playing.
 -- Returns the play, or nil when there are not two such morphis.
-function Worker.playNow(workers)
+function Worker.playNow(workers, category)
     local free = {}
     for _, w in ipairs(workers) do
         if w.wilds and w:isWorking() and w.trade == nil and w.play == nil and w.hunger >= HUNGER_EAT_THRESHOLD then
@@ -547,24 +938,165 @@ function Worker.playNow(workers)
         end
     end
     if not best then return nil end
-    return Worker.beginPlay(best[1], best[2], nil, true)
+    return Worker.beginPlay(best[1], best[2], nil, true, category)
 end
 
--- Nothing to do: a hardship, pointing at the nearest thing of my trade
--- that nobody can get at (or nowhere to put food, for a forager).
-function Worker:bored()
-    local kind = self.roleInfo.nodeKind
+-- Free for a tester to pair up: in the wilds, here, not hungry, and not
+-- trading or playing. (The DEV screen lists these.)
+function Worker:canBePaired()
+    return self.wilds and self:isWorking() and self.trade == nil and self.play == nil
+        and self.hunger >= HUNGER_EAT_THRESHOLD
+end
+
+-- The tester's pick: a and b play category at once, whatever else they were
+-- doing and whenever they last had fun. Returns the play, or nil.
+function Worker.playPair(a, b, category)
+    if not (a and b and a ~= b and a:canBePaired() and b:canBePaired()) then return nil end
+    return Worker.beginPlay(a, b, nil, true, category)
+end
+
+-- Why a job has nothing for this morphi right now: { job, slot, why, at }.
+-- why is 'storage' (foraging, with nowhere to put food), 'water' (the
+-- nearest work of that job is across water: bridge it), 'walled' (behind
+-- rock or otherwise cut off: dig to it), 'taken' (what there is, others
+-- are already doing) or 'none' (no work of that kind
+-- anywhere: nothing ripe, nothing marked). at is the work out of reach.
+local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'nestwork' }
+local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather', critter = 'hunt' }
+
+function Worker:whyNoWork(job, slot)
+    local t = self:tile()
+    local types = {}
+    for _, ty in ipairs(JobSets.jobTypes(job)) do types[ty] = true end
+    if (types.forage or types.hunt) and self.world:nearestFreeStorageTile(self) == nil then
+        return { job = job, slot = slot, why = 'storage' }
+    end
     local best, bestD = nil, math.huge
-    if kind then
+    for _, node in ipairs(self.world.nodes) do
+        if node.ready and types[NODE_JOB[node.kind]] and not self.world:nodeReachable(node) then
+            local d = Util.manhattan(node.x, node.y, t.x, t.y)
+            if d < bestD then best, bestD = node, d end
+        end
+    end
+    for _, site in ipairs(self.world.sites) do
+        if not site.done and types[SITE_JOB[site.kind]] and not self.world:siteReachable(site) then
+            local d = Util.manhattan(site.x, site.y, t.x, t.y)
+            if d < bestD then best, bestD = site, d end
+        end
+    end
+    if not best then
+        -- reachable work all in other hands, or none at all
         for _, node in ipairs(self.world.nodes) do
-            if node.kind == kind and not self.world:nodeReachable(node) then
-                local d = Util.manhattan(node.x, node.y, self:tile().x, self:tile().y)
-                if d < bestD then best, bestD = node, d end
+            if node.ready and types[NODE_JOB[node.kind]] and self.world:nodeReachable(node) then
+                return { job = job, slot = slot, why = 'taken' }
+            end
+        end
+        for _, site in ipairs(self.world.sites) do
+            if not site.done and types[SITE_JOB[site.kind]] and self.world:siteReachable(site) then
+                return { job = job, slot = slot, why = 'taken' }
+            end
+        end
+        return { job = job, slot = slot, why = 'none' }
+    end
+    local reach = self.world:reachableFromBreakroom()
+    local water = self.world:acrossWater(best.x, best.y, reach)
+    if not water then
+        for _, c in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+            local x, y = best.x + c[1], best.y + c[2]
+            if self.world:isPassable(x, y) and self.world:acrossWater(x, y, reach) then water = true break end
+        end
+    end
+    return { job = job, slot = slot, why = water and 'water' or 'walled', at = best }
+end
+
+-- Every one of my jobs, in order, with why it has nothing for me.
+function Worker:idleReasons()
+    local out = {}
+    for _, o in ipairs(self:jobOrder()) do out[#out + 1] = self:whyNoWork(o.job, o.slot) end
+    return out
+end
+
+-- A job somebody could do now (reachable work waiting on the queue) that
+-- nobody in the band has as main or neutral job. Nil if there is none.
+function Worker:unstaffedJob()
+    if not (self.jobSet and self.band) then return nil end
+    local staffed = {}
+    for _, w in ipairs(self.band) do
+        if w.jobSet and w:isWorking() then
+            staffed[w.jobSet.main] = true
+            if w.jobSet.neutral then staffed[w.jobSet.neutral] = true end
+        end
+    end
+    for _, job in ipairs(JobSets.JOBS) do
+        if not staffed[job] then
+            local types = {}
+            for _, ty in ipairs(JobSets.jobTypes(job)) do types[ty] = true end
+            for _, j in ipairs(self.jobs.items) do
+                if types[j.type] and ((j.node and j.node.ready and self.world:nodeReachable(j.node))
+                    or (j.site and not j.site.done and self.world:siteReachable(j.site))
+                    or (j.area and self.world:areaReachable(j.area))
+                    or (j.baby and j.baby.alive and j.baby:isBaby())) then
+                    return job
+                end
             end
         end
     end
-    self.boredReason = (self.role == ROLE_FORAGER and self.world:nearestFreeStorageTile(self) == nil) and 'storage' or 'reach'
-    self:complain('bored', best)
+    return nil
+end
+
+local WHY_TEXT = {
+    storage = 'nowhere to put berries (lay a STASH or a BASKET)',
+    water = 'the nearest is across water (BRIDGE it)',
+    walled = 'the nearest is cut off (DIG a way)',
+    taken = 'others have it all in hand',
+    none = 'none to do',
+}
+local NONE_TEXT = {
+    forager = 'no ripe bushes', lumberjack = 'no trees, grass or leaves', miner = 'no clay marked to dig', builder = 'nothing marked to build', hunter = 'no critters about', caretaker = 'no baby needs anything',
+}
+
+-- The idle reason as a line for the player, naming the jobs.
+function Worker.idleText(reasons, noNeutral, unstaffed)
+    local parts = {}
+    for i, r in ipairs(reasons) do
+        local what = r.why == 'none' and (NONE_TEXT[r.job] or WHY_TEXT.none) or WHY_TEXT[r.why]
+        if r.at and r.why ~= 'none' then what = what .. ' at ' .. r.at.x .. ',' .. r.at.y end
+        local who = (i == 1 and '' or (r.slot .. ' ')) .. JobSets.label(r.job)
+        parts[#parts + 1] = who .. ': ' .. what
+        if i == 1 and noNeutral then parts[#parts + 1] = 'no neutral job set' end
+    end
+    local text = table.concat(parts, '; ')
+    if unstaffed then text = text .. '. ' .. JobSets.label(unstaffed) .. ' work is waiting and no one has ' .. JobSets.label(unstaffed) .. ' set' end
+    return text
+end
+
+-- Idle, in a few words for the strip and the units list: the main job's
+-- reason (looked at again at most once a second).
+local SHORT_WHY = { storage = 'nowhere to put berries', water = 'work across water', walled = 'work cut off', taken = 'all taken' }
+function Worker:idleSummary()
+    if not self.jobSet then return nil end
+    if not self.idleLook or self.clock - self.idleLook.at >= 1 or self.idleLook.main ~= self.jobSet.main or self.idleLook.neutral ~= self.jobSet.neutral then
+        local r = self:whyNoWork(self.jobSet.main, 'main')
+        local text = JobSets.label(r.job) .. ': ' .. (SHORT_WHY[r.why] or NONE_TEXT[r.job] or 'nothing to do')
+        if not self.jobSet.neutral then text = text .. ', no fallback' end
+        self.idleLook = { at = self.clock, main = self.jobSet.main, neutral = self.jobSet.neutral, text = text }
+    end
+    return self.idleLook.text
+end
+
+-- Nothing to do: a hardship. Remembers why, job by job, and points at the
+-- nearest work of the main job that is out of reach, if any.
+function Worker:bored()
+    local reasons = self:idleReasons()
+    self.idleWhy = reasons
+    self.unstaffed = self:unstaffedJob()
+    local first = reasons[1]
+    self.boredReason = first and (first.why == 'storage' and 'storage' or 'reach') or 'reach'
+    local node = nil
+    for _, r in ipairs(reasons) do
+        if r.at then node = r.at break end
+    end
+    self:complain('bored', node)
 end
 
 function Worker:complain(reason, node)
@@ -592,7 +1124,7 @@ function Worker:quit(reason)
     self:dropJob()
     self.slots = {}
     self.scoring:addQuit()
-    self:say('I AM DONE', 6)
+    self:say('bye bye', 6)
     self:emit('quit', reason or 'starved')
     self.state = 'quitting'
     local t = self:tile()
@@ -797,6 +1329,7 @@ end
 -- Decisions ---------------------------------------------------------------
 
 function Worker:decide()
+    if self.stage == 'baby' then return self:decideBaby() end
     -- 0. Somebody at camp wants to trade and I could use cheering up
     if self.wilds and self.morale < MORALE_MAX - 10 and self.world.openTrade and self:atCamp() and self:joinTrade() then return end
     -- 1. Survival beats output. In arcade: the one meal, once the level's
@@ -819,18 +1352,15 @@ function Worker:decide()
         self.decideTimer = DECIDE_INTERVAL * 4
         return
     end
-    -- 4. The nearest job I can do and can actually walk to. Jobs nobody can
-    --    reach stay on the queue untouched. Foragers only pick when there is
-    --    somewhere to put the food. The claim happens inside takeNearest, in
-    --    the same step the job leaves the queue, so it cannot be shared.
-    local types = {}
-    if self.role ~= ROLE_FORAGER or self.world:nearestFreeStorageTile(self) ~= nil then
-        types[#types + 1] = self.roleInfo.jobType
-    end
-    for _, extra in ipairs(self.roleInfo.alsoTakes or {}) do types[#types + 1] = extra end
-    -- survival: anyone builds; arcade: one job each, building is the builder's
-    if not self.arcade then types[#types + 1] = 'build' end
+    -- 4. The nearest job I can do and can actually walk to, main job first,
+    --    then neutral, then disliked (free play). Jobs nobody can reach stay
+    --    on the queue untouched. Foraging waits for somewhere to put the
+    --    food. The claim happens inside takeNearest, in the same step the job
+    --    leaves the queue, so it cannot be shared.
     local function usable(j)
+        if j.baby then
+            return j.baby.alive and j.baby:isBaby() and j.baby.caredBy == nil
+        end
         if j.node then
             return j.node.ready and j.node.claimedBy == nil and not self:isIcked(j.x, j.y) and self.world:nodeReachable(j.node)
         end
@@ -846,6 +1376,14 @@ function Worker:decide()
             j.area.claimedBy = self
             return true
         end
+        if j.baby then
+            local t = j.baby:tile()
+            local path = self:pathTo(t.x, t.y)
+            if not path then return false end
+            claimedPath = path
+            j.baby.caredBy = self
+            return true
+        end
         local spot = j.node and self.world:approachTile(j.node) or self.world:siteApproachTile(j.site)
         if not spot then return false end
         local path = self:pathTo(spot.x, spot.y)
@@ -855,7 +1393,16 @@ function Worker:decide()
         target.claimedBy = self
         return true
     end
-    local job = self.jobs:takeNearest(types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
+    local job
+    for _, tier in ipairs(self:jobTiers()) do
+        if #tier.types > 0 then
+            job = self.jobs:takeNearest(tier.types, here.x, here.y, usable, claim, JOB_PATH_TRIES)
+            if job then
+                self.doing = tier.job
+                break
+            end
+        end
+    end
     if job then self.idleSince = nil end
     if job and job.area then
         self.job = nil -- the area is the job; it is reposted if anything is left
@@ -868,6 +1415,7 @@ function Worker:decide()
         self.job = job
         self.targetNode = job.node
         self.targetSite = job.site
+        self.targetBaby = job.baby
         self:setPath(claimedPath, 'work')
         return
     end
@@ -879,9 +1427,9 @@ function Worker:decide()
             self:bored()
             return
         end
-        -- with this season's chance: join somebody who wants to play, or
-        -- at camp offer to. Waiting for somebody is still standing about;
-        -- only playing itself is fun.
+        -- due for some fun: join somebody who wants to play, or offer at the
+        -- home nest. Waiting for a partner is still standing about; only
+        -- playing itself is fun.
         if self:joinPlay() or self:offerPlay() then return end
     end
     -- 4. Do not loiter on the pantry
@@ -897,6 +1445,35 @@ function Worker:decide()
         end
     end
     self.decideTimer = DECIDE_INTERVAL * 2
+end
+
+-- The job queue types to look at, tier by tier: { {job, slot, types}, ... }.
+-- Free play: main, neutral, disliked, each with its own types. Arcade: the
+-- one role's types. The retired survival levels: the role's types and
+-- 'build', which anyone took there. Foraging only with storage to put food.
+function Worker:jobTiers()
+    local room
+    local function typesOf(job)
+        local out = {}
+        for _, t in ipairs(JobSets.jobTypes(job)) do
+            if t == 'forage' or t == 'hunt' then
+                if room == nil then room = self.world:nearestFreeStorageTile(self) ~= nil end
+                if room then out[#out + 1] = t end
+            else
+                out[#out + 1] = t
+            end
+        end
+        return out
+    end
+    local tiers = {}
+    for _, o in ipairs(self:jobOrder()) do
+        tiers[#tiers + 1] = { job = o.job, slot = o.slot, types = typesOf(o.job) }
+    end
+    if not self.jobSet and not self.arcade then
+        local t = tiers[1].types
+        t[#t + 1] = 'build'
+    end
+    return tiers
 end
 
 -- Next tile of the claimed mine area. Returns false when nothing reachable
@@ -943,6 +1520,14 @@ function Worker:followPath(dt)
         self.state = 'idle'
         return
     end
+    if self.goal == 'work' and self.targetBaby and not (self.targetBaby.alive and self.targetBaby:isBaby()) then
+        self:releaseBaby()
+        self.job = nil
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        return
+    end
     if self.goal == 'work' and self.targetSite and (self.targetSite.done or self.targetSite.claimedBy ~= self) then
         self:releaseSite()
         self.job = nil
@@ -960,16 +1545,18 @@ function Worker:followPath(dt)
         return
     end
     self.walkTime = self.walkTime + dt
-    if self.walkTime > WORKER_PATIENCE and (self.goal == 'work' or self.goal == 'eat') then
-        if self.targetNode then
-            self:complain('slow', self.targetNode)
-        else
-            self:dropJob()
-            self.state = 'idle'
-        end
+    -- a morphi walks as far as it takes and never gives up on a long walk
+    -- (Micah, 2026-10-21). Only a way that has been shut since it set off
+    -- (a wall built across it) sends it back to think again, quietly.
+    local node = self.path and self.path[self.pathIndex]
+    if node and not self.world:isPassable(node.x, node.y) then
+        self:dropJob()
+        self.path = nil
+        self.goal = nil
+        self.state = 'idle'
+        self.decideTimer = 0
         return
     end
-    local node = self.path and self.path[self.pathIndex]
     if not node then
         self:arrive()
         return
@@ -999,7 +1586,7 @@ function Worker:goDeliver()
     if cargo.kind == CARGO_FOOD then
         local spot = self.world:nearestFreeStorageTile(self)
         if not spot then
-            self:say('no storage', 1.5)
+            self:say('no stash', 1.5)
             return false
         end
         self.world:reserveTile(spot.x, spot.y, self)
@@ -1041,7 +1628,7 @@ function Worker:deliverHere()
     self.state = 'idle'
     self.decideTimer = 0
     if self.targetArea and self:continueArea() then return end
-    -- a natural break: play, if somebody is waiting or I am at camp with my chance
+    -- a natural break: play, if somebody is waiting or I am at the nest and due
     if self.wilds and (self:joinPlay() or self:offerPlay()) then return end
     if cargo.kind == CARGO_FOOD then self:stepOff() end
 end
@@ -1094,7 +1681,7 @@ function Worker:arrive()
         if self.targetSite and self.targetSite.kind ~= SITE_MINE then
             self.stateTimer = BUILD_SECONDS
         else
-            self.stateTimer = self.roleInfo.actionSeconds
+            self.stateTimer = self:doingInfo().actionSeconds
         end
     elseif self.goal == 'deliver' then
         self:deliverHere()
@@ -1130,7 +1717,7 @@ function Worker:finishAction()
             self:emit('break', inBed and 'bed' or 'floor')
             return
         end
-        -- rested, at camp: a good moment to play
+        -- rested, at the nest: a good moment to play
         if self.wilds and (self:joinPlay() or self:offerPlay()) then
             self:emit('break', inBed and 'bed' or 'floor')
             return
@@ -1145,6 +1732,7 @@ function Worker:finishAction()
             local site = self.targetSite
             local kind = self.world:completeSite(site)
             if kind then cargo = { kind = kind } end
+            if kind == CARGO_GOLD and site.kind == SITE_MINE then self:emit('shiny', { x = site.x, y = site.y }) end
             if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
             self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
         elseif self.targetNode and self.targetNode.ready then
@@ -1152,9 +1740,12 @@ function Worker:finishAction()
             local kind = self.world:harvestNode(node)
             cargo = { kind = kind, food = node.food }
             self:emit('work', node.kind)
+        elseif self.targetBaby and self.targetBaby.alive and self.targetBaby:isBaby() then
+            self:careFor(self.targetBaby)
         end
         self:releaseNode()
         self:releaseSite()
+        self:releaseBaby()
         self.job = nil
         if cargo then
             -- nowhere to take it yet: keep hold of it (decide tries again,
@@ -1212,20 +1803,22 @@ end
 -- 'log' for floor spots, bins and bridges. Nil for foraging and the rest.
 function Worker:toolInHand()
     if not (self.state == 'working' or (self.state == 'walking' and self.goal == 'work')) then return nil end
+    -- little blobs, no axes or pickaxes: a twig bundle for sticks and
+    -- building, a little spade for digging, a leaf for weaving a nest
     if self.targetNode then
-        if self.targetNode.kind == NODE_TREE then return 'axe' end
-        if self.targetNode.kind == NODE_ORE then return 'pickaxe' end
+        if self.targetNode.kind == NODE_TREE then return 'twigs' end
+        if self.targetNode.kind == NODE_ORE then return 'spade' end
         return nil
     end
     local site = self.targetSite
     if not site then return nil end
-    if site.kind == SITE_MINE then return 'pickaxe' end
-    if site.kind == SITE_BED then return 'saw' end
-    return 'log'
+    if site.kind == SITE_MINE then return 'spade' end
+    if site.kind == SITE_BED then return 'leaf' end
+    return 'twigs'
 end
 
 function Worker:mood()
-    if self.morale < MORALE_LOW then return 'fed up' end
+    if self.morale < MORALE_LOW then return 'very grumpy' end
     if self.morale < 65 then return 'grumpy' end
     return 'fine'
 end
@@ -1259,6 +1852,12 @@ function Worker:update(dt, clock)
         if self.bubble.ttl <= 0 then self.bubble = nil end
     end
     if not self.alive then return end
+    -- an egg just sits in its nest until it hatches
+    if self.stage == 'egg' then
+        self.hatchTimer = self.hatchTimer - dt
+        if self.hatchTimer <= 0 then self:hatch() end
+        return
+    end
     if self.state ~= 'quitting' then
         local here = self:tile()
         if not self.world:isPassable(here.x, here.y) then self:unstick(here.x, here.y) end
@@ -1278,18 +1877,22 @@ function Worker:update(dt, clock)
         if self.hunger <= 0 then
             -- starving: it holds out as long again as a full belly lasts
             self.hunger = 0
-            self.starveTimer = (self.starveTimer or HUNGER_MAX / math.max(self.drain, 0.01)) - dt
-            if self.starveTimer <= 0 then
-                self:quit('starved')
-                return
+            if self.stage ~= 'baby' then
+                self.starveTimer = (self.starveTimer or HUNGER_MAX / math.max(self.drain, 0.01)) - dt
+                if self.starveTimer <= 0 then
+                    if self.wilds then self:die('hunger') else self:quit('starved') end
+                    return
+                end
             end
         else
             self.starveTimer = nil
         end
         if self:updateMorale(dt) then return end
     end
-    -- the one who offered runs the play for both, whatever it is doing
-    if self.play and self.play.a == self then self:updatePlay(dt) end
+    if self.stage == 'baby' then
+        self:updateBaby(dt)
+        if not self.alive then return end
+    end
     self:accumulateWork(dt)
     self.moving = false
     if self.state == 'idle' then
@@ -1310,50 +1913,69 @@ function Worker:update(dt, clock)
         -- the one who offered runs the trade for both
         if self.trade and self.trade.a == self then self:updateTrade(dt) end
     end
+    -- the one who offered a play runs it for both, whatever it is doing
+    if self.play and self.play.a == self then self:updatePlay(dt) end
 end
 
+-- What things are called on screen (the keys stay as they were).
+local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny', grass = 'grass', leaves = 'leaves' }
+local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
+local function siteWord(kind) return SITE_WORDS[kind] or kind end
+
 function Worker:describeState()
-    if self.state == 'quitting' then return 'Leaving the band' end
+    if self.state == 'quitting' then return 'Toddling off' end
     if self.arcade and self.state == 'idle' and self:wantsMeal() and not self.world:arcadeReady() then return 'Waiting to eat' end
     if self.state == 'sulking' then return 'Grumbling' end
     if self.state == 'trading' and self.trade then
         local tr = self.trade
-        if not tr.b then return 'Waiting at camp to trade' end
-        return 'Trading with ' .. (tr.a == self and tr.b or tr.a).name
+        if not tr.b then return 'Waiting at the home nest to swap' end
+        return 'Swapping snacks with ' .. (tr.a == self and tr.b or tr.a).name
     end
     if self.play and self:isPlaying() then
         local pl = self.play
-        if not pl.b then return 'Waiting at camp to play' end
+        if not pl.b then return 'Waiting at the home nest to play' end
         local other = (pl.a == self and pl.b or pl.a).name
         if self.state == 'walking' then return 'Going over to play with ' .. other end
-        return (pl.category == 'socialize' and 'Having a drink with ' or 'Philosophizing with ') .. other
+        return (PLAY_DOING[pl.category] or 'Playing with ') .. other
     end
     if self.state == 'eating' then return 'Eating' end
-    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a bed' or 'Resting at camp' end
+    if self.state == 'breaking' then return (self.restSpot and self.restSpot.bed) and 'Napping in a nest' or 'Resting at the home nest' end
     if self.state == 'working' then
-        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. self.targetSite.kind end
-        if self.targetNode and self.targetNode.kind == NODE_BUSH and self.role ~= ROLE_FORAGER then return 'Picking food, helping out' end
-        return self.roleInfo.verb:sub(1, 1):upper() .. self.roleInfo.verb:sub(2)
+        if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Building ' .. siteWord(self.targetSite.kind) .. self:slotNote() end
+        local verb = self:doingInfo().verb
+        return verb:sub(1, 1):upper() .. verb:sub(2) .. self:slotNote()
     end
     if self.state == 'walking' then
         if self.goal == 'deliver' then
             local c = self:carrying()
-            return 'Carrying ' .. (c and c.kind or 'cargo') .. (c and c.kind == CARGO_FOOD and ' to storage' or ' to camp')
+            return 'Carrying ' .. (c and (CARGO_WORDS[c.kind] or c.kind) or 'things') .. (c and c.kind == CARGO_FOOD and ' to a stash' or ' home')
         end
         if self.goal == 'eat' then return 'Going to eat' end
-        if self.goal == 'fetch' then return 'Fetching a snack from storage' end
-        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to bed' or 'Heading to camp' end
+        if self.goal == 'fetch' then return 'Fetching a snack from a stash' end
+        if self.goal == 'break' then return (self.restSpot and self.restSpot.bed) and 'Heading to a nest' or 'Heading home' end
         if self.goal == 'work' then
-            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. self.targetSite.kind end
-            return 'Going ' .. self.roleInfo.verb
+            if self.targetSite and self.targetSite.kind ~= SITE_MINE then return 'Going to build ' .. siteWord(self.targetSite.kind) .. self:slotNote() end
+            return 'Going ' .. self:doingInfo().verb .. self:slotNote()
         end
-        return 'Wandering'
+        return self.stage == 'baby' and 'Toddling about' or 'Wandering'
     end
     local c = self:carrying()
     if c then
-        return 'Holding ' .. c.kind .. (c.kind == CARGO_FOOD and ', no storage free' or ', no way to camp')
+        return 'Holding ' .. (CARGO_WORDS[c.kind] or c.kind) .. (c.kind == CARGO_FOOD and ', no stash free' or ', no way home')
     end
+    if self.wilds and self.jobSet and self.idleSince then return 'Idle - ' .. self:idleSummary() end
+    if self.stage == 'baby' then return 'Toddling about' end
+    if self.stage == 'egg' then return 'An egg, hatching in ' .. math.ceil(self.hatchTimer) .. 's' end
     return 'Idle'
+end
+
+-- Free play, at work on a job that is not its main one: says which.
+function Worker:slotNote()
+    if not self.jobSet or not self.doing then return '' end
+    local slot = self:slotOf(self.doing)
+    if slot == 'neutral' then return ' (neutral job)' end
+    if slot == 'disliked' then return ' (disliked job)' end
+    return ''
 end
 
 return Worker

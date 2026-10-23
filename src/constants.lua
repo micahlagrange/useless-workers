@@ -32,9 +32,24 @@ RIVER_WIDTH_MAX = 3
 NODE_BUSH = 'bush'
 NODE_TREE = 'tree'
 NODE_ORE  = 'ore'
-NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE }
-NODES_INITIAL      = { bush = 8, tree = 8, ore = 6 }
-NODES_PER_QUARTER  = { bush = 4, tree = 2, ore = 3 }
+-- the gatherer's other two: tufts of grass (they grow back) and leaf piles
+-- (gone once gathered, more blow in each season, most in Autumn)
+NODE_GRASS  = 'grass'
+NODE_LEAVES = 'leaves'
+-- little critters that hop about the meadow; a hunter catches one for meat
+NODE_CRITTER = 'critter'
+CRITTER_HOP_SECONDS = 2.5
+HUNT_SECONDS = 3.0
+NODE_KINDS = { NODE_BUSH, NODE_TREE, NODE_ORE, NODE_GRASS, NODE_LEAVES, NODE_CRITTER }
+-- free play has no ore lying about: shinies are hidden in the clay
+-- (SHINY_CHANCE) and found by digging. Hand built levels keep their ore.
+NODES_INITIAL      = { bush = 8, tree = 8, ore = 0, grass = 10, leaves = 6, critter = 5 }
+-- New growth each season. Tuned as 4 / 2 / 3 for 90 s seasons; times 300/90
+-- for 300 s seasons, so as much grows per minute as before.
+NODES_PER_QUARTER  = { bush = 13, tree = 7, ore = 0, grass = 6, leaves = 5, critter = 6 }
+SHINY_CHANCE       = 0.08 -- share of clay and hard dirt tiles with a shiny hidden in them
+LEAVES_AUTUMN      = 2    -- leaf piles blowing in at the start of Autumn, times this
+GRASS_REGROW_SECONDS = 40
 MAX_NODES_PER_KIND = 16
 NODE_ENCLOSED_FRACTION = 0.4    -- share of nodes placed where morphis cannot reach yet
 NODE_ENCLOSED_LATER    = 0.75   -- the share for nodes that grow after the start (free play)
@@ -45,7 +60,8 @@ BUSH_FIRST_RIPEN_MIN, BUSH_FIRST_RIPEN_MAX = 2, 10
 TREE_REGROW_SECONDS = 45
 -- ore never regrows; a mined tile turns to dirt and opens the tunnel further
 CARGO_FOOD, CARGO_LOGS, CARGO_GOLD = 'food', 'logs', 'gold'
-CARGO_VALUE = { food = 1, logs = 2, gold = 3 }   -- weight in the final score
+CARGO_GRASS, CARGO_LEAVES = 'grass', 'leaves'
+CARGO_VALUE = { food = 1, logs = 2, gold = 3, grass = 1, leaves = 1 }   -- weight in the final score
 
 -- Storage: delivered food is a real item on a built storage tile, one per
 -- tile, closest to the break room first. Logs and gold go to the stockpile.
@@ -61,29 +77,55 @@ BREAK_AFTER_SECONDS = 45
 BREAK_SECONDS       = 8        -- resting on a break room tile or the ground
 BREAK_SECONDS_BED   = 4        -- resting in a bed
 BED_REST_BONUS      = 1.5      -- a bed rest lasts longer before the next break is due
--- Floor spots, bins and bridges are 'build' jobs anyone takes. A bed is
--- 'woodwork': only a lumberjack builds it.
+-- Floor spots, bins and bridges are 'build' jobs: the builder's, in free
+-- play and arcade alike. A nest is 'nestwork': a gatherer or a builder.
 -- Every resting morphi claims its own spot: a bed, a break room tile, or a
 -- free tile next to the break room. Nobody naps on top of anybody.
 
 -- Morphis and their roles
 ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER = 'forager', 'lumberjack', 'miner'
 ROLE_BUILDER = 'builder'
+ROLE_HUNTER = 'hunter'
+ROLE_CARETAKER = 'caretaker'
+-- Caretakers visit a baby that needs something (CARE_POST_BELOW): a visit
+-- of CARE_SECONDS plays with it, cleans it (with a tuft of grass, or not as
+-- well without), feeds it a stored meal it will eat when it is hungry, and
+-- tucks it in for a nap when it is sleepy. A baby feeds itself only when
+-- nobody has caretaker set, or when it is very hungry.
+CARE_SECONDS        = 4.0
+CARE_POST_BELOW     = 75
+CARE_FUN            = 45
+CARE_CLEAN          = 45
+CARE_FEED_BELOW     = 60
+CARE_TUCK_BELOW     = 50
+BABY_SELF_FEED_BELOW = 20
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
-    lumberjack = { label = 'Lumberjack', jobType = 'chop',   nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'chopping', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
-    miner      = { label = 'Miner',      jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'mining',   sheets = { 'cwab', 'blue' } },
-    -- arcade only: building is a job of its own
-    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'woodwork' } },
+    lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
+    miner      = { label = 'Digger',     jobType = 'mine',   nodeKind = NODE_ORE,  cargo = CARGO_GOLD, actionSeconds = 2.5, verb = 'digging',   sheets = { 'cwab', 'blue' } },
+    -- building is a job of its own (in free play since the player-jobs epic)
+    caretaker  = { label = 'Caretaker',  jobType = 'care',   nodeKind = nil,       cargo = nil,        actionSeconds = CARE_SECONDS, verb = 'looking after a baby', sheets = { 'woofoof', 'ribbit' } },
+    hunter     = { label = 'Hunter',     jobType = 'hunt',   nodeKind = NODE_CRITTER, cargo = CARGO_FOOD, actionSeconds = HUNT_SECONDS, verb = 'hunting', sheets = { 'pupper', 'woofoof' } },
+    -- a baby has no job yet; this only names it on screen
+    baby       = { label = 'Baby',       jobType = nil,      nodeKind = nil,       cargo = nil,        actionSeconds = 1.0, verb = 'playing', sheets = { 'pupper' } },
+    builder    = { label = 'Builder',    jobType = 'build',  nodeKind = nil,       cargo = nil,        actionSeconds = 3.0, verb = 'building', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
 }
 -- Arcade: one job each. Foragers fill bins, the builder builds, miners dig.
--- Nobody chops: the points a level starts with are all the logs there are.
+-- Nobody gathers: the points a level starts with are all the sticks there are.
 ARCADE_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'builder', cwab = 'miner', blue = 'miner', ribbit = 'builder' }
+-- The retired survival levels' hire order. Free play deals jobs instead
+-- (src/jobsets.lua) and a morphi's look no longer decides its job: arrivals
+-- come in this order of species, which is the order the old one-job hires
+-- gave, so a seed's band looks and eats as before.
 HIRE_ORDER = { ROLE_FORAGER, ROLE_LUMBERJACK, ROLE_MINER }
+HIRE_SHEETS = { 'pupper', 'twins', 'cwab', 'woofoof', 'ribbit', 'blue' }
 -- Every morphi eats one thing and nothing else. Food grows on bushes of
 -- that kind; a forager picks any kind into storage, and everyone takes only
 -- their own from it, or eats straight off a bush of their kind when hungry.
 FOOD_KINDS  = { 'steak', 'fish', 'cheese', 'chili', 'candy', 'grapes' }
+-- meat: the key stays 'steak'; in free play it comes only from hunting
+MEAT = 'steak'
+FOOD_WORDS = { steak = 'meat' }
 FOOD_SPRITE = { steak = 'yp_ham.png', fish = 'yp_tuna.png', cheese = 'yp_cheese.png', chili = 'yp_chilipepper.png', candy = 'yp_candy1.png', grapes = 'yp_grapes.png' }
 MORPHI_DIET = { pupper = 'steak', woofoof = 'fish', twins = 'cheese', cwab = 'chili', blue = 'candy', ribbit = 'grapes' }
 MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', cwab = 'miner', blue = 'miner', ribbit = 'lumberjack' }
@@ -105,7 +147,6 @@ HUNGER_EAT_THRESHOLD   = 20
 HUNGER_STARVING        = 1
 FRUIT_HUNGER_VALUE     = 55
 WORKER_SPEED           = 72     -- pixels per second, 4.5 tiles per second
-WORKER_PATIENCE        = 24     -- seconds walking toward a tree before giving up
 WORKER_SULK_SECONDS    = 3
 ICK_SECONDS            = 30
 COMPLAINT_COOLDOWN     = 40     -- seconds before anyone complains about the same tree again
@@ -124,6 +165,39 @@ HARVEST_SECONDS        = 0.8
 EAT_SECONDS            = 1.0
 WANDER_RADIUS          = 3
 MAX_WORKERS            = 12
+-- Babies. Free play starts with one, Morphi, in the home nest. A baby does
+-- no work: it eats, naps, toddles about near home and grows up after
+-- BABY_SECONDS. Its needs (0-100) run down and only care fills fun and
+-- clean; how well it was looked after (its care score) sets its mood when
+-- it grows up.
+START_BABIES       = 1
+-- Eggs, not migrants: at each change of season EGGS_PER_SEASON pairs of
+-- grown-ups, picked at random for now (relationships come later), lay an
+-- egg in a free nest. A nest holds one egg or baby; the home nest counts as
+-- one. With no free nest, no egg. An egg hatches after EGG_HATCH_SECONDS.
+EGGS_PER_SEASON    = 2
+-- Danger: neglect long enough and a morphi dies. A grown-up starving as long
+-- as a full belly lasts dies (in free play; in the old levels it still
+-- wanders off). A baby dies after BABY_STARVE_SECONDS with an empty belly,
+-- or BABY_NEGLECT_SECONDS with every need empty; a warning comes at half
+-- way. An egg never dies.
+BABY_STARVE_SECONDS  = 60
+-- Tamagotchi mode: what one tap does for the baby being tended
+TAMA_FUN, TAMA_CLEAN, TAMA_PLAY_COST = 30, 40, 5
+-- a nap on the Tamagotchi screen takes this long; nothing else can be done
+-- meanwhile, and waking it early (WAKE, MEADOW) gives no rest at all
+TAMA_NAP_SECONDS = 15
+TAMA_SLEEPY_BELOW = 90  -- a baby with more sleep than this will not nap
+BABY_NEGLECT_SECONDS = 120
+EGG_HATCH_SECONDS  = 60
+FIRST_BABY_NAME    = 'Morphi'
+BABY_SECONDS       = 300
+BABY_NEED_DRAIN    = { fun = 0.2, clean = 0.12, sleep = 0.25 }  -- per second
+BABY_NAP_BELOW     = 40     -- sleep under this: off for a nap
+BABY_NAP_RATE      = 6      -- sleep regained per second napping
+BABY_WANDER        = 2      -- tiles from home a baby toddles
+BABY_SCALE         = 0.6    -- drawn this big
+BABY_MORALE_MIN    = 40     -- a neglected baby still grows up with this much morale
 
 -- Player tools (section 6). The player designates work; morphis do it.
 ABILITY_SELECT  = 'select'
@@ -138,7 +212,9 @@ ABILITY_DOOR    = 'door'      -- place a door site (costs a log); walkable, coun
 TOOLS_SURVIVAL  = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
 TOOLS_ARCADE    = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_WALL, ABILITY_DOOR, ABILITY_BRIDGE }
 ABILITY_ORDER   = TOOLS_ARCADE
-ABILITY_LABEL   = { select = 'SELECT', mine = 'MINE', storage = 'FLOOR', bin = 'BIN', bed = 'BED', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
+-- the words on the tool buttons (the little-blob meadow voice: a STASH is a
+-- leaf mat for one thing, a BASKET holds four, a NEST is where they nap)
+ABILITY_LABEL   = { select = 'SELECT', mine = 'DIG', storage = 'STASH', bin = 'BASKET', bed = 'NEST', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
 -- Storage: a floor spot is free and holds one item. A bin costs logs and
 -- holds four, shown in the order they came in, quadrant by quadrant.
 STORAGE_FLOOR_CAPACITY = 1
@@ -152,7 +228,36 @@ COSTS = {
     bed     = { logs = 2 },
     bridge  = { logs = 1 },   -- per water tile
 }
-STARTING_STOCK  = { logs = 4, gold = 0 }
+-- Free play builds nests, not furniture: a NEST is woven from sticks, grass
+-- and leaves, a BASKET from grass, a STASH is a free leaf mat, a bridge is
+-- sticks. Hand built levels keep COSTS above, in points (sticks).
+FREE_COSTS = {
+    storage = {},
+    bin     = { grass = 1 },
+    bed     = { logs = 2, grass = 2, leaves = 1 },
+    bridge  = { logs = 1 },   -- per water tile
+    wall    = { logs = 1 },
+    door    = { logs = 1 },
+}
+-- What a kind of site costs in this world.
+function costOf(world, kind)
+    local t = (world and world.wilds) and FREE_COSTS or COSTS
+    return t[kind] or {}
+end
+-- A cost in words, most first: '2 sticks 2 grass 1 leaf'. Empty for free.
+local MATERIAL_ORDER = { 'logs', 'grass', 'leaves', 'gold' }
+local MATERIAL_WORDS = { logs = { 'stick', 'sticks' }, grass = { 'grass', 'grass' }, leaves = { 'leaf', 'leaves' }, gold = { 'shiny', 'shinies' } }
+function costWords(cost, sep)
+    local parts = {}
+    for _, k in ipairs(MATERIAL_ORDER) do
+        local n = cost[k] or 0
+        if n > 0 then parts[#parts + 1] = n .. ' ' .. MATERIAL_WORDS[k][n == 1 and 1 or 2] end
+    end
+    return table.concat(parts, sep or ' ')
+end
+-- the site kinds by their new names (the keys stay 'bed', 'bin', 'storage')
+SITE_NEST, ABILITY_NEST = 'bed', 'bed'
+STARTING_STOCK  = { logs = 4, gold = 0, grass = 0, leaves = 0 }
 BUILD_SECONDS   = 3.0
 LINE_MAX_LENGTH = 12
 MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting hundreds of jobs
@@ -175,26 +280,42 @@ ARCADE_NEED_ORDER = { 'bins', 'floors', 'enclosed', 'binsInside' }
 ARCADE_DIFFICULTIES = {
     { key = 'easy',   name = 'Easy',   blurb = 'points to burn, build it twice if you like' },
     { key = 'normal', name = 'Normal', blurb = 'room for a few mistakes' },
-    { key = 'hard',   name = 'Hard',   blurb = 'the obvious build and a log or two to spare' },
+    { key = 'hard',   name = 'Hard',   blurb = 'the obvious build and a stick or two to spare' },
 }
 DEFAULT_ARCADE_DIFFICULTY = 1
 
 -- Seasons and the tally. A year is four seasons; the wilds grade each one.
 -- Internally a season is still a 'quarter' and migrants are 'hires'.
-QUARTER_SECONDS     = 90
+-- A season is five minutes (it was 90 s). What happens per second (hunger,
+-- morale, work, boredom, trades) is unchanged; what comes once a season
+-- (new growth, migrants, the endless drain step, the grade) is rescaled
+-- below so a season plays about as before, only longer.
+QUARTER_SECONDS     = 300
 QUARTERS_PER_GAME   = 4
 SEASON_NAMES        = { 'Spring', 'Summer', 'Autumn', 'Winter' }
 HIRE_OUTPUT_DIVISOR = 5
 QUIT_PENALTY        = 3
 FED_SAMPLE_SECONDS  = 1
-ENDLESS_DRAIN_STEP  = 0.1
-GRADE_THRESHOLDS    = { { 'S', 16 }, { 'A', 11 }, { 'B', 6 }, { 'C', 2 } } -- below the last one is an F
+-- After the first year hunger drains faster each season. 0.1 with 90 s
+-- seasons; at 300 s a season holds 3.3 times the hunger, and 0.05 keeps the
+-- year the bands begin to fall where it was (tools/bench.py).
+ENDLESS_DRAIN_STEP  = 0.05
+-- Season grades score output - complaints - 3 x quits, which pile up per
+-- second: 16 / 11 / 6 / 2 for 90 s seasons, times 300/90.
+GRADE_THRESHOLDS    = { { 'S', 53 }, { 'A', 37 }, { 'B', 20 }, { 'C', 7 } } -- below the last one is an F
 -- The run's audit log (src/stats.lua): a day is a slice of a season, and
 -- the player's note on an export is kept short. Milestones are never two
 -- closer than MILESTONE_GAP_DAYS (three seasons), so about one a year.
 DAYS_PER_SEASON     = 9
 DAY_SECONDS         = QUARTER_SECONDS / DAYS_PER_SEASON
-STATS_FORMAT        = 1
+-- 2: every morphi in a day's band has main, neutral, disliked and job (what
+-- it is working at), and a day row has idleByMain. A format 1 run has only
+-- role, which is its main job.
+-- 3: eggs and babies (stage, care score, nest) next to the grown-ups in a
+-- day's band, eggs/babies/died counts per day, grass and leaves stock;
+-- events laid, hatched, grewUp, died. Logs and gold keep their keys (sticks
+-- and shinies on screen).
+STATS_FORMAT        = 3
 STATS_BLURB_MAX     = 200
 MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 
@@ -202,17 +323,22 @@ MILESTONE_GAP_DAYS  = DAYS_PER_SEASON * 3
 -- the first, so the band does not all get hungry at the same moment).
 -- Free play offers only the first for now (FREE_PLAY_DIFFICULTIES) while it
 -- is being tuned; the rest are kept for when there are more hardships.
+-- Free play starts with three, their jobs dealt at random (src/jobsets.lua); the
+-- other wilds keep their numbers until the ladder is redone.
 DIFFICULTIES = {
-    { name = 'Mild wilds',   drain = 0.5, workers = 5, multiplier = 0.5, startHunger = 85 },
-    { name = 'Harsh wilds',  drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
-    { name = 'Bitter wilds', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
-    { name = 'Cruel wilds',  drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
+    { name = 'Sunny meadow', drain = 0.5, workers = 3, multiplier = 0.5, startHunger = 85 },
+    { name = 'Breezy meadow', drain = 0.7, workers = 4, multiplier = 1.0, startHunger = 60 },
+    { name = 'Chilly meadow', drain = 0.95, workers = 3, multiplier = 1.5, startHunger = 50 },
+    { name = 'Stormy meadow', drain = 1.2, workers = 2, multiplier = 2.0, startHunger = 45 },
 }
 FREE_PLAY_DIFFICULTIES = 1
 DEFAULT_DIFFICULTY = 1
 -- Migrants are capped per season, by year: a rush of new mouths, each with
 -- its own food, starved year one.
-MIGRANTS_PER_SEASON = { 2, 3, 4 }
+-- 2 / 3 / 4 with 90 s seasons; one more each at 300 s so a newcomer still
+-- turns up every couple of minutes and a band that loses morphis over a
+-- long season can make it up (more than this did not help, tools/bench.py).
+MIGRANTS_PER_SEASON = { 3, 4, 5 }
 -- Free play tastes. Every species loves one food (MORPHI_DIET), hates one,
 -- and will eat the rest. A meal is worth more hunger the better it is
 -- liked; a loved meal cheers a morphi up and a hated one, eaten only when
@@ -265,7 +391,12 @@ PLAY_LINE_SECONDS    = 3.4
 PLAY_BUBBLE_SECONDS  = 2.6
 PLAY_MIN_HUNGER      = 40
 -- the kinds of play, in the order the rng picks from (dancing comes later)
-PLAY_CATEGORIES      = { 'philosophize', 'socialize' }
+PLAY_CATEGORIES      = { 'philosophize', 'socialize', 'dance' }
+PLAY_MEAN_SECONDS    = QUARTER_SECONDS   -- about one fun task per morphi per season, at random
+-- what the screen says a morphi is doing, by kind: '<this>' .. partner's name
+PLAY_DOING = { philosophize = 'Philosophizing with ', socialize = 'Having a drink with ', dance = 'Dancing with ' }
+-- the kinds, as the DEV screen names them
+PLAY_KIND_NAMES = { philosophize = 'PHILOSOPHIZE', socialize = 'DRINKS', dance = 'DANCE' }
 -- the news for a finished talk: '<A> and <B> ' .. this, by title, else by kind
 PLAY_NEWS = {
     ['What Gold Is For']     = 'talked about what gold is for',
@@ -273,7 +404,9 @@ PLAY_NEWS = {
     ['The Tree, This Big']   = 'shared a drink and a tall tale about a very big tree',
     ['Psst, the Lumberjack'] = 'gossiped about the lumberjack over a drink',
 }
-PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a drink and a chat' }
+PLAY_NEWS['Pebble Hop'] = 'did a pebble hop round the home nest'
+PLAY_NEWS['The Tiny Waltz'] = 'danced a tiny waltz'
+PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a drink and a chat', dance = 'danced together' }
 -- What two morphis say while they play together, once a season. Same shape
 -- as TRADE_CHAT: a line every few seconds, turn about. Odd lines are the
 -- first morphi's (A), even lines the second's (B). Every line fits a speech
@@ -322,6 +455,38 @@ PLAY_CHAT = {
             'it rustles',
         },
     },
+    dance = {
+        {
+            title = 'Pebble Hop',
+            'dance with me?',
+            'i only hop',
+            'hop is a dance',
+            'one, two, hop',
+            'two, three, HOP',
+            'left foot, left!',
+            'my other left',
+            'spin spin spin',
+            'whoa, whoa',
+            'so dizzy!',
+            'bow to the bush',
+            'hop hop hooray',
+        },
+        {
+            title = 'The Tiny Waltz',
+            'may i have this',
+            'dance? you may',
+            'mind my toes',
+            'which ones?',
+            'all of them',
+            'one two three',
+            'one two three',
+            'we are so good',
+            'i trod on you',
+            'it was a twirl',
+            'twirl again?',
+            'twirl again',
+        },
+    },
     socialize = {
         {
             title = 'The Tree, This Big',
@@ -358,13 +523,13 @@ PLAY_CHAT = {
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow
-GRASS_COLORS     = { '#94a35b', '#849151', '#737f47' }
-DIRT_COLORS      = { '#a38f5b', '#917f51', '#7f6f47' }
-STONE_COLORS     = { '#6d6a64', '#625f5a', '#58554f', '#77746d' }
-WATER_COLORS     = { '#5f8fa8', '#5786a0', '#4f7d97' }
-SNOW_COLORS      = { '#e9ecf0', '#dfe3e8', '#d3d8de' }
-BRIDGE_COLORS    = { '#8a6f3f', '#7d6437', '#96773f' }
-BREAKROOM_COLORS = { '#c9b27a', '#bfa870' }
+GRASS_COLORS     = { '#a9c97a', '#9dbf6f', '#b3d185' }
+DIRT_COLORS      = { '#d6bc8e', '#cdb184', '#dcc59b' }
+STONE_COLORS     = { '#c98f6e', '#bf8566', '#d19a79', '#b87e60' }
+WATER_COLORS     = { '#8cc4dc', '#82bbd6', '#96cbe1' }
+SNOW_COLORS      = { '#a67c5b', '#9d7354', '#ae8562' }
+BRIDGE_COLORS    = { '#b48a5c', '#a87f53', '#bf9566' }
+BREAKROOM_COLORS = { '#e8d9a6', '#e0cf9a' }
 WALL_COLORS      = { '#6b4f2a', '#5e4524' }
 DOOR_COLORS      = { '#a6823f', '#9a7838' }
 TILE_PALETTE     = {

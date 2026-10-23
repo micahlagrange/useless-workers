@@ -34,7 +34,7 @@ Rogue.GROUND_GAIN = { water = 1.35, grass = 1.15, dirt = 1.2, stone = 1.05, snow
 
 Rogue.GLYPH = {
     bush = '"', tree = '\226\153\163', stump = '\226\136\153',  -- U+2663 club, U+2219 bullet operator
-    ore = '$', food = '%', logs = '=', gold = '$',
+    ore = '$', food = '%', logs = '=', gold = '$', grass = 'w', cropped = ',', leaves = '&', critter = 'r',
     floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', wall = 'O', door = '+', floor = '.', bridge = '=',
     morphi = '@', fire = '*',
     axe = '/', pickaxe = '\\', saw = '-', log = '=',
@@ -132,7 +132,7 @@ function Rogue:drawBreakroom()
     self:glyph(self.GLYPH.fire, px + TILE_SIZE / 2, py + TILE_SIZE / 2, 1, 0.55 * flick + 0.2, 0.1)
     local font = love.graphics.getFont()
     love.graphics.setFont(self.bubbleFont)
-    local label = 'CAMP'
+    local label = 'HOME'
     local w = self.bubbleFont:getWidth(label) + 4
     love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
     love.graphics.rectangle('fill', px + TILE_SIZE - w / 2, py - 11, w, 10)
@@ -161,6 +161,12 @@ function Rogue:drawNodes(clock)
         elseif node.kind == NODE_ORE then
             local glint = 0.75 + 0.25 * math.sin((clock or 0) * 3 + node.id)
             self:glyph(self.GLYPH.ore, px, py, 0.95 * glint, 0.8 * glint, 0.2)
+        elseif node.kind == NODE_GRASS then
+            self:glyph(node.ready and self.GLYPH.grass or self.GLYPH.cropped, px, py, 0.4, 0.75, 0.32)
+        elseif node.kind == NODE_LEAVES then
+            self:glyph(self.GLYPH.leaves, px, py, 0.9, 0.6, 0.3)
+        elseif node.kind == NODE_CRITTER then
+            self:glyph(self.GLYPH.critter, px, py, 0.93, 0.88, 0.8)
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
@@ -246,6 +252,10 @@ function Rogue:drawWorkerCargo(w, clock, sx, feetY)
             self:smallGlyph(self.GLYPH.food, w.x, cy, c[1], c[2], c[3])
         elseif cargo.kind == CARGO_LOGS then
             self:smallGlyph(self.GLYPH.logs, w.x, cy, 0.75, 0.58, 0.32)
+        elseif cargo.kind == CARGO_GRASS then
+            self:smallGlyph(self.GLYPH.grass, w.x, cy, 0.4, 0.75, 0.32)
+        elseif cargo.kind == CARGO_LEAVES then
+            self:smallGlyph(self.GLYPH.leaves, w.x, cy, 0.9, 0.6, 0.3)
         else
             self:smallGlyph(self.GLYPH.gold, w.x, cy, 0.95, 0.8, 0.2)
         end
