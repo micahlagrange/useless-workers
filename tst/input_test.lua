@@ -6,6 +6,7 @@ dofile('conf.lua')
 TEST_HOOKS = {}
 dofile('main.lua')
 local H = TEST_HOOKS.main
+local Worker = require('src.worker')
 love.load()
 
 TestInput = {}
@@ -203,6 +204,46 @@ function TestInput:testFunTestByTouch()
     lu.assertNotNil(event)
     lu.assertEquals(event.text, 'dance: ' .. pl.convo.title)
     lu.assertNotNil(news)
+end
+
+-- DETAILS on the picked morphi's strip opens what it is doing, and the
+-- fun it is having is in the log from start to end.
+function TestInput:testDetailsButtonAndFunInTheLog()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    for _ = 1, 30 do love.update(1 / 30) end
+    local game = H.game()
+    local grown = {}
+    for _, w in ipairs(game.workers) do if w:isWorking() then grown[#grown + 1] = w end end
+    local a, b = grown[1], grown[2]
+    game.selectedWorker = a
+    love.draw()
+    local pl = Worker.playPair(a, b, 'philosophize')
+    lu.assertNotNil(pl)
+    for _ = 1, 30 * 12 do love.update(1 / 30) end
+    love.draw()
+    local ui = H.ui()
+    lu.assertNotNil(ui.doingButton, 'no DETAILS button on the strip')
+    local r = ui.doingButton
+    local x, y = (r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale
+    Stub.fingers = { 't' }
+    love.touchpressed('t', x, y)
+    love.touchreleased('t', x, y)
+    Stub.fingers = {}
+    lu.assertEquals(H.state(), 'doing')
+    love.draw()
+    for _ = 1, 30 * 40 do love.update(1 / 30) end
+    love.draw()
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'playing')
+    local who = a.name .. ' and ' .. b.name
+    local started, ended = false, false
+    for _, e in ipairs(game.log) do
+        if e.text:find(who, 1, true) and e.text:find('started', 1, true) then started = true end
+        if e.text:find(who, 1, true) and not e.text:find('started', 1, true) then ended = true end
+    end
+    lu.assertTrue(started, 'the start of the fun is not in the log')
+    lu.assertTrue(ended, 'the end of the fun is not in the log')
 end
 
 -- FUN TEST is a free play tool: an arcade level has no morale to lift.

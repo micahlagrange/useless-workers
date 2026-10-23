@@ -407,6 +407,7 @@ PLAY_NEWS = {
 }
 PLAY_NEWS['Pebble Hop'] = 'did a pebble hop round the home nest'
 PLAY_NEWS['The Tiny Waltz'] = 'danced a tiny waltz'
+PLAY_STARTS = { philosophize = 'philosophizing', socialize = 'a drink and a chat', dance = 'a dance' }
 PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a drink and a chat', dance = 'danced together' }
 -- What two morphis say while they play together, once a season. Same shape
 -- as TRADE_CHAT: a line every few seconds, turn about. Odd lines are the

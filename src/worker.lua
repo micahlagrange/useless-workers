@@ -831,6 +831,7 @@ function Worker.beginPlay(a, b, pl, dev, category, convo)
     local list = PLAY_CHAT[pl.category]
     pl.convo = convo or (rng and rng:pick(list) or list[1])
     pl.lines, pl.chat, pl.started = 0, 0, false
+    pl.said = {} -- the talk so far, { who, text }, for the DETAILS screen
     pl.walk = PLAY_WALK_SECONDS
     b:say('sure!', 2)
     local at, bt = a:tile(), b:tile()
@@ -842,6 +843,7 @@ function Worker.beginPlay(a, b, pl, dev, category, convo)
     else
         Worker.startTalk(pl)
     end
+    a:emit('playstart', { partner = b, category = pl.category, title = pl.convo.title, dev = dev })
     return pl
 end
 
@@ -884,6 +886,7 @@ function Worker:updatePlay(dt)
         pl.lines = pl.lines + 1
         local speaker = (pl.lines % 2 == 1) and a or b
         speaker:say(pl.convo[pl.lines], PLAY_BUBBLE_SECONDS)
+        pl.said[#pl.said + 1] = { who = speaker, text = pl.convo[pl.lines] }
         -- added on, not set, so the lines keep time whatever the frame rate
         pl.chat = pl.chat + PLAY_LINE_SECONDS
     end
@@ -919,6 +922,8 @@ function Worker:endPlay(done)
     if not pl.b then pl.a.playRetryAt = pl.a.clock + PLAY_RETRY_SECONDS end
     if done then
         pl.a:emit('play', { partner = pl.b, category = pl.category, title = pl.convo.title, dev = pl.dev })
+    elseif pl.b then
+        pl.a:emit('playcut', { partner = pl.b, category = pl.category, title = pl.convo.title, dev = pl.dev })
     end
 end
 
@@ -1936,6 +1941,33 @@ end
 local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny', grass = 'grass', leaves = 'leaves' }
 local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
 local function siteWord(kind) return SITE_WORDS[kind] or kind end
+
+-- What the DETAILS screen shows for this morphi right now: a table with
+-- title, state and lines, each line { text, who } (who is the speaker, for a
+-- transcript). Whatever it is doing: what it carries, who it is with and
+-- what has been said so far in a talk.
+function Worker:details()
+    local lines = {}
+    local function add(text, who) lines[#lines + 1] = { text = text, who = who } end
+    local cargo = self:carrying()
+    if cargo then
+        add('Carrying: ' .. (cargo.kind == CARGO_FOOD and (cargo.food or 'food') or (CARGO_WORDS[cargo.kind] or tostring(cargo.kind))))
+    end
+    local pocket = self.slots[SLOT_PERSONAL]
+    if pocket then add('In its pocket: ' .. (pocket.food or CARGO_WORDS[pocket.kind] or tostring(pocket.kind))) end
+    local pl = self.play
+    if pl and pl.b and self:isPlaying() then
+        local other = (pl.a == self and pl.b or pl.a)
+        add((PLAY_KIND_NAMES[pl.category] or pl.category):lower() .. ' with ' .. other.name .. ': "' .. tostring(pl.convo.title) .. '"')
+        if #pl.said == 0 then add('(nobody has said anything yet)') end
+        for _, l in ipairs(pl.said) do add(l.text, l.who) end
+    elseif self.trade and self.trade.b then
+        local tr = self.trade
+        add('Swapping snacks with ' .. (tr.a == self and tr.b or tr.a).name .. ((tr.gifts or 0) > 0 and (' (' .. tr.gifts .. ' favourite)') or ''))
+    end
+    if #lines == 0 then add('Nothing more to tell: ' .. self:describeState():lower() .. '.') end
+    return { title = self.name, state = self:describeState(), lines = lines }
+end
 
 function Worker:describeState()
     if self.state == 'quitting' then return 'Toddling off' end

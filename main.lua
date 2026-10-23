@@ -212,6 +212,13 @@ local function onWorkerEvent(worker, name, data)
         local who = worker.name .. ' and ' .. data.partner.name
         if game.stats then game.stats:event('play', game, who, data.category .. ': ' .. tostring(data.title), t) end
         announce(who .. ' ' .. (PLAY_NEWS[data.title] or PLAY_NEWS_KIND[data.category] or 'played together') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'playstart' and game.mode == 'free' then
+        local t = worker:tile()
+        announce(worker.name .. ' and ' .. data.partner.name .. ' started ' .. (PLAY_STARTS[data.category] or 'playing together') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'playcut' and game.mode == 'free' then
+        local t = worker:tile()
+        local what = (PLAY_STARTS[data.category] or 'playing together'):gsub('^an? ', '')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' stopped ' .. what .. ' before it was over.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
         announce(worker.name .. ' is very grumpy and thinking about leaving.', { x = t.x, y = t.y }, 'warning')
@@ -224,7 +231,7 @@ local function onWorkerEvent(worker, name, data)
         else
             announce(worker.name .. ' got far too hungry and toddled off to find snacks elsewhere.', { x = t.x, y = t.y }, 'left')
         end
-        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs') then
+        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs' or state == 'doing') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
             state = 'levelfailed'
             love.mouse.setVisible(true)
@@ -743,7 +750,7 @@ function love.update(dt)
     debugClock = debugClock + dt
     Audio.update(dt)
     syncTouches()
-    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' then
+    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' or state == 'doing' then
         game.speed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
@@ -752,7 +759,7 @@ function love.update(dt)
         else
             for step = 1, simSpeed do
                 updatePlaying(dt, step > 1)
-                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' then break end
+                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' and state ~= 'doing' then break end
             end
         end
         ui:update(dt)
@@ -880,6 +887,8 @@ local function drawScene()
         ui:drawUnits(game, game.view)
     elseif state == 'jobs' then
         ui:drawJobs(game)
+    elseif state == 'doing' then
+        ui:drawDoing(game)
     elseif state == 'tama' then
         ui:drawTama(game, game.view)
     elseif state == 'log' then
@@ -1237,6 +1246,24 @@ local function openJobs()
     state = 'jobs'
     love.mouse.setVisible(true)
     Audio.playSFX('click')
+end
+
+-- DETAILS: what the picked morphi is doing right now, in full (what it
+-- carries, a talk's transcript so far). The meadow keeps running under it.
+local function openDoing()
+    local w = game.selectedWorker
+    if not (w and w.alive and not w:isEgg()) then
+        ui:toast('Select a morphi first (SELECT tool, then tap one)')
+        return
+    end
+    state = 'doing'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local function closeDoing()
+    state = 'playing'
+    hideCursor()
 end
 
 local function closeJobs()
@@ -1628,6 +1655,9 @@ local function pointerPressed(x, y, button, istouch)
             pressTama(pb:sub(6))
         end
         return
+    elseif state == 'doing' then
+        if pb == 'close' or not ui:insideDoingPanel(vx, vy) then closeDoing() end
+        return
     elseif state == 'jobs' then
         if pb and pb:sub(1, 4) == 'job:' then
             pressJob(pb)
@@ -1709,6 +1739,10 @@ local function pointerPressed(x, y, button, istouch)
     end
     if ui:jobsButtonAt(vx, vy) then
         openJobs()
+        return
+    end
+    if ui:doingButtonAt(vx, vy) then
+        openDoing()
         return
     end
     if vy > ui.vh - BOTTOM_BAR_H then
@@ -1945,6 +1979,7 @@ function love.keypressed(key)
             openUnits()
         elseif key == 'j' then
             openJobs()
+
         elseif key == 'g' then
             openGoal()
         elseif key == 'l' then
@@ -1968,6 +2003,8 @@ function love.keypressed(key)
             elseif game.tamaNap then game.tamaMenu = 'wakeLeave'
             else closeTama() end
         end
+    elseif state == 'doing' then
+        if key == 'escape' or key == 'return' then closeDoing() end
     elseif state == 'jobs' then
         if key == 'j' or key == 'escape' then
             closeJobs()

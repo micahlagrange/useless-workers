@@ -1044,6 +1044,48 @@ function TestPlay:testTheTalkComesFromTheSeededRng()
     lu.assertEquals(n, 6, 'all six talks turn up')
 end
 
+function TestPlay:testDetailsShowWhatItCarriesAndTheTalkSoFar()
+    local a, b = self.make('Pip'), self.make('Dave', 6, 5)
+    a.slots[SLOT_WORK] = { kind = 'logs' }
+    local d = a:details()
+    lu.assertStrContains(d.lines[1].text, 'Carrying: sticks')
+    a.slots[SLOT_WORK] = nil
+    a:offerPlay()
+    b:joinPlay()
+    run({ a, b }, self.world, self.jobs, 3 * PLAY_LINE_SECONDS + 1)
+    d = a:details()
+    lu.assertEquals(d.title, 'Pip')
+    lu.assertStrContains(d.state, 'with')
+    local said = {}
+    for _, l in ipairs(d.lines) do if l.who then said[#said + 1] = l end end
+    lu.assertTrue(#said >= 3 and #said <= 4)
+    lu.assertEquals(said[1].text, a.play.convo[1])
+    lu.assertIs(said[1].who, a)
+    lu.assertIs(said[2].who, b)
+    lu.assertEquals(b:details().lines[#b:details().lines].text, said[#said].text, 'both see the same talk')
+end
+
+function TestPlay:testEveryFunIsAnnouncedAtStartAndEnd()
+    local a, b = self.make('Pip'), self.make('Dave', 6, 5)
+    a:offerPlay()
+    b:joinPlay()
+    local starts = 0
+    for _, e in ipairs(self.events) do if e.name == 'playstart' then starts = starts + 1 end end
+    lu.assertEquals(starts, 1)
+    run({ a, b }, self.world, self.jobs, 12 * PLAY_LINE_SECONDS + 10)
+    lu.assertEquals(#self.played(), 1)
+    -- one cut short is announced too
+    local c, d = self.make('Gus', 5, 5), self.make('Rex', 6, 4)
+    c:offerPlay()
+    d:joinPlay()
+    run({ c, d }, self.world, self.jobs, 6)
+    d.hunger = HUNGER_EAT_THRESHOLD - 1
+    run({ c, d }, self.world, self.jobs, 0.2)
+    local cut = 0
+    for _, e in ipairs(self.events) do if e.name == 'playcut' then cut = cut + 1 end end
+    lu.assertEquals(cut, 1)
+end
+
 function TestPlay:testNoPlayOutsideFreePlay()
     local world = World.fromGrid(GRID, Rng.new(1))
     world.arcade = true

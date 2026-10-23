@@ -1037,6 +1037,7 @@ function UI:drawBottomBar(game)
     local abilities = game.abilities
     self.jobsButton = nil
     self.followButton = nil
+    self.doingButton = nil
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
@@ -1168,7 +1169,10 @@ function UI:drawBottomBar(game)
                 sx = sx + 30
             end
             local under = w:isBaby() and w:babySummary() or w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
-            self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            -- DETAILS, left of the HUNGER and MOOD column: what it is doing, in full
+            local dw = w:isEgg() and 0 or 72
+            if dw > 0 then self:doingButtonDraw({ x = px + pw - 150 - dw, y = py + 42, w = dw - 4, h = 22 }) end
+            self:printLine(under, sx + 6, py + 46, pw - 150 - 66 - dw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
@@ -1215,11 +1219,12 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        local room = self.vw - 28 - 76
-        local fx = self.vw - 8 - 70
+        local room = self.vw - 28 - 76 - 66
+        local fx = self.vw - 8 - 70 - 66
+        self:doingButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 })
         if w.jobSet or w:isBaby() then
             room = room - 70
-            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
+            self:jobsButtonDraw({ x = self.vw - 8 - 64 - 66, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
             fx = fx - 70
         end
         self:followButtonDraw(game, { x = fx, y = ty, w = 70, h = 20 })
@@ -1253,6 +1258,50 @@ end
 
 function UI:followButtonAt(mx, my)
     return hit(self.followButton, mx, my)
+end
+
+-- The DETAILS button on the picked morphi's strip: what it is doing, in full.
+function UI:doingButtonDraw(r)
+    self:button(r, 'DETAILS', false)
+    self.doingButton = r
+end
+
+function UI:doingButtonAt(mx, my)
+    return hit(self.doingButton, mx, my)
+end
+
+function UI:insideDoingPanel(mx, my)
+    return hit(self.doingPanel, mx, my)
+end
+
+-- The DETAILS screen: the picked morphi's activity in full. A long talk
+-- shows its last lines, newest at the bottom.
+function UI:drawDoing(game)
+    local w = game.selectedWorker
+    if not (w and w.alive) then return end
+    local d = w:details()
+    local small = self.fonts.small
+    local lh = small:getHeight() + 6
+    local maxLines = math.max(3, math.floor((self.vh - 220) / lh))
+    local first = math.max(1, #d.lines - maxLines + 1)
+    local shown = #d.lines - first + 1
+    local x, y, pw, ph = self:panel(620, 150 + shown * lh)
+    self.doingPanel = { x = x, y = y, w = pw, h = ph }
+    self:printLine(d.title:upper(), x + 20, y + 16, pw - 160, 'left', C.text, { self.fonts.big, self.fonts.hud })
+    self:printLine(d.state, x + 20, y + 58, pw - 40, 'left', C.good, { self.fonts.hud, small })
+    local ly = y + 96
+    for i = first, #d.lines do
+        local l = d.lines[i]
+        if l.who then
+            local tag = l.who.name .. ': '
+            self:printLine(tag, x + 20, ly, pw - 40, 'left', C.accent, { small })
+            self:printLine(l.text, x + 20 + small:getWidth(tag), ly, pw - 40 - small:getWidth(tag), 'left', C.text, { small })
+        else
+            self:printLine(l.text, x + 20, ly, pw - 40, 'left', C.dim, { small, self.fonts.tiny })
+        end
+        ly = ly + lh
+    end
+    self:panelButton('close', { x = x + pw - 130, y = y + 14, w = 110, h = 30 }, 'CLOSE', false)
 end
 
 -- The JOBS button on the picked morphi's strip (free play only).
