@@ -411,12 +411,22 @@ function TestStripAndUnits:test_follow_on_the_strip_and_jobs_on_the_units_list()
         Stub.fingers = {}
     end
     g.follow = false
-    g.selectedWorker = g.workers[1]
+    -- a tap on a morphi opens its ring; the middle follows it
+    local w1 = g.workers[1]
+    local p = g.camera:toScreen(w1.x, w1.y - 4)
+    Stub.fingers = { 't' }
+    love.touchpressed('t', p.x, p.y)
+    love.touchreleased('t', p.x, p.y)
+    Stub.fingers = {}
+    local hud = H.hud()
+    lu.assertTrue(hud:isOpen() and hud.ring.worker == w1, 'a tap on a morphi opens its ring')
     love.draw()
-    local f = ui.followButton
-    lu.assertNotNil(f, 'FOLLOW is on the strip')
+    local f
+    for _, b in ipairs(hud.buttons) do if b.item.id == 'follow' then f = b end end
+    lu.assertNotNil(f, 'FOLLOW is the middle of the ring')
     tap(f)
     lu.assertTrue(g.follow)
+    lu.assertFalse(hud:isOpen())
     -- the units list: JOBS on a row opens that morphi's job screen
     H.setState('units')
     love.draw()
@@ -506,25 +516,55 @@ function TestJobsScreen:test_a_tap_on_jobs_and_a_job_button_works_on_a_phone()
     H.closeGoal()
     local g = H.game()
     local w = g.workers[2]
-    g.selectedWorker = w
-    love.draw()
-    local ui = H.ui()
-    local b = ui.jobsButton
-    lu.assertNotNil(b, 'the strip shows JOBS for a free play morphi')
+    local ui, hud = H.ui(), H.hud()
     local s = ui.scale
-    love.touchpressed('a', (b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
-    love.touchreleased('a')
-    lu.assertEquals(H.state(), 'jobs')
-    love.draw()
-    local target
-    for _, pb in ipairs(ui.panelButtons) do
-        if pb.id == 'job:neutral:none' then target = pb end
+    local function tapAt(x, y)
+        Stub.fingers = { 'a' }
+        love.touchpressed('a', x, y)
+        love.touchreleased('a', x, y)
+        Stub.fingers = {}
     end
-    lu.assertNotNil(target)
-    love.touchpressed('b', (target.x + target.w / 2) * s, (target.y + target.h / 2) * s)
-    love.touchreleased('b')
-    lu.assertNil(w.jobSet.neutral)
-    lu.assertEquals(H.state(), 'jobs')
+    local function ringButton(id)
+        love.draw()
+        for _, b in ipairs(hud.buttons or {}) do if b.item.id == id then return b end end
+    end
+    local p = g.camera:toScreen(w.x, w.y - 4)
+    tapAt(p.x, p.y)
+    lu.assertTrue(hud:isOpen() and hud.ring.worker == w, 'the ring opens on the morphi')
+    -- a tap on a job: the first job
+    local other
+    for _, job in ipairs(require('src.jobsets').JOBS) do
+        if job ~= w.jobSet.main and job ~= w.jobSet.disliked and job ~= w.jobSet.neutral then other = job break end
+    end
+    local b = ringButton('job:' .. other)
+    lu.assertNotNil(b, 'a button for every job')
+    tapAt((b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
+    lu.assertEquals(w.jobSet.main, other)
+    lu.assertTrue(hud:isOpen(), 'the ring stays open for a second change')
+    -- a hold on a job: the then job; holding it again clears it
+    local then_
+    for _, job in ipairs(require('src.jobsets').JOBS) do
+        if job ~= w.jobSet.main and job ~= w.jobSet.disliked and job ~= w.jobSet.neutral then then_ = job break end
+    end
+    b = ringButton('job:' .. then_)
+    Stub.fingers = { 'h' }
+    love.touchpressed('h', (b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
+    Stub.now = (Stub.now or 0) + 0.6
+    love.update(0.01)
+    love.touchreleased('h', (b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
+    Stub.fingers = {}
+    lu.assertEquals(w.jobSet.neutral, then_)
+    lu.assertEquals(w.jobSet.main, other, 'a hold does not touch the first job')
+    -- the disliked job is never the then job
+    b = ringButton('job:' .. w.jobSet.disliked)
+    Stub.fingers = { 'h' }
+    love.touchpressed('h', (b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
+    Stub.now = Stub.now + 0.6
+    love.update(0.01)
+    love.touchreleased('h', (b.x + b.w / 2) * s, (b.y + b.h / 2) * s)
+    Stub.fingers = {}
+    lu.assertEquals(w.jobSet.neutral, then_)
+    hud:close()
     Stub.width, Stub.height = 1280, 720
     H.ui().touch = false
     love.resize(1280, 720)

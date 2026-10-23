@@ -245,6 +245,95 @@ function Abilities:useDrag(x1, y1, x2, y2)
     return true, (placed < #tiles and why) or nil
 end
 
+-- The radial tool's painting: exact squares, not a rectangle or a line.
+
+-- Mark these clay squares for digging, as one area. Returns the count.
+function Abilities:markTiles(tiles)
+    local world, area, count = self.world, nil, 0
+    for _, p in ipairs(tiles) do
+        local t = world:get(p.x, p.y)
+        if stoneOrSnow(t) and not t.site and count < MINE_MAX_TILES then
+            area = area or world:newArea()
+            if world:addSite(SITE_MINE, p.x, p.y, area) then count = count + 1 end
+        end
+    end
+    if area then self.jobs:postArea(area) end
+    if count > 0 then self:effect('mine', { count = count }) end
+    return count
+end
+
+-- Wipe the dig marks on these squares nobody has started on. Returns the count.
+function Abilities:unmarkTiles(tiles)
+    local count = 0
+    for _, p in ipairs(tiles) do
+        local t = self.world:get(p.x, p.y)
+        if t and t.site and t.site.kind == SITE_MINE and not t.site.working then
+            self.jobs:removeSite(t.site)
+            self.world:removeSite(t.site)
+            count = count + 1
+        end
+    end
+    if count > 0 then self:effect('unmark', { count = count, clearing = true }) end
+    return count
+end
+
+-- Bridge squares on these water tiles, one at a time while the sticks last.
+-- Returns how many were laid and, when some could not be, why.
+function Abilities:bridgeTiles(tiles)
+    local cost = costOf(self.world, 'bridge')
+    local laid, short = 0, false
+    for _, p in ipairs(tiles) do
+        local t = self.world:get(p.x, p.y)
+        if t and t.type == TILE_WATER and not t.site then
+            if not self.world:canAfford(cost) then short = true break end
+            local site = self.world:addSite(SITE_BRIDGE, p.x, p.y)
+            if site then
+                self.world:spend(cost)
+                self.jobs:postSite(site)
+                laid = laid + 1
+            end
+        end
+    end
+    if laid > 0 then self:effect('site', { kind = SITE_BRIDGE, count = laid }) end
+    if short then return laid, laid == 0 and 'A bridge needs ' .. costWords(cost) .. ' a square' or 'Out of sticks for the bridge' end
+    return laid
+end
+
+-- Take away a finished stash, basket or nest at (x, y) (a basket's left
+-- tile). Nothing comes back. Refused while it holds food or someone naps there.
+function Abilities:takeAway(x, y)
+    local world = self.world
+    local t = world:get(x, y)
+    if not t then return false end
+    if #t.items > 0 then return false, 'Empty it first: it is holding food' end
+    if t.restingBy then return false, 'Someone is napping there' end
+    if t.storage > 0 then
+        local wasBin = t.storage >= STORAGE_BIN_CAPACITY
+        t.storage = 0
+        for i = #world.storageList, 1, -1 do
+            local s = world.storageList[i]
+            if s.x == x and s.y == y then table.remove(world.storageList, i) end
+        end
+        if wasBin then
+            local r = world:get(x + 1, y)
+            if r and r.binPart and r.binPart.x == x and r.binPart.y == y then r.binPart = nil end
+        end
+        world.version = world.version + 1
+        self:effect('unmark', { count = 1, kind = wasBin and SITE_BIN or SITE_STORAGE, taken = true })
+        return true
+    end
+    if t.bed then
+        t.bed = false
+        for i = #world.beds, 1, -1 do
+            if world.beds[i].x == x and world.beds[i].y == y then table.remove(world.beds, i) end
+        end
+        world.version = world.version + 1
+        self:effect('unmark', { count = 1, kind = SITE_BED, taken = true })
+        return true
+    end
+    return false
+end
+
 function Abilities:lineQuote(x1, y1, x2, y2)
     local tiles = self.world:lineTiles(x1, y1, x2, y2)
     local n = 0

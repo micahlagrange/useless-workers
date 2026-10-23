@@ -7,9 +7,12 @@ local JobSets = require('src.jobsets')
 local Worker = require('src.worker')
 local Version = require('src.version')
 local Audio = require('src.audio')
+local Toy = require('src.toy')
 
 local UI = {}
 UI.__index = UI
+-- The radial tool (epic-toybox-radial-ui): no tool tray, taps open a ring.
+UI.RADIAL = true
 
 TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
@@ -130,6 +133,7 @@ function UI:layout(w, h)
     end
     self.scale = Util.clamp(self.scale, 0.6, 3.0)
     self.vw, self.vh = w / self.scale, h / self.scale
+    Toy.setScale(self.scale)
     local gap = 8
     local n = #ABILITY_ORDER
     -- quick buttons, for fingers and for people who forget keys. The top
@@ -195,6 +199,12 @@ function UI:layout(w, h)
         for i, tool in ipairs(ABILITY_ORDER) do
             self.buttons[i] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = self.vh - BOTTOM_BAR_H + 10, w = bw, h = th, key = tostring(i) }
         end
+    end
+    if UI.RADIAL then
+        BOTTOM_BAR_H = 0
+        self.buttons = {}
+        self.panelW, self.infoH = 0, 0
+        self.goalBox = true
     end
 end
 
@@ -1037,6 +1047,7 @@ function UI:drawBottomBar(game)
     local abilities = game.abilities
     self.jobsButton = nil
     self.followButton = nil
+    if UI.RADIAL then return end
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
