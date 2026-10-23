@@ -5,7 +5,7 @@
 --   "C:/Program Files/LOVE/lovec.exe" tools/font_metrics fredoka > tst/fredoka_metrics.lua
 local SETS = {
     c64 = { fonts = { c64 = 'assets/fonts/commodore64.ttf' }, sizes = { 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 26, 28, 44, 46 } },
-    fredoka = { fonts = { medium = 'assets/fonts/Fredoka-Medium.ttf', semibold = 'assets/fonts/Fredoka-SemiBold.ttf' }, sizes = { 16, 20, 28 } },
+    fredoka = { fonts = { medium = 'assets/fonts/Fredoka-Medium.ttf', semibold = 'assets/fonts/Fredoka-SemiBold.ttf' }, sizes = { 16, 20, 28, 44 } },
 }
 
 local function measure(path, sizes, indent)

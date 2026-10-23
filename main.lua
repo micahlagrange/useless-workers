@@ -415,7 +415,7 @@ local function newGame(seedString, difficultyIndex)
     -- and one baby in the home nest
     for i = 1, START_BABIES do hireBaby(i == 1 and FIRST_BABY_NAME or nil) end
     game.log = {}
-    announce('Mark a STASH (or a BASKET, 1 grass, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
+    announce('Tap open grass to set out a stash (or a basket: 1 grass, holds 4) so foragers have somewhere to put berries. Drag across a stream to bridge it.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)
@@ -627,6 +627,8 @@ function love.load()
     buildTitleOptions()
     -- start on the furthest unlocked arcade level
     title.option = math.min(levelsUnlocked('arcade'), Campaign.count('arcade'))
+    -- with the levels off the title there may be fewer options than that
+    if title.option > #title.options then title.option = 1 end
 end
 
 function love.resize(w, h)
@@ -2298,9 +2300,10 @@ function love.keypressed(key)
             cycleTileset()
             Audio.playSFX('click')
         elseif key == 'u' then
-            openUnits()
+            if UI.RADIAL then pressToy('bunch') else openUnits() end
         elseif key == 'j' then
-            openJobs()
+            local w = game.selectedWorker
+            if UI.RADIAL and w and w.alive then openWorkerRing(w) else openJobs() end
         elseif key == 'g' then
             openGoal()
         elseif key == 'l' then
