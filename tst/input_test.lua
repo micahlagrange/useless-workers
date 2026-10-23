@@ -173,11 +173,15 @@ function TestInput:testFunTestByTouch()
     -- a kind with nobody picked starts nothing
     tapButton('fk:dance')
     lu.assertEquals(H.state(), 'funtest')
-    tapButton('fm:1')
-    tapButton('fm:3')
+    -- the buttons are numbered by place in the band, babies and eggs not listed
+    local grown = {}
+    for i, w in ipairs(game.workers) do if w:isWorking() then grown[#grown + 1] = i end end
+    lu.assertTrue(#grown >= 2)
+    tapButton('fm:' .. grown[1])
+    tapButton('fm:' .. grown[#grown])
     tapButton('fk:dance')
     lu.assertEquals(H.state(), 'playing')
-    local a, b = game.workers[1], game.workers[3]
+    local a, b = game.workers[grown[1]], game.workers[grown[#grown]]
     lu.assertNotNil(a.play)
     lu.assertEquals(a.play, b.play)
     lu.assertEquals(a.play.category, 'dance')

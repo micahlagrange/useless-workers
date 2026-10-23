@@ -2502,9 +2502,9 @@ end
 -- FUN TEST: the band as buttons (tap two), then a kind of fun to start for
 -- them. a and b are the picked workers. A * marks one that cannot play now.
 function UI:drawFunTest(workers, a, b)
-    local list = {}
-    for _, w in ipairs(workers) do
-        if w:isWorking() then list[#list + 1] = w end
+    local list, at = {}, {}
+    for i, w in ipairs(workers) do
+        if w:isWorking() then list[#list + 1] = w; at[#list] = i end
     end
     local rows = 6
     local cols = math.max(1, math.min(3, math.ceil(#list / rows)))
@@ -2521,7 +2521,7 @@ function UI:drawFunTest(workers, a, b)
         local col, row = math.floor((i - 1) / rows), (i - 1) % rows
         local r = { x = x + 20 + col * (bw + gap), y = y + 100 + row * (bh + 6), w = bw, h = bh }
         local label = w.name .. (w:canBePaired() and '' or ' *')
-        self:panelButton('fm:' .. i, r, label, w == a or w == b)
+        self:panelButton('fm:' .. at[i], r, label, w == a or w == b)
     end
     local ky = y + 100 + rows * (bh + 6) + 8
     self:centeredFit('Then pick the fun   (* = hungry, busy or away)', ky, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
