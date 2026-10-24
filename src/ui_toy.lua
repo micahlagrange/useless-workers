@@ -15,6 +15,13 @@ local function hit(r, x, y)
     return r and x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h
 end
 
+-- How wide a count's cell is: every digit as wide as a 0 and at least two of
+-- them, so the plate does not shift (and wrap differently) as numbers tick.
+local function steadyWidth(text)
+    local shape = text:gsub('%d+', function(run) return string.rep('0', math.max(2, #run)) end)
+    return math.max(Toy.width(shape, Toy.M, true), Toy.width(text, Toy.M, true))
+end
+
 -- Layout ---------------------------------------------------------------------
 
 UI.TOY_BUTTONS = { 'pause', 'speed', 'bunch', 'menu' }
@@ -67,11 +74,12 @@ function UI:toyStock(game)
         add({ key = 'grumbles', icon = 'grumble', text = tostring(sc.complaints), warn = sc.complaints > 0, wide = true })
     end
     add({ key = 'bunch', icon = 'bunch', text = tostring(game.staffCount or 0), wide = true })
-    for _, it in ipairs(out) do it.w = 8 + Toy.ICON + 6 + Toy.width(it.text, Toy.M, true) + 8 end
+    for _, it in ipairs(out) do it.w = 8 + Toy.ICON + 6 + steadyWidth(it.text) + 8 end
     return out
 end
 
 -- Top bar --------------------------------------------------------------------
+
 
 function UI:drawToyTop(game, menuOpen)
     self.topButtons = {}
@@ -82,7 +90,7 @@ function UI:drawToyTop(game, menuOpen)
     -- a phone packs the cells closer and the clock loses its season word
     local function cellW(it)
         local inner = (tight and 4 or 8)
-        return inner + Toy.ICON + (tight and 4 or 6) + Toy.width(it.text, Toy.M, true) + inner
+        return inner + Toy.ICON + (tight and 4 or 6) + steadyWidth(it.text) + inner
     end
     if tight then
         for _, it in ipairs(items) do

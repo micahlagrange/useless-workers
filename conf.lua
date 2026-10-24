@@ -24,6 +24,8 @@ function love.conf(t)
     t.window.height = WINDOW_HEIGHT
     t.window.vsync = 1
     t.window.resizable = true
+    -- draw at the screen's real density (a phone is 2x or 3x), not stretched
+    t.window.highdpi = true
     t.window.minwidth = 480
     t.window.minheight = 320
 end

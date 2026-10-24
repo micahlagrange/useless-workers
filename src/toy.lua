@@ -45,7 +45,10 @@ local cache = {}
 local dpi = 1
 
 function Toy.setScale(scale)
-    local d = math.max(1, math.floor(scale * 4 + 0.5) / 4)
+    -- the HUD's scale times the screen's own density (highdpi)
+    local screen = (love.graphics.getDPIScale and love.graphics.getDPIScale()) or 1
+    if type(screen) ~= 'number' or screen <= 0 then screen = 1 end
+    local d = math.max(1, math.floor(scale * screen * 4 + 0.5) / 4)
     if d ~= dpi then dpi = d end
 end
 
