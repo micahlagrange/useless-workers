@@ -26,6 +26,6 @@ function love.conf(t)
     t.window.resizable = true
     -- draw at the screen's real density (a phone is 2x or 3x), not stretched
     t.window.highdpi = true
-    t.window.minwidth = 480
+    t.window.minwidth = 320 -- a phone held upright is 360 to 430 wide: a bigger floor squeezes the picture
     t.window.minheight = 320
 end
