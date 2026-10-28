@@ -490,6 +490,38 @@ function View:drawBubble(x, y, text, color)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- A round bubble over a baby that needs something, with the need's picture:
+-- a berry (hungry), soap (dirty), a ball (bored), a moon (sleepy).
+function View:drawNeedBubble(w, clock)
+    local need = w:babyNeed()
+    if not need then return end
+    local x, y = w.x, w.y - 26 + math.sin(clock * 4) * 1.5
+    love.graphics.setColor(1, 1, 1, 0.95)
+    love.graphics.circle('fill', x, y, 7)
+    love.graphics.polygon('fill', x - 2, y + 6, x + 2, y + 6, x, y + 10)
+    if need == 'hungry' then
+        love.graphics.setColor(0.85, 0.2, 0.3)
+        love.graphics.circle('fill', x, y + 1, 3.2)
+        love.graphics.setColor(0.4, 0.7, 0.35)
+        love.graphics.rectangle('fill', x - 0.5, y - 4, 2, 2)
+    elseif need == 'dirty' then
+        love.graphics.setColor(0.45, 0.75, 0.95)
+        love.graphics.circle('line', x - 1.5, y + 1, 2.5)
+        love.graphics.circle('line', x + 2, y - 2, 1.5)
+    elseif need == 'bored' then
+        love.graphics.setColor(0.95, 0.6, 0.2)
+        love.graphics.circle('fill', x, y, 3.4)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.line(x - 3, y, x + 3, y)
+    else
+        love.graphics.setColor(0.45, 0.4, 0.8)
+        love.graphics.circle('fill', x, y, 3.4)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.circle('fill', x + 1.6, y - 1, 3)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 -- Hand tools, drawn about the grip so they can swing. Facing right.
 function View:drawTool(kind, x, y, angle, sx)
     love.graphics.push()
@@ -561,6 +593,8 @@ function View:drawWorker(w, clock, selected)
     end
     if w.bubble then
         self:drawBubble(w.x, w.y - 26, w.bubble.text)
+    elseif w:isBaby() then
+        self:drawNeedBubble(w, clock)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end

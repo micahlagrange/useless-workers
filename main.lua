@@ -171,6 +171,10 @@ local function onWorkerEvent(worker, name, data)
         local text = data == 'hungry' and (worker.name .. ' is a hungry baby with an empty tummy. Feed it, or set a CARETAKER.')
             or (worker.name .. ' is a baby nobody is looking after. Set a CARETAKER, or tend it yourself.')
         announce(text, { x = t.x, y = t.y }, 'warning')
+    elseif name == 'babyNeeds' then
+        local t = worker:tile()
+        local what = { hungry = 'is hungry', dirty = 'needs a wash', bored = 'wants to play', sleepy = 'is sleepy' }
+        announce(worker.name .. ' ' .. what[data] .. '.', { x = t.x, y = t.y }, 'warning')
     elseif name == 'died' then
         Audio.playSFX('quit')
         local t = worker:tile()

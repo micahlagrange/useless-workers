@@ -218,6 +218,19 @@ function Worker:die(cause)
     self:emit('died', { cause = cause, stage = self.stage or 'grown-up' })
 end
 
+-- What a baby needs most right now, if anything is low: 'hungry', 'dirty',
+-- 'bored' or 'sleepy' (nil while it naps or is looked after). The lowest wins.
+function Worker:babyNeed()
+    if not self:isBaby() or not self.needs or self.state == 'breaking' then return nil end
+    local n = self.needs
+    local best, low = nil, BABY_NEED_BELOW
+    local levels = { { 'hungry', self.hunger / HUNGER_MAX * 100 }, { 'dirty', n.clean }, { 'bored', n.fun }, { 'sleepy', n.sleep } }
+    for _, l in ipairs(levels) do
+        if l[2] < low then best, low = l[1], l[2] end
+    end
+    return best
+end
+
 function Worker:updateBaby(dt)
     self.age = self.age + dt
     -- danger: an empty belly, or every need empty, for long enough
@@ -245,6 +258,9 @@ function Worker:updateBaby(dt)
     local n = self.needs
     for k, rate in pairs(BABY_NEED_DRAIN) do n[k] = math.max(0, n[k] - rate * dt) end
     if self.state == 'breaking' then n.sleep = math.min(100, n.sleep + BABY_NAP_RATE * dt) end
+    local need = self:babyNeed()
+    if need and need ~= self.lastNeed then self:emit('babyNeeds', need) end
+    self.lastNeed = need
     self.careSum = self.careSum + self:careNow() * dt
     self.careTime = self.careTime + dt
     if self.age >= BABY_SECONDS then self:emit('grewUp') end

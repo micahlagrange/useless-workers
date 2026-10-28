@@ -251,4 +251,32 @@ function TestDanger:test_an_egg_never_dies()
     lu.assertTrue(egg.alive)
 end
 
+TestBabyNeeds = {}
+
+function TestBabyNeeds:test_a_baby_shows_its_lowest_need_and_says_so_once()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    local b = baby(g)
+    lu.assertNil(b:babyNeed(), 'a fresh baby needs nothing')
+    b.needs.clean = BABY_NEED_BELOW - 5
+    b.needs.fun = BABY_NEED_BELOW - 10
+    lu.assertEquals(b:babyNeed(), 'bored', 'the lowest need wins')
+    local told = 0
+    b.onEvent = function(_, name) if name == 'babyNeeds' then told = told + 1 end end
+    b:updateBaby(0.1)
+    b:updateBaby(0.1)
+    lu.assertEquals(told, 1, 'the alert comes once, when the need appears')
+    b.needs.fun, b.needs.clean = 100, 100
+    lu.assertNil(b:babyNeed())
+end
+
+function TestBabyNeeds:test_a_napping_baby_shows_no_need()
+    H.newGame('PUPPER', 1)
+    local b = baby(H.game())
+    b.needs.sleep = 5
+    b.state = 'breaking'
+    lu.assertNil(b:babyNeed())
+end
+
 os.exit(lu.LuaUnit.run())

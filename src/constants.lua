@@ -99,6 +99,7 @@ CARE_CLEAN          = 45
 CARE_FEED_BELOW     = 60
 CARE_TUCK_BELOW     = 50
 BABY_SELF_FEED_BELOW = 20
+BABY_NEED_BELOW    = 35     -- a need (0-100) under this shows a bubble over the baby
 ROLES = {
     forager    = { label = 'Forager',    jobType = 'forage', nodeKind = NODE_BUSH, cargo = CARGO_FOOD, actionSeconds = 0.8, verb = 'picking',  sheets = { 'pupper', 'woofoof' } },
     lumberjack = { label = 'Gatherer',   jobType = 'gather', nodeKind = NODE_TREE, cargo = CARGO_LOGS, actionSeconds = 2.0, verb = 'gathering sticks', sheets = { 'twins', 'ribbit' }, alsoTakes = { 'nestwork' } },
