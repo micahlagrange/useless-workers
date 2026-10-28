@@ -17,6 +17,7 @@ local Effects = require('src.effects')
 local Audio = require('src.audio')
 local Stats = require('src.stats')
 local Version = require('src.version')
+local Hunt = require('src.hunt')
 
 love.graphics.setDefaultFilter('nearest', 'nearest')
 
@@ -90,6 +91,8 @@ local sub = { back = 'playing', toolsBack = 'playing', text = '', saved = nil, s
 local exportBoxClosed -- defined with the EXPORT screen, called from love.update
 local debugClock = 0
 local reportTimer = 0
+local meadow = nil      -- the meadow, set aside while a hunting party is away
+local huntPick = { candidates = {}, chosen = {}, max = HUNT_PARTY_SIZE }
 local musicStarted = false
 local PAN_SPEED = 700
 -- Fast forward: the simulation runs this many steps a frame. Every arcade
@@ -561,6 +564,141 @@ local function continueFromReport()
     end
 end
 
+-- Hunting parties: on day HUNT_LEAVE_DAY of each season of free play the
+-- player may send hunters out. The meadow is set aside (paused) in `meadow`
+-- while the party is on a hunting ground, and gets the meat when it is home.
+local HUNT_TIME_LIMIT = 240
+
+local function huntChosenAt(name)
+    for i, n in ipairs(huntPick.chosen) do
+        if n == name then return i end
+    end
+end
+
+local function offerHunt()
+    local c = {}
+    for _, w in ipairs(game.workers) do
+        if w.alive and not w:isBaby() and w:isWorking() then
+            c[#c + 1] = { name = w.name, sheet = w.sheet, species = w.species, role = w.role, diet = w.diet }
+        end
+    end
+    if #c < 2 then return false end
+    huntPick.candidates = c
+    huntPick.max = math.min(HUNT_PARTY_SIZE, #c - 1)
+    huntPick.chosen = {}
+    for _, p in ipairs(Hunt.pick(c, {})) do
+        if #huntPick.chosen < huntPick.max then huntPick.chosen[#huntPick.chosen + 1] = p.name end
+    end
+    announce('Critters were spotted in the far meadow! Pick hunters to send out.')
+    state = 'huntpick'
+    love.mouse.setVisible(true)
+    return true
+end
+
+local function toggleHunter(name)
+    local i = huntChosenAt(name)
+    if i then
+        table.remove(huntPick.chosen, i)
+    elseif #huntPick.chosen < huntPick.max then
+        huntPick.chosen[#huntPick.chosen + 1] = name
+    end
+    Audio.playSFX('click')
+end
+
+local function skipHunt()
+    state = 'playing'
+    hideCursor()
+    announce('The hunting party stays home this season.')
+end
+
+local function startHunt()
+    local party = {}
+    for _, name in ipairs(huntPick.chosen) do
+        for _, c in ipairs(huntPick.candidates) do
+            if c.name == name then party[#party + 1] = c end
+        end
+    end
+    if #party == 0 then return end
+    local n = (game.scoring.quarter % Hunt.count()) + 1
+    local run = Hunt.load(n, Rng.new(n), party)
+    if not run then skipHunt() return end
+    meadow = { game = game, party = party }
+    local home = game
+    game = {}
+    game.log = {}
+    game.mode = 'hunt'
+    game.hunt = run
+    setTools(TOOLS_ARCADE)
+    game.seedString = 'hunt ' .. n
+    game.rng = Rng.new(n)
+    game.jobRng = home.jobRng
+    game.scoring = Scoring.new(DEFAULT_DIFFICULTY)
+    game.scoring.drain = 0
+    game.scoring.quarterTimer = HUNT_TIME_LIMIT
+    game.world = run.world
+    game.jobs = Jobs.new()
+    for _, node in ipairs(game.world.nodes) do
+        if node.ready then game.jobs:postNode(node) end
+    end
+    game.workers = {}
+    game.hired = #run.specs
+    game.clock = 0
+    game.staffCount = #run.specs
+    game.averageHunger = HUNGER_MAX
+    game.abilities = Abilities.new(game.world, game.jobs, onEffect)
+    game.view = Tileset.newView(game.world)
+    game.tileset = Tileset.current()
+    game.camera = Camera.new(game.world.w, game.world.h, love.graphics.getDimensions())
+    game.camera:setInsets(TOP_BAR_H * ui.scale, BOTTOM_BAR_H * ui.scale)
+    game.camera:fitWorld()
+    game.selectedWorker = nil
+    game.follow = false
+    game.lineStart = nil
+    game.dragging = false
+    game.report = nil
+    game.highScore = 0
+    game.isNewHigh = false
+    for _, spec in ipairs(run.specs) do
+        table.insert(game.workers, Worker.new(game.world, game.jobs, game.scoring, game.rng, {
+            x = spec.x, y = spec.y, role = spec.role, sheet = spec.sheet, name = spec.name,
+            diet = spec.diet, hunger = spec.hunger, drain = 0,
+            onComplain = onComplain, onEvent = onWorkerEvent,
+        }))
+    end
+    Effects.clear()
+    ui:clear()
+    game.started = true
+    state = 'playing'
+    hideCursor()
+    announce('The hunters set out. Catch every critter to bring meat home.')
+end
+
+-- Back to the meadow. A won hunt brings meat into storage; a lost one,
+-- or one given up, brings the party home empty-handed.
+local function finishHunt(won)
+    local m = meadow
+    meadow = nil
+    game = m.game
+    setTools(TOOLS_SURVIVAL)
+    Effects.clear()
+    ui:clear()
+    if won then
+        local weeks = Hunt.weeksAway()
+        local meat, inPouches = Hunt.meatHome(#m.party, weeks, game.world:binCount())
+        local stored = Hunt.deliver(game.world, meat)
+        local line = 'The hunting party is home with ' .. stored .. ' meat'
+        if stored < meat then line = line .. ' (' .. (meat - stored) .. ' more had nowhere to go: set out more STASH spots)' end
+        if inPouches > 0 then line = line .. ', and ' .. inPouches .. ' more stayed in their pouches: a BASKET lets them unload it all' end
+        announce(line .. '.')
+        Audio.playSFX('win')
+    else
+        announce('The hunting party came home empty-handed. Nobody was lost.')
+        Audio.playSFX('quit')
+    end
+    state = 'playing'
+    hideCursor()
+end
+
 local function workerAt(tile)
     local best, bestD = nil, 1.5
     for _, w in ipairs(game.workers) do
@@ -574,6 +712,7 @@ local function workerAt(tile)
 end
 
 local function goToTitle()
+    if meadow then return finishHunt(false) end
     state = 'title'
     love.mouse.setVisible(true)
     title.editingSeed = false
@@ -651,7 +790,24 @@ end
 
 -- substep: an extra fast forward step this frame; the camera and effects
 -- only move once a frame.
+local function updateHunt(dt, substep)
+    game.clock = game.clock + dt
+    game.scoring.quarterTimer = game.scoring.quarterTimer - dt
+    game.jobs:update(dt)
+    game.world:update(dt, onReady)
+    local alive = 0
+    for _, w in ipairs(game.workers) do
+        w:update(dt, game.clock)
+        if w.alive then alive = alive + 1 end
+    end
+    game.staffCount = alive
+    if Hunt.won(game.world) then finishHunt(true) return end
+    if alive == 0 or game.scoring.quarterTimer <= 0 then finishHunt(false) return end
+    if not substep then updateCamera(dt) end
+end
+
 local function updatePlaying(dt, substep)
+    if game.mode == 'hunt' then return updateHunt(dt, substep) end
     game.clock = game.clock + dt
     game.jobs:update(dt)
     game.world:update(dt, onReady)
@@ -703,6 +859,11 @@ local function updatePlaying(dt, substep)
         end
         game.stuckTimer = stuck and (game.stuckTimer or 0) + dt or 0
         game.suggestRestart = game.stuckTimer >= 5
+    end
+    if game.mode == 'free' and game.huntOffered ~= game.scoring.quarter
+        and Hunt.seasonDay(game.scoring.quarterTimer) >= HUNT_LEAVE_DAY then
+        game.huntOffered = game.scoring.quarter
+        if offerHunt() then return end
     end
     if game.scoring:update(dt, avg) then
         if game.mode == 'level' then levelClear() else closeQuarter() end
@@ -874,6 +1035,8 @@ local function drawScene()
         ui:drawJobs(game)
     elseif state == 'tama' then
         ui:drawTama(game, game.view)
+    elseif state == 'huntpick' then
+        ui:drawHuntPick(huntPick)
     elseif state == 'log' then
         ui:drawLog(game)
     end
@@ -1005,6 +1168,7 @@ local function toggleFollow()
 end
 
 local function openUnits()
+    if game.mode == 'hunt' then return end
     state = 'units'
     love.mouse.setVisible(true)
 end
@@ -1213,6 +1377,7 @@ function stockUp()
 end
 
 local function openJobs()
+    if game.mode == 'hunt' then return end
     local w = game.selectedWorker
     if w and w.alive and w:isBaby() then
         openTama(w)
@@ -1335,6 +1500,7 @@ end
 -- The same level, or the same free play seed, from the top.
 local function restartGame()
     Audio.playSFX('click')
+    if meadow then return finishHunt(false) end
     if isLevelMode() then
         newLevel(game.level.index, game.level.set, game.level.difficulty)
     else
@@ -1522,6 +1688,14 @@ local function pointerPressed(x, y, button, istouch)
         if pb == 'older' then sub.scroll = sub.scroll + math.max(1, sub.fit - 2)
         elseif pb == 'newer' then sub.scroll = math.max(0, sub.scroll - math.max(1, sub.fit - 2))
         elseif pb == 'close' then closeSub() end
+        return
+    elseif state == 'huntpick' then
+        if pb == 'send' then startHunt()
+        elseif pb == 'skip' then skipHunt()
+        elseif pb and pb:sub(1, 4) == 'pick' then
+            local c = huntPick.candidates[tonumber(pb:sub(5))]
+            if c then toggleHunter(c.name) end
+        end
         return
     elseif state == 'levelclear' then
         if pb == 'next' then nextLevelOrTitle() elseif pb == 'title' then goToTitle() end
@@ -1956,6 +2130,14 @@ function love.keypressed(key)
         if key == 'up' then sub.scroll = sub.scroll + 1
         elseif key == 'down' then sub.scroll = math.max(0, sub.scroll - 1)
         elseif key == 'escape' or key == 'h' or key == 'return' then closeSub() end
+    elseif state == 'huntpick' then
+        if key == 'return' or key == 'kpenter' then startHunt()
+        elseif key == 'escape' then skipHunt()
+        else
+            local n = tonumber(key)
+            local c = n and huntPick.candidates[n]
+            if c then toggleHunter(c.name) end
+        end
     elseif state == 'goal' then
         closeGoal()
     elseif state == 'levelclear' then

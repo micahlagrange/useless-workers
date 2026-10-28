@@ -108,6 +108,23 @@ function Hunt.load(n, rng, party)
     return run
 end
 
+-- Day of the season (1 to DAYS_PER_SEASON) for a scoring's quarter timer.
+function Hunt.seasonDay(quarterTimer)
+    local elapsed = QUARTER_SECONDS - quarterTimer
+    return math.min(DAYS_PER_SEASON, math.floor(elapsed / DAY_SECONDS) + 1)
+end
+
+-- Puts `meat` pieces of steak into the meadow's storage, bins first
+-- (storageList is already ordered that way). Returns how many fit.
+function Hunt.deliver(world, meat)
+    local stored = 0
+    for _, s in ipairs(world.storageList) do
+        while stored < meat and world:storeItem(ITEM_FOOD, s.x, s.y, MEAT) do stored = stored + 1 end
+        if stored >= meat then break end
+    end
+    return stored
+end
+
 -- Critters still hopping about.
 function Hunt.crittersLeft(world)
     return world:readyNodeCount(NODE_CRITTER)

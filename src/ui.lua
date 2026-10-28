@@ -634,6 +634,7 @@ function UI:topValues(game)
     local qLabel = sc:seasonLabel():upper()
     if game.mode == 'level' then qLabel = 'LEVEL ' .. game.level.index end
     if arcade then qLabel = 'ARCADE ' .. game.level.index end
+    if game.mode == 'hunt' then qLabel = 'HUNT' end
     local timeColor = C.text
     if not arcade and sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0 then timeColor = C.warn end
     -- survival counts down; arcade has no clock, it just keeps time
@@ -2415,6 +2416,28 @@ function UI:drawLevelFailed(game)
     self:centeredFit(game.failReason or 'Somebody wandered off.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     self:panelButtonRow(x, y, pw, ph, { { 'retry', 'TRY AGAIN', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
+end
+
+-- Picking who goes hunting: a toggle per morphi, then SEND or NOT NOW.
+function UI:drawHuntPick(pick)
+    local list = pick.candidates
+    local rowH = math.max(22, math.min(40, math.floor((self.vh - 16 - 200) / math.max(#list, 1)) - 6))
+    local shown = math.min(#list, math.floor((self.vh - 16 - 200) / (rowH + 6)))
+    local x, y, pw, ph = self:panel(720, 200 + shown * (rowH + 6))
+    self:centeredFit('Critters in the far meadow!', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    self:centeredFit('Pick up to ' .. pick.max .. ' hunters. They come home with meat.', y + 70, pw - 40, C.dim)
+    local ry = y + 108
+    for i = 1, shown do
+        local c = list[i]
+        local on = false
+        for _, n in ipairs(pick.chosen) do if n == c.name then on = true end end
+        local info = ROLES[c.role]
+        local label = (on and '[x] ' or '[ ] ') .. c.name .. (info and (' the ' .. info.label:lower()) or '')
+        self:panelButton('pick' .. i, { x = x + 40, y = ry, w = pw - 80, h = rowH }, label, on)
+        ry = ry + rowH + 6
+    end
+    local go = #pick.chosen > 0
+    self:panelButtonRow(x, y, pw, ph, { { 'send', self.touch and 'SEND' or 'SEND (ENTER)', go }, { 'skip', 'NOT NOW', false } })
 end
 
 function UI:drawConfirmQuit()

@@ -129,6 +129,8 @@ function Bench.runOne(seed, strategy, years, difficulty)
             closeRow(cur, rep)
             cur = newSeason(#rows + 1, band())
             love.keypressed('return')
+        elseif st == 'huntpick' then
+            love.keypressed('escape') -- the bench plays the meadow, not the hunts
         elseif st == 'annual' then
             game.scoring:startEndless()
             H.setState('playing')

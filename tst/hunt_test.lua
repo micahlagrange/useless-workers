@@ -81,4 +81,20 @@ function TestHunt:testMeatHome()
     lu.assertEquals(Hunt.meatHome(3, 10, 1), 60)
 end
 
+function TestHunt:testSeasonDay()
+    lu.assertEquals(Hunt.seasonDay(QUARTER_SECONDS), 1)
+    lu.assertEquals(Hunt.seasonDay(QUARTER_SECONDS - DAY_SECONDS * (HUNT_LEAVE_DAY - 1) - 0.1), HUNT_LEAVE_DAY)
+    lu.assertEquals(Hunt.seasonDay(-5), DAYS_PER_SEASON)
+end
+
+function TestHunt:testDeliverFillsStorage()
+    local run = assert(Hunt.load(1, Rng.new(1), party))
+    local world = run.world
+    local before = world:storedCount(ITEM_FOOD)
+    lu.assertEquals(Hunt.deliver(world, 6), 6)
+    lu.assertEquals(world:storedCount(ITEM_FOOD), before + 6)
+    local room = world:storageCapacity() - world:storedCount(ITEM_FOOD)
+    lu.assertEquals(Hunt.deliver(world, room + 5), room)
+end
+
 os.exit(lu.LuaUnit.run())
