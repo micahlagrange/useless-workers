@@ -15,6 +15,7 @@ require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
 local JobSets = require('src.jobsets')
+local Skills = require('src.skills')
 
 local Worker = {}
 Worker.__index = Worker
@@ -79,6 +80,7 @@ function Worker.new(world, jobs, scoring, rng, opts)
     self.targetTile = nil
     self.slots = {}           -- [SLOT_WORK] = {kind, food}, [SLOT_PERSONAL] = {kind, food}
     self.eatingSlot = nil
+    self.skills = Skills.new() -- scrappy, sightful, grit: all start at 0
     self.workTime = 0         -- accumulated work since the last break
     self.breakAfter = self.arcade and math.huge or BREAK_AFTER_SECONDS
     self.wantsBreak = false
@@ -1391,10 +1393,14 @@ function Worker:deliverHere()
             return
         end
         self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.food)
+        -- a sightful pick brings more than one; extras go in while there is room
+        for _ = 2, cargo.count or 1 do
+            if self.world:hasRoom(t.x, t.y) then self.world:storeItem(ITEM_FOOD, t.x, t.y, cargo.food) end
+        end
         self:releaseTile()
     end
     if cargo.kind ~= CARGO_FOOD then
-        self.world:addStock(cargo.kind, 1)
+        self.world:addStock(cargo.kind, cargo.count or 1)
     end
     self.slots[SLOT_WORK] = nil
     self.scoring:addDelivery(cargo.kind)
@@ -1493,15 +1499,31 @@ function Worker:finishAction()
             local kind = self.world:completeSite(site)
             if kind then cargo = { kind = kind } end
             if kind == CARGO_GOLD and site.kind == SITE_MINE then self:emit('shiny', { x = site.x, y = site.y }) end
+            Skills.add(self.skills, 'scrappy', site.kind == SITE_MINE and Skills.GAIN_DIG or Skills.GAIN_BUILD)
             if site.kind == SITE_MINE then self.areaTilesDone = self.areaTilesDone + 1 end
             self:emit(site.kind == SITE_MINE and 'mined' or 'built', site.kind)
         elseif self.targetNode and self.targetNode.ready then
             local node = self.targetNode
-            local kind = self.world:harvestNode(node)
-            cargo = { kind = kind, food = node.food }
-            self:emit('work', node.kind)
+            if node.kind == NODE_CRITTER and not (self.rng and self.rng:random() < Skills.huntChance(self.skills)) then
+                -- the critter got away; it stays about for another try
+                self:say('missed', 1.5)
+            else
+                local kind = self.world:harvestNode(node)
+                cargo = { kind = kind, food = node.food }
+                if node.kind == NODE_CRITTER then
+                    Skills.add(self.skills, 'scrappy', Skills.GAIN_HUNT)
+                elseif node.kind == NODE_TREE then
+                    cargo.count = Skills.yield(self.skills.grit)
+                    Skills.add(self.skills, 'grit', Skills.GAIN_SHAKE)
+                elseif node.kind == NODE_BUSH or node.kind == NODE_GRASS then
+                    cargo.count = Skills.yield(self.skills.sightful)
+                    Skills.add(self.skills, 'sightful', Skills.GAIN_GATHER)
+                end
+                self:emit('work', node.kind)
+            end
         elseif self.targetBaby and self.targetBaby.alive and self.targetBaby:isBaby() then
             self:careFor(self.targetBaby)
+            Skills.add(self.skills, 'sightful', Skills.GAIN_NURTURE)
         end
         self:releaseNode()
         self:releaseSite()
