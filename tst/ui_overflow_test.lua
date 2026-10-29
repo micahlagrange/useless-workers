@@ -55,6 +55,30 @@ function UI:drawDropdown(game)
     Stub.ctx.panel = nil
     return dropdown(self, game)
 end
+-- the Chatter panel too; speech bubbles float over everything on the map,
+-- so they are checked against each other only
+local chatter = UI.drawChatter
+function UI:drawChatter(game)
+    layer = layer + 1
+    Stub.ctx.layer = layer
+    Stub.ctx.panel = self:chatterRect()
+    chatter(self, game)
+    Stub.ctx.panel = nil
+end
+local bubbles = UI.drawBubbles
+function UI:drawBubbles(game, cam)
+    Stub.ctx.layer = 'bubbles'
+    bubbles(self, game, cam)
+    Stub.ctx.layer = layer
+end
+-- the unread badge sits on the CHAT button's corner on purpose
+local badge = UI.drawChatBadge
+function UI:drawChatBadge(r, text)
+    local prev = Stub.ctx.layer
+    Stub.ctx.layer = 'badge'
+    badge(self, r, text)
+    Stub.ctx.layer = prev
+end
 function UI:button(r, label, ...)
     local b = { x = r.x, y = r.y, w = r.w, h = r.h, label = label, layer = Stub.ctx.layer }
     buttons[#buttons + 1] = b
@@ -235,6 +259,18 @@ local function playingScreens(tag)
         frame(tag .. ' ' .. which .. ' open')
         ui.dropdown = nil
     end
+    -- everybody talking at once, the Chatter panel, and a picked one's lines
+    local says = { 'is that a shiny over there?', 'I would like a very long nap in a very soft nest please', 'berries!',
+        'sticks sticks sticks', 'wheee' }
+    for i, w in ipairs(game.workers) do w:say(says[(i - 1) % #says + 1], 30) end
+    frame(tag .. ' bubbles')
+    love.keypressed('c')
+    frame(tag .. ' chatter open')
+    game.selectedWorker = game.workers[1]
+    frame(tag .. ' chatter open, selected')
+    love.keypressed('c')
+    frame(tag .. ' lately')
+    game.selectedWorker = nil
     game.paused = true
     frame(tag .. ' paused')
     game.selectedWorker = game.workers[1]

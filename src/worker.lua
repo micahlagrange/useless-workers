@@ -534,8 +534,15 @@ function Worker:emit(name, data)
     if self.onEvent then self.onEvent(self, name, data) end
 end
 
+-- Game speed, set by main each frame: a bubble stays at least
+-- BUBBLE_MIN_SHOW seconds of real time even on fast forward.
+Worker.gameSpeed = 1
+Worker.BUBBLE_MIN_SHOW = 1.4
+
 function Worker:say(text, ttl)
-    self.bubble = { text = text, ttl = ttl or 2.5 }
+    ttl = math.max(ttl or 2.5, Worker.BUBBLE_MIN_SHOW * (Worker.gameSpeed or 1))
+    self.bubble = { text = text, ttl = ttl, full = ttl }
+    self:emit('say', text)
 end
 
 function Worker:isIcked(x, y)

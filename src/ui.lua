@@ -7,6 +7,7 @@ local JobSets = require('src.jobsets')
 local Worker = require('src.worker')
 local Version = require('src.version')
 local Audio = require('src.audio')
+local Chatter = require('src.chatter')
 
 local UI = {}
 UI.__index = UI
@@ -728,10 +729,12 @@ function UI:drawTopBar(game)
     local gearW = bh + 12
     -- DEV: the tester's tools (FINGERS, HISTORY, EXPORT), always on the bar
     local devW = self.fonts.small:getWidth('DEV') + self.quickPad
+    -- CHAT: the Chatter panel, with its unread badge, always on the bar
+    local chatW = self.fonts.small:getWidth('CHAT') + self.quickPad
     local quickW = 0
     for _, d in ipairs(self.quickDefs) do quickW = quickW + d.w + 6 end
     local valuesBtnW = self.fonts.small:getWidth(key.word .. ' ' .. key.value) + 52
-    local room = self.vw - 16 - 8 - pauseW - 6 - devW - 6
+    local room = self.vw - 16 - 8 - pauseW - 6 - devW - 6 - chatW - 6
     local foldButtons = valuesW + 20 + quickW > room
     local foldValues = foldButtons and valuesW + 20 + gearW + 6 > room
     self.foldValues, self.foldButtons = foldValues, foldButtons
@@ -741,6 +744,8 @@ function UI:drawTopBar(game)
     self.topButtons[#self.topButtons + 1] = { id = 'pause', label = 'PAUSE', x = x, y = by, w = pauseW, h = bh }
     x = x - 6 - devW
     self.topButtons[#self.topButtons + 1] = { id = 'dev', label = 'DEV', x = x, y = by, w = devW, h = bh }
+    x = x - 6 - chatW
+    self.topButtons[#self.topButtons + 1] = { id = 'chat', label = 'CHAT', x = x, y = by, w = chatW, h = bh }
     x = x - 6
     if foldButtons then
         x = x - gearW
@@ -780,7 +785,7 @@ function UI:drawTopBar(game)
     for _, b in ipairs(self.topButtons) do
         if b.id ~= 'values' then
             local active = (b.id == 'follow' and game.follow) or (b.id == 'sound' and (game.muted or self.dropdown == 'sound')) or (b.id == 'pause' and game.paused)
-                or (b.id == 'tiles' and game.tileset == 'rogue')
+                or (b.id == 'tiles' and game.tileset == 'rogue') or (b.id == 'chat' and game.chatterOpen)
             local label = b.label
             if b.id == 'speed' then
                 label = 'SPEED ' .. (game.speed or 1) .. 'x'
@@ -792,6 +797,7 @@ function UI:drawTopBar(game)
                 drawGear(b.x + b.w / 2, b.y + b.h / 2, math.floor(bh * 0.3))
             else
                 self:button(b, label, active)
+                if b.id == 'chat' and game.chatter then self:drawChatBadge(b, game.chatter:badge()) end
             end
         end
     end
@@ -1788,7 +1794,9 @@ function UI:drawHUD(game)
     self:drawFollowNav(game)
     self:drawGoalBox(game)
     self:drawAlerts(game)
+    self:drawLately(game)
     self:drawBottomBar(game)
+    if game.chatterOpen then self:drawChatter(game) end
     self:drawDropdown(game)
 end
 
@@ -1977,6 +1985,193 @@ end
 
 function UI:insideLogPanel(mx, my)
     return hit(self.logPanel, mx, my)
+end
+
+-- Speech bubbles and Chatter ---------------------------------------------
+
+local INK = { 0.18, 0.14, 0.11 }
+local CREAM = { 1.0, 0.97, 0.87 }
+local BERRY = { 0.86, 0.25, 0.42 }
+local FACES = {
+    { 0.98, 0.72, 0.56 }, { 0.62, 0.84, 0.58 }, { 0.6, 0.76, 0.96 }, { 0.96, 0.84, 0.46 },
+    { 0.86, 0.66, 0.92 }, { 0.98, 0.6, 0.7 },
+}
+local function faceColor(name)
+    local h = 0
+    for i = 1, #(name or '') do h = (h * 31 + name:byte(i)) % 997 end
+    return FACES[h % #FACES + 1]
+end
+
+-- Where the Chatter panel sits: down the right on a desk, the bottom half
+-- on a phone held upright.
+function UI:chatterRect()
+    if self.portrait then
+        local h = math.floor((self.vh - TOP_BAR_H) * 0.5)
+        return { x = 0, y = self.vh - h, w = self.vw, h = h }
+    end
+    local w = Util.clamp(math.floor(self.vw * 0.36), 280, 400)
+    return { x = self.vw - w, y = TOP_BAR_H, w = w, h = self.vh - TOP_BAR_H - BOTTOM_BAR_H }
+end
+
+-- Every morphi's bubble, drawn in HUD space so the words are a readable
+-- size at any zoom, placed clear of the bars, the panel and each other.
+function UI:drawBubbles(game, cam)
+    if not (game.workers and cam) then return end
+    local font = self.fonts.hud
+    local lh = font:getHeight()
+    local maxW = self.portrait and 180 or 210
+    local k = cam.scale / self.scale
+    local speed = math.max(1, game.speed or 1)
+    local width = function(s) return font:getWidth(s) end
+    local list = {}
+    for _, w in ipairs(game.workers) do
+        local b = w.bubble
+        if b then
+            local sx, sy = (w.x - cam.x) * k, (w.y - 20 - cam.y) * k
+            if sx > -40 and sx < self.vw + 40 and sy > -40 and sy < self.vh + 80 then
+                local lines = Chatter.wrap(b.text, maxW - 16, width)
+                local tw = 0
+                for _, l in ipairs(lines) do tw = math.max(tw, font:getWidth(l)) end
+                local age = (b.full or b.ttl) - b.ttl
+                list[#list + 1] = {
+                    sx = sx, sy = sy, speakerX = sx, speakerY = (w.y - cam.y) * k,
+                    w = tw + 16, h = #lines * lh + 10, t = -age, lines = lines,
+                    pop = math.min(1, age / (0.15 * speed)), fade = math.min(1, b.ttl / (0.3 * speed)),
+                }
+            end
+        end
+    end
+    if #list == 0 then return end
+    local blocked = {}
+    if game.chatterOpen then blocked[1] = self:chatterRect() end
+    local screen = { x = 4, y = TOP_BAR_H + 4, w = self.vw - 8, h = self.vh - TOP_BAR_H - BOTTOM_BAR_H - 8 }
+    Chatter.place(list, blocked, screen, 20 * k)
+    love.graphics.setFont(font)
+    love.graphics.setLineWidth(3)
+    for _, b in ipairs(list) do
+        if not b.hidden then
+            love.graphics.push()
+            local cx, cy = b.x + b.w / 2, b.below and b.y or b.y + b.h
+            local s = 0.6 + 0.4 * b.pop
+            love.graphics.translate(cx, cy)
+            love.graphics.scale(s)
+            love.graphics.translate(-cx, -cy)
+            -- the tail points at the speaker's head
+            local tx = Util.clamp(b.sx, b.x + 10, b.x + b.w - 10)
+            local tail = b.below and { tx - 6, b.y + 1, tx + 6, b.y + 1, b.sx, b.y - 8 }
+                or { tx - 6, b.y + b.h - 1, tx + 6, b.y + b.h - 1, b.sx, b.y + b.h + 8 }
+            love.graphics.setColor(INK[1], INK[2], INK[3], b.fade)
+            love.graphics.polygon('fill', tail[1] - 2, tail[2], tail[3] + 2, tail[4], tail[5], tail[6] + (b.below and -2 or 2))
+            love.graphics.rectangle('fill', b.x - 3, b.y - 3, b.w + 6, b.h + 6, 8, 8)
+            love.graphics.setColor(CREAM[1], CREAM[2], CREAM[3], b.fade)
+            love.graphics.rectangle('fill', b.x, b.y, b.w, b.h, 6, 6)
+            love.graphics.polygon('fill', tail)
+            love.graphics.setColor(INK[1], INK[2], INK[3], b.fade)
+            for i, l in ipairs(b.lines) do
+                love.graphics.print(l, math.floor(b.x + 8), math.floor(b.y + 5 + (i - 1) * lh))
+            end
+            love.graphics.pop()
+        end
+    end
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The unread count on the CHAT button: a berry dot at its corner.
+function UI:drawChatBadge(r, text)
+    if not text then return end
+    local f = self.fonts.tiny
+    local d = math.max(f:getHeight() + 4, f:getWidth(text) + 8)
+    local cx, cy = r.x + r.w - 2, r.y + 2
+    setColor(BERRY)
+    love.graphics.rectangle('fill', cx - d / 2, cy - d / 2, d, d, d / 2, d / 2)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(f)
+    love.graphics.print(text, math.floor(cx - f:getWidth(text) / 2), math.floor(cy - f:getHeight() / 2))
+end
+
+-- The Chatter panel: every line the bunch said, newest at the bottom, the
+-- game still running behind it. A row is a tap target that goes to that
+-- morphi.
+function UI:drawChatter(game)
+    local chat = game.chatter
+    if not chat then return end
+    local r = self:chatterRect()
+    self.chatterPanel = r
+    self.chatterRows = {}
+    setColor(C.panel)
+    love.graphics.rectangle('fill', r.x, r.y, r.w, r.h)
+    setColor(C.accent)
+    love.graphics.rectangle('line', r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1)
+    local small, tiny = self.fonts.small, self.fonts.tiny
+    local cw = self.touch and 56 or 48
+    self.chatterClose = { x = r.x + r.w - cw - 10, y = r.y + 8, w = cw, h = self.touch and 40 or 30 }
+    self:printLine('CHATTER', r.x + 14, r.y + 14, r.w - cw - 40, 'left', C.text, { self.fonts.hud, small })
+    self:button(self.chatterClose, 'X', false)
+    local top = r.y + 8 + self.chatterClose.h + 8
+    love.graphics.setColor(C.accent[1], C.accent[2], C.accent[3], 0.5)
+    love.graphics.rectangle('fill', r.x + 12, top - 4, r.w - 24, 1)
+    if #chat.lines == 0 then
+        self:printLine('Nobody has said a thing yet.', r.x + 14, top + 6, r.w - 28, 'left', C.dim, { small, tiny })
+        return
+    end
+    local textX, textW = r.x + 14 + 40, r.w - 28 - 40
+    local y = r.y + r.h - 8
+    local now = game.clock or 0
+    for i = #chat.lines, 1, -1 do
+        local e = chat.lines[i]
+        local wrapped = Chatter.wrap(e.text, textW, function(t) return small:getWidth(t) end, 2)
+        local nLines = #wrapped
+        local rowH = math.max(56, small:getHeight() + tiny:getHeight() + nLines * small:getHeight() + 14)
+        if y - rowH < top then break end
+        y = y - rowH
+        local row = { x = r.x + 6, y = y, w = r.w - 12, h = rowH - 4, entry = e }
+        self.chatterRows[#self.chatterRows + 1] = row
+        love.graphics.setColor(1, 1, 1, 0.04)
+        love.graphics.rectangle('fill', row.x, row.y, row.w, row.h, 4, 4)
+        local fc = faceColor(e.name)
+        love.graphics.setColor(fc[1], fc[2], fc[3], (e.speaker and e.speaker.alive == false) and 0.4 or 1)
+        love.graphics.circle('fill', r.x + 30, y + 22, 14)
+        setColor(INK)
+        love.graphics.circle('fill', r.x + 25, y + 20, 2)
+        love.graphics.circle('fill', r.x + 35, y + 20, 2)
+        local _, nw = self:printLine(e.name, textX, y + 5, textW * 0.5, 'left', C.good, { small, tiny })
+        self:printLine(e.where .. ', ' .. Chatter.ago(now - e.t), textX + nw + 8, y + 5 + small:getHeight() - tiny:getHeight(),
+            textW - nw - 8, 'left', C.dim, { tiny })
+        for k, l in ipairs(wrapped) do
+            self:printLine(l, textX, y + 9 + k * small:getHeight(), textW, 'left', C.text, { small })
+        end
+    end
+end
+
+function UI:chatterAt(mx, my)
+    if hit(self.chatterClose, mx, my) then return 'close' end
+    for _, row in ipairs(self.chatterRows or {}) do
+        if hit(row, mx, my) then return 'row', row.entry end
+    end
+    if hit(self.chatterPanel, mx, my) then return 'inside' end
+end
+
+-- A picked morphi's last two lines, in a small card above the bottom bar.
+function UI:drawLately(game)
+    local w = game.selectedWorker
+    if not (w and w.alive and game.chatter) then return end
+    local lines = game.chatter:lately(w, 2)
+    if #lines == 0 then return end
+    local tiny, small = self.fonts.tiny, self.fonts.small
+    local cw = math.min(340, self.vw - 2 * (self.quickH + 60))
+    -- a short screen has no room above the bottom bar (the goal list sits there)
+    if cw < 160 or self.vh < 480 then return end
+    local ch = tiny:getHeight() + #lines * small:getHeight() + 14
+    local x = math.floor(self.vw / 2 - cw / 2)
+    local y = self.vh - BOTTOM_BAR_H - 74 - ch
+    if game.chatterOpen and self.portrait then return end
+    love.graphics.setColor(0, 0, 0, 0.6)
+    love.graphics.rectangle('fill', x, y, cw, ch, 6, 6)
+    self:printLine('LATELY, ' .. w.name, x + 8, y + 4, cw - 16, 'left', C.dim, { tiny })
+    for i, l in ipairs(lines) do
+        self:printLine('"' .. l .. '"', x + 8, y + 8 + tiny:getHeight() + (i - 1) * small:getHeight(), cw - 16, 'left', C.text, { small, tiny })
+    end
 end
 
 -- The morphi whose row button is under the pointer, and which button:

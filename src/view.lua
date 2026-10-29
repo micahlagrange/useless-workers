@@ -559,9 +559,7 @@ function View:drawWorker(w, clock, selected)
             love.graphics.circle('fill', w.x, feetY + 4, 1.6)
         end
     end
-    if w.bubble then
-        self:drawBubble(w.x, w.y - 26, w.bubble.text)
-    end
+    -- speech bubbles are drawn over the map in HUD space, see UI:drawBubbles
     love.graphics.setColor(1, 1, 1, 1)
 end
 
