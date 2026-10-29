@@ -808,6 +808,21 @@ local function besideSpot(world, x, y)
     return nil
 end
 
+-- A tile PLAY_BALL_TILES to the left or right of (x, y) with a clear row
+-- between, for catch; b's own tile if it is one already. nil if none.
+local function catchSpot(world, x, y, bt)
+    local n = PLAY_BALL_TILES
+    if bt.y == y and math.abs(bt.x - x) == n then return bt end
+    for _, dx in ipairs({ n, -n }) do
+        local clear = true
+        for i = 1, n do
+            if not world:isPassable(x + (dx > 0 and i or -i), y) then clear = false break end
+        end
+        if clear then return { x = x + dx, y = y } end
+    end
+    return nil
+end
+
 -- a and b play. Spends this season's chance for both, unless dev (the
 -- tester's PLAY NOW) says otherwise. A talk is picked with the game's rng,
 -- and b walks to stand beside a; the talk starts when b gets there.
@@ -836,7 +851,14 @@ function Worker.beginPlay(a, b, pl, dev, category, convo)
     b:say('sure!', 2)
     local at, bt = a:tile(), b:tile()
     local beside = math.abs(at.x - bt.x) <= 1 and math.abs(at.y - bt.y) <= 1 and not (at.x == bt.x and at.y == bt.y)
-    local spot = not beside and besideSpot(a.world, at.x, at.y)
+    local spot
+    if pl.category == 'ball' then
+        -- catch wants room: a spot a few tiles to one side, else beside
+        spot = catchSpot(a.world, at.x, at.y, bt) or (not beside and besideSpot(a.world, at.x, at.y))
+    else
+        spot = not beside and besideSpot(a.world, at.x, at.y)
+    end
+    if spot and spot.x == bt.x and spot.y == bt.y then spot = nil end
     local path = spot and b:pathTo(spot.x, spot.y)
     if path then
         b:setPath(path, 'play') -- arrive() starts the talk
@@ -880,15 +902,19 @@ function Worker:updatePlay(dt)
         if pl.walk > 0 then return end
         Worker.startTalk(pl)
     end
+    -- the scene's clock (stars, the ball) and when the last line began
+    pl.t = (pl.t or 0) + dt
     pl.chat = pl.chat - dt
     if pl.chat <= 0 then
         if pl.lines >= #pl.convo then self:endPlay(true) return end
         pl.lines = pl.lines + 1
         local speaker = (pl.lines % 2 == 1) and a or b
-        speaker:say(pl.convo[pl.lines], PLAY_BUBBLE_SECONDS)
+        local gap = PLAY_LINE_SECONDS_BY[pl.category] or PLAY_LINE_SECONDS
+        speaker:say(pl.convo[pl.lines], math.min(PLAY_BUBBLE_SECONDS, gap * 0.8))
         pl.said[#pl.said + 1] = { who = speaker, text = pl.convo[pl.lines] }
+        pl.lineAt = pl.t
         -- added on, not set, so the lines keep time whatever the frame rate
-        pl.chat = pl.chat + PLAY_LINE_SECONDS
+        pl.chat = pl.chat + gap
     end
 end
 

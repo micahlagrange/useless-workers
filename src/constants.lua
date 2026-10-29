@@ -522,6 +522,37 @@ PLAY_CHAT = {
         },
     },
 }
+
+-- Fun scenes: short plays of three lines (a chat) or a throw a line (ball).
+-- They start with a little burst of stars between the two; in ball the ball
+-- flies from whoever speaks to the other. Lines fit the bubble as above.
+PLAY_CHAT.chat = {
+    { title = 'The Clay Patch', 'Big clay patch!', 'It looks squishy', 'Let us poke it!' },
+    { title = 'The Shy Pebble', 'A round pebble!', 'Can I hold it?', 'Gently. It is shy.' },
+    { title = 'One Crumb', 'My snacks are gone', 'Half my crumb?', 'You are the best.' },
+    { title = 'Candy Clouds', 'Clouds = candy?', 'Only fluffy ones.', 'I knew it!' },
+    { title = 'Twelve Berries', 'Twelve berries!', 'Wow, twelve!', 'Ate them. Zero now' },
+    { title = 'The Rude Stick', 'That stick stared.', 'Sticks do that.', 'Rude.' },
+    { title = 'Pip Hops', 'Pip did a hop!', 'Big or small?', 'Medium. So brave.' },
+    { title = 'Nap Time', 'Is it nap time?', 'Always, somewhere.', 'Wise words.' },
+    { title = 'Basket Dream', 'I dreamt: a basket', 'What did you hold?', 'Four whole grapes.' },
+    { title = 'Hi, Stream', 'Stream is wiggly!', 'It is happy, see?', 'Aww. Hi, stream!' },
+}
+PLAY_CHAT.ball = {
+    -- four throws, a line each, back and forth
+    { title = 'Catch', 'To you!', 'Got it! Back!', 'Big throw!', 'Wheee! Got it!' },
+}
+PLAY_CATEGORIES[#PLAY_CATEGORIES + 1] = 'chat'
+PLAY_CATEGORIES[#PLAY_CATEGORIES + 1] = 'ball'
+PLAY_DOING.chat, PLAY_DOING.ball = 'Chatting with ', 'Playing catch with '
+PLAY_KIND_NAMES.chat, PLAY_KIND_NAMES.ball = 'CHAT', 'BALL'
+PLAY_STARTS.chat, PLAY_STARTS.ball = 'a little chat', 'a game of catch'
+PLAY_NEWS_KIND.chat, PLAY_NEWS_KIND.ball = 'had a little chat', 'played catch'
+-- seconds between lines, where a kind talks faster than PLAY_LINE_SECONDS
+PLAY_LINE_SECONDS_BY = { chat = 2.2, ball = 1.4 }
+PLAY_BALL_TILES      = 3     -- how far apart they stand to play catch
+PLAY_BALL_FLIGHT     = 0.9   -- seconds the ball is in the air
+PLAY_STARS_SECONDS   = 1.0   -- the burst of stars as a fun scene starts
 DEFAULT_SEED       = 'PUPPER'
 
 -- Colors, hex strings; the same palette as control-the-environment plus water and snow

@@ -1000,7 +1000,7 @@ function TestPlay:testTheTestersPickOfTwoMorphisAndAKindOfFun()
         local pl = Worker.playPair(x, y, kind)
         lu.assertNotNil(pl)
         lu.assertEquals(pl.category, kind)
-        lu.assertEquals(#pl.convo, 12)
+        lu.assertTrue(#pl.convo >= 3)
         lu.assertEquals(x.play, pl)
         lu.assertEquals(y.play, pl)
         lu.assertStrContains(x:describeState(), PLAY_DOING[kind]:gsub('%s+$', ''))
@@ -1041,7 +1041,9 @@ function TestPlay:testTheTalkComesFromTheSeededRng()
         local k = pick(s)
         if not seen[k] then seen[k] = true; n = n + 1 end
     end
-    lu.assertEquals(n, 6, 'all six talks turn up')
+    local total = 0
+    for _, cat in ipairs(PLAY_CATEGORIES) do total = total + #PLAY_CHAT[cat] end
+    lu.assertEquals(n, total, 'every talk turns up')
 end
 
 function TestPlay:testDetailsShowWhatItCarriesAndTheTalkSoFar()
@@ -1106,10 +1108,55 @@ function TestPlay:testEveryLineFitsTheBubble()
         lu.assertTrue(#PLAY_CHAT[cat] >= 1)
         for _, convo in ipairs(PLAY_CHAT[cat]) do
             lu.assertNotNil(convo.title)
-            lu.assertEquals(#convo, 12)
+            lu.assertTrue(#convo >= 3, convo.title)
             for _, line in ipairs(convo) do lu.assertTrue(#line <= 18, line) end
         end
     end
+end
+
+function TestPlay:testAChatIsThreeQuickLinesThenALift()
+    local a, b = self.make('Pip', 4, 1), self.make('Dave', 5, 1)
+    a.morale, b.morale = 40, 40
+    a.funAt, b.funAt = 1e9, 1e9 -- no fun of their own after
+    local pl = Worker.playPair(a, b, 'chat')
+    lu.assertEquals(#pl.convo, 3)
+    run({ a, b }, self.world, self.jobs, 0.5)
+    lu.assertTrue(pl.started, 'side by side: it starts at once')
+    lu.assertTrue(pl.t < PLAY_STARS_SECONDS, 'the stars are still out')
+    run({ a, b }, self.world, self.jobs, 3 * PLAY_LINE_SECONDS_BY.chat + 2)
+    lu.assertNil(a.play)
+    lu.assertEquals(#pl.said, 3)
+    lu.assertEquals(pl.said[1].who, a)
+    lu.assertEquals(pl.said[2].who, b)
+    lu.assertEquals(pl.said[3].who, a)
+    lu.assertTrue(a.morale >= 40 + MORALE_PLAY - 2)
+    lu.assertTrue(b.morale >= 40 + MORALE_PLAY - 2)
+    local played = self.played()
+    lu.assertEquals(played[#played].data.category, 'chat')
+end
+
+function TestPlay:testCatchIsPlayedAFewTilesApart()
+    local a, b = self.make('Pip', 2, 1), self.make('Dave', 3, 1)
+    a.morale, b.morale = 40, 40
+    a.funAt, b.funAt = 1e9, 1e9
+    local pl = Worker.playPair(a, b, 'ball')
+    lu.assertEquals(b.goal, 'play', 'the catcher steps back first')
+    local waited = 0
+    while not pl.started and waited < PLAY_WALK_SECONDS + 1 do
+        waited = waited + run({ a, b }, self.world, self.jobs, 0.1)
+    end
+    lu.assertTrue(pl.started)
+    run({ a, b }, self.world, self.jobs, 0.2)
+    local at, bt = a:tile(), b:tile()
+    lu.assertEquals(math.abs(bt.x - at.x), PLAY_BALL_TILES)
+    lu.assertEquals(bt.y, at.y)
+    lu.assertTrue(pl.lineAt ~= nil, 'the first throw is in the air')
+    run({ a, b }, self.world, self.jobs, #pl.convo * PLAY_LINE_SECONDS_BY.ball + 2)
+    lu.assertNil(a.play)
+    lu.assertEquals(#pl.said, #pl.convo)
+    lu.assertTrue(a.morale >= 40 + MORALE_PLAY - 2)
+    local played = self.played()
+    lu.assertEquals(played[#played].data.category, 'ball')
 end
 
 os.exit(lu.LuaUnit.run())

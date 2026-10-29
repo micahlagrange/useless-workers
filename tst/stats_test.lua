@@ -81,7 +81,8 @@ function TestStats:test_play_is_recorded_with_who_and_what_kind()
     lu.assertEquals(s.counts.play, #plays)
     for _, e in ipairs(plays) do
         lu.assertStrContains(e.who, ' and ')
-        lu.assertNotNil(e.text:match('^philosophize: ') or e.text:match('^socialize: ') or e.text:match('^dance: '), e.text)
+        local kind = e.text:match('^(%a+): ')
+        lu.assertNotNil(kind and PLAY_CHAT[kind], e.text)
         lu.assertNotNil(e.day)
         lu.assertNotNil(e.x)
     end

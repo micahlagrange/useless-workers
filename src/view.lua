@@ -673,6 +673,43 @@ function View:drawWorkers(workers, clock, selectedWorker)
     for _, w in ipairs(sorted) do
         self:drawWorker(w, clock, w == selectedWorker)
     end
+    for _, w in ipairs(sorted) do
+        local pl = w.play
+        if pl and pl.a == w and pl.b and pl.started then self:drawFunScene(pl) end
+    end
+end
+
+-- A fun scene's extras over the two: a burst of stars as it starts, and in
+-- catch the ball, flying in an arc from whoever spoke last to the other.
+function View:drawFunScene(pl)
+    local a, b = pl.a, pl.b
+    local t = pl.t or 0
+    if t < PLAY_STARS_SECONDS then
+        local mx, my = (a.x + b.x) / 2, (a.y + b.y) / 2 - 8
+        local k = t / PLAY_STARS_SECONDS
+        love.graphics.setColor(1, 0.9, 0.35, 1 - k)
+        for i = 0, 5 do
+            local ang = i * math.pi / 3 + k
+            local r = 3 + 10 * k
+            local sx, sy = mx + math.cos(ang) * r, my + math.sin(ang) * r
+            love.graphics.polygon('fill', sx, sy - 2, sx + 1, sy, sx, sy + 2, sx - 1, sy)
+            love.graphics.polygon('fill', sx - 2, sy, sx, sy - 1, sx + 2, sy, sx, sy + 1)
+        end
+    end
+    if pl.category == 'ball' and pl.lineAt then
+        local from, to = a, b
+        if pl.lines % 2 == 0 then from, to = b, a end
+        local k = math.min(1, (t - pl.lineAt) / PLAY_BALL_FLIGHT)
+        local bx = from.x + (to.x - from.x) * k
+        local by = from.y + (to.y - from.y) * k - 6 - math.sin(k * math.pi) * 14
+        love.graphics.setColor(0, 0, 0, 0.25)
+        love.graphics.ellipse('fill', bx, from.y + 4 + (to.y - from.y) * k, 2.5, 1)
+        love.graphics.setColor(0.95, 0.4, 0.45)
+        love.graphics.circle('fill', bx, by, 2.5)
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.circle('fill', bx - 0.8, by - 0.8, 0.8)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 return View
