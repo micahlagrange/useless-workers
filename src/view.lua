@@ -2,6 +2,7 @@
 require('src.constants')
 local Util = require('src.util')
 local anim8 = require('libs.anim8')
+local Feel = require('src.feel')
 
 local View = {}
 View.__index = View
@@ -24,6 +25,11 @@ function View.new(world)
         local frames = math.floor(img:getWidth() / 16)
         local grid = anim8.newGrid(16, 16, img:getWidth(), img:getHeight())
         self.sheets[key] = { image = img, quads = grid('1-' .. frames, 1), frames = frames }
+        -- where its eyes sit on each frame, for blinks and happy eyes
+        if love.image and love.image.newImageData then
+            local ok, data = pcall(love.image.newImageData, 'assets/images/morphis/' .. key .. '-worker-walk.png')
+            if ok and data and data.getPixel then self.sheets[key].eyes = Feel.findEyes(data, frames) end
+        end
     end
     self.foodImages = {}
     for food, file in pairs(FOOD_SPRITE) do
@@ -528,8 +534,9 @@ function View:drawWorker(w, clock, selected)
     end
     local sx = (w.facing == 'left') and -1 or 1
     local feetY = w.y + 4
+    w.pose = Feel.pose(w, clock, selected)
     love.graphics.setColor(0, 0, 0, 0.25)
-    love.graphics.ellipse('fill', w.x, feetY, 6, 2.5)
+    love.graphics.ellipse('fill', w.x, feetY, 6 * w.pose.shadow, 2.5 * w.pose.shadow)
     if selected then
         love.graphics.setColor(1, 1, 1, 0.9)
         love.graphics.ellipse('line', w.x, feetY, 8, 4)
@@ -578,9 +585,7 @@ function View:drawWorkerBody(w, clock, sx, feetY)
     else
         love.graphics.setColor(1, 1, 1, 1)
     end
-    -- standing about, a little blob breathes: a soft squash and stretch
-    local sy = 1
-    if not w.moving then sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7) end
+    local pose = w.pose or Feel.pose(w, clock)
     if w.stage == 'egg' then
         -- a speckled egg, wobbling now and then
         local wob = math.sin((clock or 0) * 9 + w.id) * (math.floor((clock or 0) + w.id) % 4 == 0 and 0.25 or 0)
@@ -597,13 +602,69 @@ function View:drawWorkerBody(w, clock, sx, feetY)
         return
     end
     local size = w.stage == 'baby' and BABY_SCALE or 1
-    love.graphics.draw(sheet.image, sheet.quads[frameIndex], w.x, feetY, 0, sx * (2 - sy) * size, sy * size, 8, 16)
+    -- hop, squash (breathing is a squash too) and wiggle about the feet
+    local sy = pose.sy
+    love.graphics.push()
+    love.graphics.translate(w.x, feetY - pose.hop)
+    love.graphics.rotate(pose.rot)
+    love.graphics.scale(sx * (2 - sy) * pose.sx * size, sy * size)
+    love.graphics.draw(sheet.image, sheet.quads[frameIndex], 0, 0, 0, 1, 1, 8, 16)
+    self:drawFace(sheet.eyes and sheet.eyes[frameIndex], pose, w.state == 'quitting')
+    if pose.wave then self:drawWaveArm(w, pose.wave, sheet.eyes and sheet.eyes[frameIndex]) end
+    love.graphics.pop()
     local tool = w:toolInHand()
     if tool then
         local swing = 0
         if w.state == 'working' then swing = -0.9 + 0.7 * math.sin((clock or 0) * 12 + w.id) end
-        self:drawTool(tool, w.x + 5 * sx, feetY - 6, swing, sx)
+        self:drawTool(tool, w.x + 5 * sx, feetY - 6 - pose.hop, swing, sx)
     end
+end
+
+-- The face on top of the sprite, in its own 16 px frame (origin 8, 16):
+-- lids over the eyes for a blink or a nap, arched eyes when happy, eyes a
+-- touch lower when it looks up at you, a mouth that opens and shuts while
+-- it talks.
+function View:drawFace(eyes, pose, grey)
+    if not eyes then return end
+    local function px(x, y) love.graphics.rectangle('fill', x - 8, y - 16, 1, 1) end
+    local ink = grey and 0.3 or 0.12
+    for _, e in ipairs(eyes) do
+        if pose.eyesShut or pose.happy or pose.lookDown then
+            love.graphics.setColor(e.r, e.g, e.b, 1)
+            px(e.x, e.y)
+        end
+        love.graphics.setColor(ink, ink * 0.8, ink * 0.7, 1)
+        if pose.happy then
+            px(e.x, e.y - 1)
+        elseif pose.eyesShut then
+            px(e.x - 1, e.y + 1); px(e.x + 1, e.y + 1)
+            love.graphics.setColor(e.r, e.g, e.b, 1)
+        elseif pose.lookDown then
+            px(e.x, e.y + 1)
+        end
+    end
+    if pose.talking and #eyes == 2 then
+        local mx = math.floor((eyes[1].x + eyes[2].x) / 2)
+        love.graphics.setColor(0.35, 0.12, 0.15, 1)
+        love.graphics.rectangle('fill', mx - 8, eyes[1].y + 2 - 16, 1, pose.mouthOpen and 2 or 1)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- A little arm up beside the head, waving, in the colour of the skin.
+function View:drawWaveArm(w, angle, eyes)
+    love.graphics.push()
+    love.graphics.translate(6, -9)
+    love.graphics.rotate(angle)
+    local c = w.state == 'quitting' and 0.6 or 1
+    local skin = eyes and eyes[1] or { r = 0.98, g = 0.86, b = 0.6 }
+    love.graphics.setColor(skin.r * c, skin.g * c, skin.b * c, 1)
+    love.graphics.ellipse('fill', 0, -2.5, 1.5, 2.5)
+    love.graphics.setColor(0.2, 0.14, 0.1, 1)
+    love.graphics.setLineWidth(0.5)
+    love.graphics.ellipse('line', 0, -2.5, 1.5, 2.5)
+    love.graphics.pop()
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 -- What it carries: the work load bobbing overhead, the pocketed snack at
@@ -611,8 +672,8 @@ end
 function View:drawWorkerCargo(w, clock, sx, feetY)
     local cargo = w.slots[SLOT_WORK]
     if cargo then
-        local bob = math.sin((clock or 0) * 6 + w.id) * 1
-        local cy = w.y - 15 + bob
+        local bob = Feel.calm and 0 or math.sin((clock or 0) * 6 + w.id) * 1
+        local cy = w.y - 15 + bob - (w.pose and w.pose.hop or 0)
         if cargo.kind == CARGO_FOOD then
             local img = self:foodImage(cargo.food)
             if img then

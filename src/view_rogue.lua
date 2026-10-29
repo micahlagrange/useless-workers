@@ -5,6 +5,7 @@
 -- ticks and dots are chunky, so the ground is mostly plain dots.
 require('src.constants')
 local View = require('src.view')
+local Feel = require('src.feel')
 
 local Rogue = setmetatable({}, { __index = View })
 Rogue.__index = Rogue
@@ -230,10 +231,15 @@ end
 function Rogue:drawWorkerBody(w, clock, sx, feetY)
     local c = self.SPECIES_COLOR[w.sheet] or { 0.9, 0.9, 0.9 }
     if w.state == 'quitting' then c = { 0.5, 0.5, 0.5 } end
-    -- a step every other frame while walking, so the glyph is seen to go
-    local bob = 0
-    if w.moving then bob = (math.floor((w.animTime or 0) / 0.24) % 2 == 0) and 0 or -1 end
-    self:glyph(self.SPECIES_GLYPH[w.sheet] or self.GLYPH.morphi, w.x - TILE_SIZE / 2, feetY - TILE_SIZE + bob, c[1], c[2], c[3])
+    -- a hop each step while walking, a jolt on a bump, a wave: whole
+    -- pixels, so the glyph stays crisp
+    local pose = w.pose or Feel.pose(w, clock)
+    local bob = -math.floor(pose.hop + 0.5)
+    if pose.sy < 0.92 then bob = bob + 1 elseif pose.sy > 1.08 then bob = bob - 1 end
+    local jig = math.floor(pose.rot * 8 + 0.5)
+    self:glyph(self.SPECIES_GLYPH[w.sheet] or self.GLYPH.morphi, w.x - TILE_SIZE / 2 + jig, feetY - TILE_SIZE + bob, c[1], c[2], c[3])
+    if pose.happy then self:smallGlyph('^', w.x, feetY - TILE_SIZE - 3 + bob, 1, 0.75, 0.85) end
+    if pose.wave then self:smallGlyph(pose.wave > -0.6 and '/' or '|', w.x + 8 * sx, feetY - 12 + bob, c[1], c[2], c[3]) end
     local tool = w:toolInHand()
     if tool then
         local swing = 0
@@ -245,8 +251,8 @@ end
 function Rogue:drawWorkerCargo(w, clock, sx, feetY)
     local cargo = w.slots[SLOT_WORK]
     if cargo then
-        local bob = math.sin((clock or 0) * 6 + w.id) * 1
-        local cy = w.y - 13 + bob
+        local bob = Feel.calm and 0 or math.sin((clock or 0) * 6 + w.id) * 1
+        local cy = w.y - 13 + bob - (w.pose and w.pose.hop or 0)
         if cargo.kind == CARGO_FOOD then
             local c = self:foodColor(cargo.food)
             self:smallGlyph(self.GLYPH.food, w.x, cy, c[1], c[2], c[3])
