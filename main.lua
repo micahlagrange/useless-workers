@@ -13,6 +13,9 @@ local Campaign = require('src.campaign')
 local Camera = require('src.camera')
 local Tileset = require('src.tileset')
 local UI = require('src.ui')
+local Ring = require('src.ring')
+local Hud = require('src.hud')
+local Toy = require('src.toy')
 local Effects = require('src.effects')
 local Audio = require('src.audio')
 local Stats = require('src.stats')
@@ -22,6 +25,7 @@ love.graphics.setDefaultFilter('nearest', 'nearest')
 
 local state = 'title'
 local ui
+local hud
 local game = {}
 local title = { difficultyIndex = DEFAULT_DIFFICULTY, arcadeDifficulty = DEFAULT_ARCADE_DIFFICULTY, seed = DEFAULT_SEED, editingSeed = false, muted = false, options = {}, option = 1 }
 
@@ -197,6 +201,8 @@ local function onWorkerEvent(worker, name, data)
     elseif name == 'shiny' and game.mode == 'free' then
         Audio.playSFX('deliver')
         announce(worker.name .. ' dug up a shiny!', data, 'news')
+        ui:toast(worker.name .. ' dug up a shiny!', 'shiny')
+        ui:bump('shinies')
     elseif name == 'built' then Audio.playSFX('hire')
     elseif name == 'break' then Audio.playSFX('settled')
     elseif name == 'work' then Audio.playSFX(data == 'ore' and 'dig' or (data == 'tree' and 'line' or 'click'))
@@ -349,13 +355,14 @@ end
 local function onEffect(name, data)
     if name == 'mine' then
         Audio.playSFX('click')
-        ui:toast(data.count .. ' tile' .. (data.count == 1 and '' or 's') .. ' marked for digging')
+        ui:toast('Marked ' .. data.count .. ' clay to dig')
     elseif name == 'unmark' then
         Audio.playSFX('click')
         if data.kind then
-            ui:toast((ABILITY_LABEL[data.kind] or data.kind:upper()) .. ' designation cancelled')
+            local what = Ring.BUILD_LABEL[data.kind] or (data.kind == SITE_BRIDGE and 'Bridge') or (data.kind:sub(1, 1):upper() .. data.kind:sub(2))
+            ui:toast(what .. (data.taken and ' taken away' or ' called off'))
         else
-            ui:toast(data.count .. ' mark' .. (data.count == 1 and '' or 's') .. ' cleared')
+            ui:toast('Wiped ' .. data.count .. ' dig mark' .. (data.count == 1 and '' or 's'))
         end
     elseif name == 'site' then
         Audio.playSFX('line')
@@ -393,6 +400,8 @@ local function newGame(seedString, difficultyIndex)
     game.selectedWorker = nil
     game.follow = false
     game.lineStart = nil
+    game.paint = nil
+    if hud then hud:close() end
     game.dragging = false
     game.report = nil
     game.highScore = Highscore.load(difficultyIndex)
@@ -406,7 +415,7 @@ local function newGame(seedString, difficultyIndex)
     -- and one baby in the home nest
     for i = 1, START_BABIES do hireBaby(i == 1 and FIRST_BABY_NAME or nil) end
     game.log = {}
-    announce('Mark a STASH (or a BASKET, 1 grass, holds 4) so foragers have somewhere to put berries. BRIDGE the streams to reach the far banks.')
+    announce('Tap open grass to set out a stash (or a basket: 1 grass, holds 4) so foragers have somewhere to put berries. Drag across a stream to bridge it.')
     game.started = false
     state = 'goal'
     love.mouse.setVisible(true)
@@ -449,6 +458,8 @@ local function newLevel(index, set, difficulty)
     game.selectedWorker = nil
     game.follow = false
     game.lineStart = nil
+    game.paint = nil
+    if hud then hud:close() end
     game.dragging = false
     game.report = nil
     game.highScore = 0
@@ -609,12 +620,15 @@ end
 
 function love.load()
     ui = UI.new()
+    hud = Hud.new(ui)
     Audio.loadVolumes()
     Tileset.load()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
     -- start on the furthest unlocked arcade level
     title.option = math.min(levelsUnlocked('arcade'), Campaign.count('arcade'))
+    -- with the levels off the title there may be fewer options than that
+    if title.option > #title.options then title.option = 1 end
 end
 
 function love.resize(w, h)
@@ -726,7 +740,7 @@ local function syncTouches()
     -- the pointer finger vanished without a release: call off what it began
     if primary and not live[primary] then
         primary = nil
-        if game then game.panStart, game.lineStart, game.lineCost = nil, nil, nil end
+        if game then game.panStart, game.lineStart, game.lineCost, game.paint = nil, nil, nil, nil end
     end
     touchCount = n
     if touchCount < 2 then pinch = nil end
@@ -750,6 +764,9 @@ function love.update(dt)
             end
         end
         ui:update(dt)
+        hud:update(dt, love.timer.getTime())
+        if hud.ring and hud.ring.worker and not hud.ring.worker.alive then hud:close() end
+        if state ~= 'playing' and hud:isOpen() then hud:close() end
     elseif state == 'tama' then
         updateTamaScene(dt)
     elseif state == 'report' then
@@ -784,8 +801,26 @@ local function drawWorld()
         game.view:drawTileOutline(t.x, t.y, { 1, 0.3, 0.2, pulse })
     end
     if game.focus then game.view:drawFocus(game.focus.x, game.focus.y, game.clock) end
+    -- the radial tool: what a hovered or pressed build button would set
+    -- out, and what a drag is painting
+    if UI.RADIAL and state == 'playing' then
+        local spec = hud.ring
+        if spec and spec.tile and hud.preview then
+            local t = spec.tile
+            if hud.preview == 'mark' then
+                game.view:drawTileFill(t.x, t.y, { 1, 0.6, 0.2, 0.55 })
+            else
+                game.view:drawGhost(hud.preview, t.x, t.y, true)
+            end
+        end
+        local p = game.paint
+        if p and p.moved and p.kind ~= 'pan' then
+            local color = p.kind == 'unmark' and { 1, 0.3, 0.25, 0.5 } or p.kind == 'bridge' and { 0.9, 0.7, 0.3, 0.6 } or { 1, 0.6, 0.2, 0.5 }
+            for _, q in ipairs(p.tiles) do game.view:drawTileFill(q.x, q.y, color) end
+        end
+    end
     -- cursor preview
-    if state == 'playing' then
+    if state == 'playing' and not UI.RADIAL then
         local mx, my = pointerPosition()
         if not ui:isOverBars(mx, my) then
             local tile = cam:toTile(mx, my)
@@ -834,6 +869,12 @@ local function drawWorld()
     game.view:drawWorkers(game.workers, game.clock, game.selectedWorker)
     Effects.draw()
     cam:reset()
+    if game.paused and UI.RADIAL then
+        -- paused: the meadow loses some colour and goes a little darker
+        love.graphics.setColor(0.42, 0.4, 0.38, 0.38)
+        love.graphics.rectangle('fill', 0, 0, love.graphics.getDimensions())
+        love.graphics.setColor(1, 1, 1, 1)
+    end
 end
 
 local function drawScene()
@@ -847,7 +888,9 @@ local function drawScene()
     drawWorld()
     game.muted = Audio.isMuted()
     ui:beginScaled()
-    ui:drawHUD(game)
+    if UI.RADIAL and state == 'playing' then hud:drawRing(game, love.timer.getTime()) end
+    ui:drawHUD(game, state == 'menu')
+    if UI.RADIAL and state == 'playing' then hud:drawCaption() end
     if state == 'report' then
         ui:drawReport(game.report, game.scoring)
     elseif state == 'gameover' then
@@ -862,6 +905,8 @@ local function drawScene()
         sub.fit = ui:drawHistory(game.stats and game.stats:history() or {}, sub.scroll)
     elseif state == 'confirmquit' then
         ui:drawConfirmQuit()
+    elseif state == 'menu' then
+        ui:drawToyMenu(game, ui.menuConfirm, fingerDebug)
     elseif state == 'goal' then
         ui:drawGoal(game)
     elseif state == 'levelclear' then
@@ -1000,7 +1045,7 @@ local function toggleFollow()
         game.follow = not game.follow
         ui:toast(game.follow and ('Following ' .. game.selectedWorker.name) or 'Camera free')
     else
-        ui:toast('Select a morphi first (SELECT tool, then tap one)')
+        ui:toast('Tap a morphi first')
     end
 end
 
@@ -1223,7 +1268,7 @@ local function openJobs()
         return
     end
     if not (w and w.alive and w.jobSet) then
-        ui:toast(game.mode == 'free' and 'Select a morphi first (SELECT tool, then tap one)' or 'Each morphi here has one fixed job')
+        ui:toast(game.mode == 'free' and 'Tap a morphi first' or 'Each morphi here has one fixed job')
         return
     end
     state = 'jobs'
@@ -1252,9 +1297,212 @@ local function pressJob(id)
     end
 end
 
+-- The radial tool -----------------------------------------------------------
+-- A tap on the meadow opens a ring of what makes sense there (src/ring.lua,
+-- src/hud.lua); a drag that starts on clay or water paints dig marks or a
+-- bridge; a drag that starts anywhere else pans.
+
+local ringAct
+
+-- The morphi under a screen point, if any: the nearest within a finger's reach.
+local function workerAtScreen(sx, sy)
+    local wp = game.camera:toWorld(sx, sy)
+    local wx, wy = wp.x, wp.y
+    local reach = math.max(10, 26 / game.camera.scale)
+    local best, bestD = nil, reach
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.state ~= 'quitting' then
+            local d = Util.dist(w.x, w.y - 4, wx, wy)
+            if d < bestD then best, bestD = w, d end
+        end
+    end
+    return best
+end
+
+local function openRingFor(spec)
+    hud.onAct = ringAct
+    hud:open(spec, love.timer.getTime())
+    hud.captionH = nil
+    local dx, dy = hud:fitShift(game, TOP_BAR_H + 8)
+    if dx ~= 0 or dy ~= 0 then
+        game.follow = false
+        game.camera:pan(dx, dy)
+    end
+end
+
+local function bunchFaces()
+    local out = {}
+    for i, w in ipairs(game.workers) do
+        if w.alive and w.state ~= 'quitting' then
+            out[#out + 1] = { id = 'look:' .. i, face = true, color = Hud.workerColor(w), label = w.name }
+        end
+    end
+    return out
+end
+
+local function workerRing(w)
+    local spec = Ring.forWorker(w) or { kind = 'morphi', worker = w, items = {}, center = { id = 'follow', icon = 'follow' } }
+    spec.caption = Hud.workerCaption(w)
+    if game.follow and game.selectedWorker == w then spec.center.on = true end
+    return spec
+end
+
+local function openWorkerRing(w)
+    game.selectedWorker = w
+    if w:isBaby() then
+        hud:close()
+        openTama(w)
+        return
+    end
+    if w:isEgg() then
+        hud:flash({ title = w.name, line = 'Still an egg. It hatches soon.' })
+        return
+    end
+    openRingFor(workerRing(w))
+end
+
+local function tapMap(tile, w)
+    if hud:isOpen() then
+        if w and hud.ring.worker ~= w then openWorkerRing(w) return end
+        hud:close()
+        return
+    end
+    if w then openWorkerRing(w) return end
+    local spec, caption = Ring.forTile(game.world, tile.x, tile.y, ABILITY_ORDER)
+    if spec then
+        if spec.kind == 'home' then hud.homeItems = bunchFaces() end
+        openRingFor(spec)
+        Audio.playSFX('click')
+    elseif caption then
+        hud:flash(caption)
+    end
+end
+
+-- A ring button was tapped (hold: held down, or right clicked).
+function ringAct(item, hold)
+    local spec = hud.ring
+    if not spec then return end
+    local id = item.id
+    local isJob = id:sub(1, 4) == 'job:'
+    if item.off and not isJob then
+        if item.why then ui:toast(item.why) end
+        return
+    end
+    local t = spec.tile
+    if id:sub(1, 6) == 'build:' then
+        game.abilities:select(id:sub(7))
+        local _, why = game.abilities:use(t.x, t.y)
+        game.abilities:select(ABILITY_SELECT)
+        if why then ui:toast(why) end
+        hud:close()
+    elseif id == 'dig' then
+        game.abilities:markTiles({ { x = t.x, y = t.y } })
+        hud:close()
+    elseif id == 'digpatch' then
+        game.abilities:markTiles(Ring.patch(game.world, t.x, t.y))
+        hud:close()
+    elseif id == 'unmark' then
+        game.abilities:unmarkTiles({ { x = t.x, y = t.y } })
+        hud:close()
+    elseif id == 'unmarkall' then
+        game.abilities:unmarkTiles(Ring.patch(game.world, t.x, t.y, 400, function(q) return q.site and q.site.kind == SITE_MINE end))
+        hud:close()
+    elseif id == 'bridge' then
+        local _, why = game.abilities:bridgeTiles({ { x = t.x, y = t.y } })
+        if why then ui:toast(why) end
+        hud:close()
+    elseif id == 'calloff' then
+        local tt = game.world:get(t.x, t.y)
+        if tt and tt.site then game.abilities:cancelSite(tt.site) end
+        hud:close()
+    elseif id == 'takeaway' then
+        local ok, why = game.abilities:takeAway(t.x, t.y)
+        if not ok and why then ui:toast(why) end
+        hud:close()
+    elseif id:sub(1, 5) == 'look:' then
+        local w = game.workers[tonumber(id:sub(6))]
+        if w and w.alive then
+            hud:close()
+            game.camera:centerOn(w.x, w.y)
+            openWorkerRing(w)
+        end
+    elseif isJob then
+        local w = spec.worker
+        if not (w and w.alive and w.jobSet) then return end
+        local job = id:sub(5)
+        local slot = hold and 'neutral' or 'main'
+        if hold and w.jobSet.neutral == job then job = nil end
+        local before = w.jobSet[slot]
+        local ok, why = w:setJob(slot, job)
+        if not ok then
+            ui:toast(w.name .. ': ' .. why)
+        elseif before ~= w.jobSet[slot] then
+            local label = job and ROLES[job].label:lower() or 'nothing'
+            if slot == 'main' then
+                ui:toast(w.name .. "'s first job: " .. label .. (job == w.jobSet.disliked and ' (grumbles about it)' or ''))
+            else
+                ui:toast(w.name .. ' then does: ' .. label)
+            end
+            Audio.playSFX('click')
+            if game.stats then game.stats:event('jobs', game, w.name, w.jobSet.main .. '/' .. (w.jobSet.neutral or 'none') .. '/' .. w.jobSet.disliked) end
+        end
+        local fresh = workerRing(w)
+        spec.items, spec.caption, hud.caption = fresh.items, fresh.caption, fresh.caption
+    elseif id == 'follow' then
+        toggleFollow()
+        hud:close()
+    end
+end
+
+-- Painting: the squares a drag crosses, from the last point to this one.
+local function paintTo(p, x, y)
+    local cam = game.camera
+    local step = math.max(2, TILE_SIZE * cam.scale / 3)
+    local dist = math.sqrt((x - p.lx) ^ 2 + (y - p.ly) ^ 2)
+    local n = math.max(1, math.ceil(dist / step))
+    for i = 0, n do
+        local sx, sy = p.lx + (x - p.lx) * i / n, p.ly + (y - p.ly) * i / n
+        local tile = cam:toTile(sx, sy)
+        local key = tile.x * 100000 + tile.y
+        if not p.seen[key] then
+            p.seen[key] = true
+            local t = game.world:get(tile.x, tile.y)
+            local fits = t and ((p.kind == 'mark' and Ring.isClay(t) and not t.site)
+                or (p.kind == 'unmark' and t.site and t.site.kind == SITE_MINE)
+                or (p.kind == 'bridge' and t.type == TILE_WATER and not t.site))
+            if fits then p.tiles[#p.tiles + 1] = tile end
+        end
+    end
+    p.lx, p.ly = x, y
+end
+
+local function finishPaint(p)
+    if #p.tiles == 0 then return end
+    if p.kind == 'mark' then
+        game.abilities:markTiles(p.tiles)
+    elseif p.kind == 'unmark' then
+        game.abilities:unmarkTiles(p.tiles)
+    elseif p.kind == 'bridge' then
+        local laid, why = game.abilities:bridgeTiles(p.tiles)
+        if why then ui:toast(why) elseif laid > 0 then ui:toast('Laid ' .. laid .. ' bridge square' .. (laid == 1 and '' or 's')) end
+    end
+end
+
 local function openMenu()
-    state = 'confirmquit'
+    if UI.RADIAL then
+        hud:close()
+        state = 'menu'
+        ui.menuConfirm, ui.menuScroll = nil, 0
+    else
+        state = 'confirmquit'
+    end
     love.mouse.setVisible(true)
+end
+
+local function closeMenu()
+    state = 'playing'
+    ui.menuConfirm = nil
+    hideCursor()
 end
 
 -- EXPORT, HISTORY and the tester's corner open over another screen and go
@@ -1414,6 +1662,89 @@ local function pressTopButton(id, x, b)
     Audio.playSFX('click')
 end
 
+-- The Toybox top bar's buttons.
+local function pressToy(id)
+    Audio.playSFX('click')
+    if id == 'pause' or id == 'carryon' then togglePause()
+    elseif id == 'speed' then cycleSpeed()
+    elseif id == 'menu' then openMenu()
+    elseif id == 'resmore' then ui.resOpen = not ui.resOpen
+    elseif id == 'bunch' then
+        local br = game.world.breakroom
+        if br then
+            game.follow = false
+            game.camera:centerOn(br.cx, br.cy)
+            tapMap({ x = br.x, y = br.y }, nil)
+        end
+    elseif id == 'hungry' then
+        for _, w in ipairs(game.workers) do
+            if w.alive and (w:hungerStatus() == 'hungry' or w:hungerStatus() == 'starving') then
+                hud:close()
+                game.follow = false
+                game.camera:centerOn(w.x, w.y)
+                openWorkerRing(w)
+                return
+            end
+        end
+        ui:toast('Nobody is hungry')
+    end
+end
+
+-- A tap on the menu sheet (on release, so a drag scrolls instead).
+local function menuTap(vx, vy)
+    local pb, rect
+    for _, b in ipairs(ui.panelButtons) do
+        if vx >= b.x and vx <= b.x + b.w and vy >= b.y and vy <= b.y + b.h then pb, rect = b.id, b end
+    end
+    if not pb then
+        if not ui:insideMenu(vx, vy) then closeMenu() end
+        return
+    end
+    Audio.playSFX('click')
+    local channel, step = pb:match('^vol:(%a+):([%+%-])$')
+    local barChannel = pb:match('^volbar:(%a+)$')
+    if pb == 'carryon' then closeMenu()
+    elseif pb == 'mute' then Audio.toggleMute()
+    elseif channel then Audio.setVolume(channel, Audio.getVolume(channel) + (step == '+' and 0.1 or -0.1))
+    elseif barChannel then Audio.setVolume(barChannel, (vx - rect.x) / rect.w)
+    elseif pb == 'restart' or pb == 'title' then ui.menuConfirm = pb
+    elseif pb == 'confirm:no' then ui.menuConfirm = nil
+    elseif pb == 'confirm:yes' then
+        local what = ui.menuConfirm
+        ui.menuConfirm = nil
+        if what == 'title' then goToTitle()
+        else
+            restartGame()
+            state = 'playing'
+            hideCursor()
+        end
+    elseif pb == 'goal' then openGoal()
+    elseif pb == 'export' or pb == 'history' then openSub(pb)
+    elseif pb == 'fingers' then fingerDebug = not fingerDebug
+    elseif pb == 'tiles' then cycleTileset()
+    elseif pb == 'news' then openLog()
+    elseif pb == 'stockup' then
+        stockUp()
+        ui:toast('Stocked up: 20 of every material, a meal of every food')
+        closeMenu()
+    elseif pb == 'tamatest' then
+        -- a fresh meadow with Morphi, straight into the baby screen, with a
+        -- shelf of every food to put down for free
+        newGame(DEFAULT_SEED, 1)
+        closeGoal()
+        for _, w in ipairs(game.workers) do
+            if w:isBaby() then
+                w.hunger = 40
+                w.needs.fun, w.needs.clean, w.needs.sleep = 50, 50, 40
+                openTama(w)
+                break
+            end
+        end
+        game.world.stock.grass = math.max(game.world.stock.grass or 0, 10)
+        game.tamaSandbox = true
+    end
+end
+
 -- The first finger on the screen switches to the touch layout.
 local function noteTouch()
     if ui.touch then return end
@@ -1538,6 +1869,9 @@ local function pointerPressed(x, y, button, istouch)
             hideCursor()
         end
         return
+    elseif state == 'menu' then
+        game.menuPress = { x = x, y = y, vy = vy, scroll = ui.menuScroll or 0, moved = false }
+        return
     elseif state == 'confirmquit' then
         if pb == 'yes' then
             goToTitle()
@@ -1612,6 +1946,12 @@ local function pointerPressed(x, y, button, istouch)
     end
     -- playing
     if button == 2 then
+        -- a right click on a ring button is a hold
+        local b = UI.RADIAL and hud:buttonAt(vx, vy)
+        if b then
+            if b.item.hold then ringAct(b.item, true) end
+            return
+        end
         game.dragging = true
         return
     end
@@ -1630,7 +1970,11 @@ local function pointerPressed(x, y, button, istouch)
         if not (top == ui.dropdown) then ui.dropdown = nil end
         if not top then return end
     end
-    if vy < TOP_BAR_H then
+    if UI.RADIAL then
+        local id = ui:toyButtonAt(vx, vy)
+        if id then pressToy(id) return end
+        if ui:isOverBars(vx, vy) then return end
+    elseif vy < TOP_BAR_H then
         local id = ui:topButtonAt(vx, vy)
         if id then pressTopButton(id) end
         return
@@ -1658,6 +2002,22 @@ local function pointerPressed(x, y, button, istouch)
     local alert = ui:alertAt(vx, vy)
     if alert then
         if alert.tile then lookAt(alert.tile) else openLog() end
+        return
+    end
+    if UI.RADIAL then
+        -- a ring button takes the press; anything else on the meadow is a
+        -- tap (on release) or a drag that paints or pans
+        if hud:pressed(vx, vy, love.timer.getTime()) then return end
+        local tile = game.camera:toTile(x, y)
+        game.focus = nil
+        local t = game.world:get(tile.x, tile.y)
+        local w = workerAtScreen(x, y)
+        local kind = 'pan'
+        if not w and t then
+            if Ring.isClay(t) then kind = (t.site and t.site.kind == SITE_MINE) and 'unmark' or 'mark'
+            elseif t.type == TILE_WATER and not t.site then kind = 'bridge' end
+        end
+        game.paint = { x = x, y = y, lx = x, ly = y, tile = tile, worker = w, kind = kind, moved = false, tiles = {}, seen = {} }
         return
     end
     if ui:jobsButtonAt(vx, vy) then
@@ -1693,7 +2053,28 @@ local function pointerPressed(x, y, button, istouch)
 end
 
 local function pointerReleased(x, y, button)
+    if state == 'menu' and game.menuPress then
+        local p = game.menuPress
+        game.menuPress = nil
+        if not p.moved and button == 1 then menuTap(ui:toVirtual(x, y)) end
+        return
+    end
     if state ~= 'playing' then return end
+    if button == 1 and hud.press then
+        hud:released(ui:toVirtual(x, y))
+        return
+    end
+    if button == 1 and game.paint then
+        local p = game.paint
+        game.paint = nil
+        if not p.moved then
+            tapMap(p.tile, p.worker)
+        elseif p.kind ~= 'pan' then
+            paintTo(p, x, y)
+            finishPaint(p)
+        end
+        return
+    end
     if button == 2 then
         game.dragging = false
     elseif button == 1 and game.panStart then
@@ -1711,7 +2092,26 @@ local function pointerReleased(x, y, button)
 end
 
 local function pointerMoved(x, y, dx, dy)
+    if state == 'menu' and game.menuPress then
+        local p = game.menuPress
+        if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
+        if p.moved then ui.menuScroll = p.scroll - (y - p.y) / ui.scale end
+        return
+    end
     if state ~= 'playing' or pinch then return end
+    if game.paint then
+        local p = game.paint
+        if not p.moved and math.abs(x - p.x) + math.abs(y - p.y) > 10 then
+            p.moved = true
+            if hud:isOpen() then hud:close() end
+            if p.kind == 'pan' then game.follow = false end
+        end
+        if p.moved then
+            if p.kind == 'pan' then game.camera:pan(-dx, -dy) else paintTo(p, x, y) end
+        end
+        return
+    end
+    if not hud.press then hud:hover(ui:toVirtual(x, y)) end
     if game.dragging then
         game.follow = false
         game.camera:pan(-dx, -dy)
@@ -1780,6 +2180,8 @@ function love.touchpressed(id, x, y)
         game.panStart = nil
         game.lineStart = nil
         game.lineCost = nil
+        game.paint = nil
+        if hud then hud.press = nil end
         game.dragging = false
     else
         primary = nil
@@ -1820,6 +2222,7 @@ function love.touchreleased(id, x, y)
 end
 
 function love.wheelmoved(_, y)
+    if state == 'menu' then ui.menuScroll = (ui.menuScroll or 0) - y * 40 return end
     if state ~= 'playing' or y == 0 then return end
     local mx, my = pointerPosition()
     game.camera:zoomAt(y > 0 and 1.15 or 1 / 1.15, mx, my)
@@ -1877,7 +2280,9 @@ function love.keypressed(key)
         end
     elseif state == 'playing' then
         local n = tonumber(key)
-        if n and ABILITY_ORDER[n] then
+        if key == 'escape' and hud:isOpen() then
+            hud:close()
+        elseif n and ABILITY_ORDER[n] and not UI.RADIAL then
             game.abilities:select(ABILITY_ORDER[n])
             Audio.playSFX('click')
         elseif key == 'f' then
@@ -1895,9 +2300,10 @@ function love.keypressed(key)
             cycleTileset()
             Audio.playSFX('click')
         elseif key == 'u' then
-            openUnits()
+            if UI.RADIAL then pressToy('bunch') else openUnits() end
         elseif key == 'j' then
-            openJobs()
+            local w = game.selectedWorker
+            if UI.RADIAL and w and w.alive then openWorkerRing(w) else openJobs() end
         elseif key == 'g' then
             openGoal()
         elseif key == 'l' then
@@ -1930,6 +2336,10 @@ function love.keypressed(key)
             followNext(key == ']' and 1 or -1)
             Audio.playSFX('click')
         end
+    elseif state == 'menu' then
+        if key == 'escape' then closeMenu()
+        elseif key == 'up' then ui.menuScroll = (ui.menuScroll or 0) - 60
+        elseif key == 'down' then ui.menuScroll = (ui.menuScroll or 0) + 60 end
     elseif state == 'confirmquit' then
         if key == 'y' or key == 'return' or key == 'kpenter' then
             goToTitle()
@@ -2009,6 +2419,7 @@ end
 if TEST_HOOKS then
     TEST_HOOKS.main = {
         ui = function() return ui end,
+        hud = function() return hud end,
         game = function() return game end,
         state = function() return state end,
         setState = function(s) state = s end,
@@ -2036,3 +2447,6 @@ if TEST_HOOKS then
         pressJob = function(id) pressJob(id) end,
     }
 end
+
+-- development screenshots, see tools/shot.lua (never in a normal run)
+if SHOT_SCRIPT then dofile('tools/shot.lua') end

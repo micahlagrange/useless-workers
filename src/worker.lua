@@ -826,7 +826,7 @@ function Worker:unstaffedJob()
 end
 
 local WHY_TEXT = {
-    storage = 'nowhere to put berries (lay a STASH or a BASKET)',
+    storage = 'nowhere to put berries (set out a stash or a basket)',
     water = 'the nearest is across water (BRIDGE it)',
     walled = 'the nearest is cut off (DIG a way)',
     taken = 'others have it all in hand',

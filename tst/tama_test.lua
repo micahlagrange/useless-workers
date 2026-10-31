@@ -44,13 +44,18 @@ function TestTama:tearDown()
     H.setState('playing')
 end
 
-function TestTama:test_tend_on_the_strip_opens_the_screen_and_the_meadow_stops()
+function TestTama:test_a_tap_on_the_baby_opens_the_screen_and_the_meadow_stops()
     local g, ui = H.game(), H.ui()
     local b = baby(g)
-    g.selectedWorker = b
-    love.draw()
-    lu.assertNotNil(ui.jobsButton, 'TEND on the baby strip')
-    tap(ui, ui.jobsButton)
+    -- a tap on the baby opens its care screen (the grown-ups stand aside)
+    for _, w in ipairs(g.workers) do
+        if w ~= b and math.abs(w.x - b.x) + math.abs(w.y - b.y) < 48 then w.x = b.x + 64 end
+    end
+    local p = g.camera:toScreen(b.x, b.y - 4)
+    Stub.fingers = { 't' }
+    love.touchpressed('t', p.x, p.y)
+    love.touchreleased('t', p.x, p.y)
+    Stub.fingers = {}
     lu.assertEquals(H.state(), 'tama')
     lu.assertTrue(g.tending == b)
     love.draw()

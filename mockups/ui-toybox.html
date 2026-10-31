@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Morphis Toybox HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== TOYBOX tokens: the whole size system lives here ===== */
+:root{
+  --tap:56px;          /* every tap target is 56 px tall; tools and bubble actions are 56 px squares */
+  --icon:28px;         /* one icon size, everywhere in the HUD */
+  --g:8px;             /* gap between things */
+  --gutter:16px;       /* edge of the screen to the HUD */
+  --r:18px;            /* button corners */
+  --r-plate:24px;      /* plate corners */
+  --line:3px;          /* outline weight */
+  --t-s:16px;          /* text S: body, captions, hints (the smallest text there is) */
+  --t-m:20px;          /* text M: names, counts, row-button labels */
+  --t-l:28px;          /* text L: sheet titles */
+
+  --ink:#3A2618;       /* text on plates: 13:1 on --plate */
+  --ink-soft:#6B4F3D;  /* secondary text: 7:1 on --plate */
+  --plate:#FFF6E3;
+  --plate-2:#F5E4C3;
+  --sun:#FFD45C;       /* "this one is on" */
+  --leaf:#2E7D3E;      /* good words: 5.2:1 */
+  --berry:#B8304B;     /* alerts, bad words: 5.6:1 */
+  --amber:#8F5600;     /* so-so words: 6:1 */
+  --sky:#2F8FC4;
+  --grass:#9BD36A;
+  --shadow:0 5px 0 rgba(58,38,24,.28);
+  --topx:0px;
+  font-family:"Fredoka", ui-rounded, "Segoe UI", system-ui, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#9BD36A;color:var(--ink);
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit}
+svg.i{width:var(--icon);height:var(--icon);display:block;flex:none}
+
+/* ===== the meadow ===== */
+#viewport{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab}
+#viewport.mode-dig,#viewport.mode-bridge,#viewport.mode-stash,#viewport.mode-basket,#viewport.mode-nest{cursor:crosshair}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#world.paused{filter:saturate(.55) brightness(.92)}
+#ground{position:absolute;left:0;top:0}
+.morphi{position:absolute;left:0;top:0;width:34px;height:30px;margin:-26px 0 0 -17px;cursor:pointer}
+.morphi .body{position:absolute;inset:0;border-radius:50% 50% 44% 44%/60% 60% 40% 40%;
+  border:3px solid var(--ink);animation:bob .5s ease-in-out infinite alternate}
+.morphi .eye{position:absolute;top:9px;width:5px;height:7px;border-radius:3px;background:var(--ink)}
+.morphi .eye.l{left:8px}.morphi .eye.r{right:8px}
+.morphi.baby{width:24px;height:21px;margin:-18px 0 0 -12px}
+.morphi.baby .eye{top:6px;width:4px;height:5px}.morphi.baby .eye.l{left:5px}.morphi.baby .eye.r{right:5px}
+.morphi .ring{position:absolute;left:-8px;right:-8px;bottom:-10px;height:14px;border-radius:50%;
+  border:3px solid var(--sun);display:none}
+.morphi.picked .ring{display:block}
+.morphi .need{position:absolute;left:50%;bottom:100%;margin-bottom:6px;transform:translateX(-50%);
+  width:40px;height:40px;border-radius:50%;background:var(--plate);border:3px solid var(--berry);
+  display:none;place-items:center;animation:pulse 1s ease-in-out infinite}
+.morphi .need svg{width:24px;height:24px}
+.morphi.needy .need{display:grid}
+.morphi.picked .need{display:none!important}
+.morphi .zz{position:absolute;left:100%;top:-16px;font-weight:700;font-size:var(--t-s);display:none;
+  background:var(--plate);border:2px solid var(--ink);border-radius:10px;padding:0 6px}
+.morphi.napping .zz{display:block}
+.morphi .tag{position:absolute;left:50%;top:100%;margin-top:8px;transform:translateX(-50%);white-space:nowrap;
+  background:var(--plate);border:var(--line) solid var(--ink);border-radius:12px;padding:1px 10px;
+  font-size:var(--t-s);font-weight:600;display:none}
+.morphi.picked .tag{display:block}
+#world.paused .morphi .body{animation-play-state:paused}
+@keyframes bob{from{transform:translateY(0) scaleY(1)}to{transform:translateY(-3px) scaleY(.94)}}
+@keyframes pulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.12)}}
+.bld{position:absolute;width:40px;height:40px;display:grid;place-items:center;cursor:pointer}
+.bld svg{width:36px;height:36px}
+.bld.site{opacity:.6;outline:3px dashed var(--ink);outline-offset:-3px;border-radius:12px}
+.bld.picked{outline:3px solid var(--sun);outline-offset:2px;border-radius:12px}
+#ghost{position:absolute;width:40px;height:40px;border-radius:12px;display:none;place-items:center;pointer-events:none;
+  border:3px solid var(--leaf);background:rgba(255,246,227,.55)}
+#ghost.bad{border-color:var(--berry);background:rgba(184,48,75,.25)}
+#ghost svg{width:32px;height:32px}
+.worldlabel{position:absolute;transform:translate(-50%,0);background:var(--plate);border:var(--line) solid var(--ink);
+  border-radius:12px;padding:1px 10px;font-size:var(--t-s);font-weight:600;white-space:nowrap;pointer-events:none}
+
+/* ===== shared pieces ===== */
+.plate{background:var(--plate);border:var(--line) solid var(--ink);border-radius:var(--r-plate);box-shadow:var(--shadow)}
+.btn{width:var(--tap);height:var(--tap);border-radius:var(--r);border:var(--line) solid var(--ink);background:var(--plate);
+  box-shadow:0 4px 0 var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;flex:none;
+  transition:transform .06s, box-shadow .06s;position:relative}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.btn.on{background:var(--sun)}
+.btn.flat{box-shadow:none;border-style:dashed;background:var(--plate-2);cursor:not-allowed}
+.btn.flat:active{transform:none}
+.btn .badge{position:absolute;top:-8px;right:-8px;min-width:26px;height:26px;border-radius:13px;background:var(--berry);color:#fff;
+  font-size:var(--t-s);font-weight:700;display:grid;place-items:center;padding:0 6px;border:2px solid var(--ink)}
+.tool{display:flex;flex-direction:column;align-items:center;gap:6px;width:66px}
+.cap{font-size:var(--t-s);font-weight:600;line-height:1.15;text-align:center;white-space:nowrap}
+.cap .sub{display:block;color:var(--ink-soft);font-weight:500}
+.rowbtn{height:var(--tap);width:100%;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:var(--r);
+  border:var(--line) solid var(--ink);background:var(--plate);box-shadow:0 4px 0 var(--ink);cursor:pointer;
+  font-size:var(--t-m);font-weight:600;text-align:left}
+.rowbtn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.rowbtn.warm{background:var(--sun)}
+.s{font-size:var(--t-s)} .m{font-size:var(--t-m);font-weight:600} .l{font-size:var(--t-l);font-weight:700}
+.soft{color:var(--ink-soft)} .good{color:var(--leaf)} .bad{color:var(--berry)} .meh{color:var(--amber)}
+
+/* ===== HUD: top ===== */
+#top{position:fixed;top:var(--gutter);left:var(--gutter);right:var(--gutter);display:flex;justify-content:space-between;
+  align-items:flex-start;gap:var(--g);pointer-events:none;z-index:5}
+#top>*{pointer-events:auto}
+#res{display:flex;align-items:center;gap:4px;padding:6px 10px;min-height:var(--tap);flex-wrap:wrap;max-width:calc(100% - 4 * 64px)}
+.res{display:flex;align-items:center;gap:6px;padding:0 8px;height:40px;border-radius:12px;font-size:var(--t-m);font-weight:600}
+.res.warn{color:var(--berry)}
+.res.season{background:var(--plate-2)}
+#resMore{display:none}
+#cluster{display:flex;gap:var(--g)}
+#alerts{position:fixed;left:var(--gutter);top:calc(var(--gutter) + var(--tap) + 20px);display:flex;flex-direction:column;gap:var(--g);z-index:4}
+.alert{display:flex;align-items:center;gap:10px;height:var(--tap);padding:0 10px 0 8px;cursor:pointer;
+  font-size:var(--t-m);font-weight:600;color:var(--berry);background:var(--plate);border:var(--line) solid var(--berry);
+  border-radius:var(--r);box-shadow:0 4px 0 var(--berry)}
+.alert:active{transform:translateY(3px);box-shadow:0 1px 0 var(--berry)}
+.alert .go{color:var(--ink);font-size:var(--t-s)}
+#hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--gutter) + var(--tap) + 20px);display:none;
+  align-items:center;gap:12px;padding:8px 8px 8px 14px;max-width:min(640px,calc(100% - 2*var(--gutter)));z-index:4}
+#hint.show{display:flex}
+#hint .txt{font-size:var(--t-s);line-height:1.3}
+#hint .txt b{font-size:var(--t-m)}
+#pausePlate{position:fixed;left:50%;top:calc(var(--gutter) + var(--tap) + 20px);transform:translateX(-50%);padding:8px 8px 8px 16px;display:none;z-index:4;
+  align-items:center;gap:14px;max-width:calc(100% - 2*var(--gutter))}
+#pausePlate.show{display:flex}
+#pausePlate .rowbtn{width:auto;flex:none}
+body.pausing #hint{top:calc(var(--gutter) + var(--tap) + 100px)}
+body.pausing #toast{top:calc(var(--gutter) + var(--tap) + 100px)}
+body.pausing.hinting #toast{top:calc(var(--gutter) + var(--tap) + 180px)}
+
+/* ===== HUD: bottom tray ===== */
+#tray{position:fixed;left:50%;bottom:var(--gutter);transform:translateX(-50%);display:flex;gap:6px;padding:10px 12px 8px;z-index:5}
+.tool.poor .btn::after{content:"";position:absolute;right:4px;bottom:4px;width:10px;height:10px;border-radius:50%;background:var(--berry);border:2px solid var(--ink)}
+#toast{position:fixed;left:50%;top:calc(var(--gutter) + var(--tap) + 20px);transform:translateX(-50%);padding:10px 18px;font-size:var(--t-m);
+  font-weight:600;display:none;z-index:7;max-width:calc(100% - 2*var(--gutter));text-align:center}
+#toast.show{display:block}
+body.hinting #toast{top:calc(var(--gutter) + var(--tap) + 100px)}
+#toast.low{top:auto!important;bottom:calc(var(--gutter) + 124px)}
+
+/* ===== context bubble ===== */
+#bubble{position:fixed;width:460px;padding:14px 16px 16px;display:none;z-index:6}
+#bubble.show{display:block}
+#bubble::after{content:"";position:absolute;left:var(--tail,50%);width:22px;height:22px;background:var(--plate);
+  border:var(--line) solid var(--ink);border-top:0;border-left:0;transform:translateX(-50%) rotate(45deg);bottom:-13px}
+#bubble.below::after{bottom:auto;top:-13px;transform:translateX(-50%) rotate(-135deg)}
+#bubble.docked::after,#bubble.side::after{display:none}
+.bhead{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.avatar{width:var(--tap);height:var(--tap);border-radius:50%;border:var(--line) solid var(--ink);position:relative;flex:none}
+.avatar::before,.avatar::after{content:"";position:absolute;top:18px;width:7px;height:10px;border-radius:4px;background:var(--ink)}
+.avatar::before{left:15px}.avatar::after{right:15px}
+.bhead .who{flex:1;min-width:0}
+.bhead .who .m{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bclose{width:var(--tap);height:var(--tap)}
+.status{font-size:var(--t-s);margin:0 0 10px;line-height:1.3}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;background:var(--plate-2);font-size:var(--t-s);font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%}
+.actions{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meters{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;margin-bottom:12px;font-size:var(--t-s);font-weight:600}
+.bar{height:14px;border-radius:7px;background:var(--plate-2);border:2px solid var(--ink);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:5px;transition:width .3s}
+.picker{display:flex;flex-wrap:wrap;gap:10px 6px;justify-content:flex-start;margin-bottom:6px}
+.pickhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pickhead .m{flex:1}
+.note{font-size:var(--t-s);color:var(--ink-soft);margin:8px 0 0;line-height:1.3}
+
+/* ===== sheets (menu, the bunch, news) ===== */
+#scrim{position:fixed;inset:0;background:rgba(40,28,18,.45);display:none;z-index:8}
+#scrim.show{display:block}
+.sheet{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100% - 2*var(--gutter)));
+  max-height:calc(100% - 2*var(--gutter));overflow:auto;padding:18px;display:none;z-index:9}
+.sheet.show{display:block}
+.sheet .shead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.sheet .shead .l{flex:1}
+.stack{display:flex;flex-direction:column;gap:12px}
+.section{margin:18px 0 8px;font-size:var(--t-s);font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+.slider{display:flex;align-items:center;gap:12px;height:var(--tap);font-size:var(--t-m);font-weight:600}
+.slider span{width:90px}
+.slider input{flex:1;accent-color:#3E9B4F;height:28px}
+.row{display:flex;align-items:center;gap:12px;min-height:72px;padding:8px 10px;border-radius:var(--r);background:var(--plate-2);cursor:pointer;margin-bottom:8px}
+.row .grow{flex:1;min-width:0}
+.row .avatar{width:44px;height:44px}
+.row .avatar::before,.row .avatar::after{top:13px;width:6px;height:8px}
+.row .avatar::before{left:11px}.row .avatar::after{right:11px}
+.toolrow{display:flex;flex-wrap:wrap;gap:12px 6px}
+textarea{width:100%;min-height:96px;font:inherit;font-size:var(--t-s);padding:10px;border:var(--line) solid var(--ink);border-radius:14px;background:#fff;color:var(--ink)}
+
+/* ===== design notes (mockup chrome, not game UI) ===== */
+#notesBtn{position:fixed;right:var(--gutter);bottom:calc(var(--gutter) + 130px);z-index:7;font:600 14px system-ui,sans-serif;
+  background:#1d1d1f;color:#fff;border:2px dashed #fff;border-radius:10px;padding:8px 12px;cursor:pointer;opacity:.9}
+#notes{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:#fbfbf8;color:#1d1d1f;z-index:21;overflow:auto;
+  font:15px/1.45 system-ui,"Segoe UI",sans-serif;padding:18px 20px 40px;box-shadow:-6px 0 24px rgba(0,0,0,.25);display:none;user-select:text;-webkit-user-select:text}
+#notes.show{display:block}
+#notes h2{font-size:20px;margin:22px 0 8px}#notes h2:first-of-type{margin-top:6px}
+#notes table{border-collapse:collapse;width:100%;font-size:14px}
+#notes th,#notes td{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left;vertical-align:top}
+#notes code{font-size:13px;background:#eee;padding:0 4px;border-radius:4px}
+#notes li{margin-bottom:6px}
+#notes .jump{display:flex;flex-wrap:wrap;gap:6px}
+#notes .jump button{font:600 13px system-ui;padding:6px 10px;border-radius:8px;border:1px solid #999;background:#fff;cursor:pointer}
+#notes .x{float:right;font:600 14px system-ui;padding:6px 10px;border-radius:8px;border:1px solid #999;background:#fff;cursor:pointer}
+.better{color:#1a7f37;font-weight:700}
+
+/* ===== phone portrait ===== */
+@media (max-width:719px){
+  #top{flex-direction:column;align-items:stretch}
+  #res{max-width:none;justify-content:space-between;flex-wrap:nowrap;padding:6px}
+  #res.open{flex-wrap:wrap}
+  body.resopen{--topx:46px}
+  .res{padding:0 4px}
+  #res .wide{display:none}
+  #res.open .wide{display:flex}
+  #resMore{display:grid}
+  #cluster{align-self:flex-end}
+  #alerts{top:calc(var(--gutter) + 2 * var(--tap) + 34px + var(--topx))}
+  #hint{top:auto!important;bottom:calc(var(--gutter) + 118px);width:calc(100% - 2*var(--gutter))}
+  #pausePlate{top:calc(var(--gutter) + 2 * var(--tap) + 34px + var(--topx));width:calc(100% - 2*var(--gutter))}
+  body.pausing #alerts{display:none}
+  #tray{left:var(--gutter);right:var(--gutter);transform:none;justify-content:space-between;padding:10px 8px 8px}
+  .tool{width:auto;flex:1}
+  .picker{display:grid;grid-template-columns:repeat(4,1fr);justify-items:center}
+  #bubble{left:var(--gutter)!important;right:var(--gutter);top:auto!important;bottom:calc(var(--gutter) + 118px);width:auto;
+    max-height:calc(100% - 300px);overflow:auto}
+  #bubble::after{display:none}
+  #toast{top:calc(var(--gutter) + 3 * var(--tap) + 46px + var(--topx))}
+  body.hinting #toast,body.pausing #toast{top:calc(var(--gutter) + 3 * var(--tap) + 46px + var(--topx))}
+  body.pausing.hinting #toast{top:calc(var(--gutter) + 4 * var(--tap) + 70px + var(--topx))}
+  #notesBtn{bottom:auto;top:calc(var(--gutter) + var(--tap) + 24px + var(--topx));left:var(--gutter);right:auto;max-width:96px}
+}
+</style>
+</head>
+<body>
+
+<!-- ======================= SVG icon set (one size: 28 px) ======================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dig" viewBox="0 0 32 32"><path d="M22 4l6 6-3 3-6-6z" fill="#A9744A" stroke="#3A2618" stroke-width="2.5" stroke-linejoin="round"/><path d="M19 9l4 4-9 9-4-4z" fill="#A9744A" stroke="#3A2618" stroke-width="2.5" stroke-linejoin="round"/><path d="M10 18l4 4c-2 4-6 6-10 6 0-4 2-8 6-10z" fill="#B9C3C9" stroke="#3A2618" stroke-width="2.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-stash" viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="13" ry="8" fill="#6DBE4B" stroke="#3A2618" stroke-width="2.5"/><path d="M5 19h22M10 14l4 5M16 12v7M22 14l-4 5" stroke="#3A2618" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-basket" viewBox="0 0 32 32"><path d="M9 13c0-6 14-6 14 0" fill="none" stroke="#3A2618" stroke-width="2.5"/><path d="M4 13h24l-3 14H7z" fill="#D9A45B" stroke="#3A2618" stroke-width="2.5" stroke-linejoin="round"/><path d="M6 18h20M7 23h18M12 13l1 14M20 13l-1 14" stroke="#3A2618" stroke-width="1.8"/></symbol>
+    <symbol id="i-nest" viewBox="0 0 32 32"><path d="M3 15c2 9 24 9 26 0z" fill="#B07A47" stroke="#3A2618" stroke-width="2.5" stroke-linejoin="round"/><path d="M6 17l8 4M12 15l10 6M20 15l7 4M5 21l6-3" stroke="#3A2618" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="16" cy="13" rx="9" ry="3" fill="#F2DFC0" stroke="#3A2618" stroke-width="2"/></symbol>
+    <symbol id="i-bridge" viewBox="0 0 32 32"><rect x="3" y="5" width="26" height="6" rx="2" fill="#C68B53" stroke="#3A2618" stroke-width="2.3"/><rect x="3" y="13" width="26" height="6" rx="2" fill="#C68B53" stroke="#3A2618" stroke-width="2.3"/><rect x="3" y="21" width="26" height="6" rx="2" fill="#C68B53" stroke="#3A2618" stroke-width="2.3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 32 32"><rect x="8" y="6" width="6" height="20" rx="2.5" fill="#3A2618"/><rect x="18" y="6" width="6" height="20" rx="2.5" fill="#3A2618"/></symbol>
+    <symbol id="i-play" viewBox="0 0 32 32"><path d="M10 6l16 10-16 10z" fill="#3A2618" stroke="#3A2618" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 32 32"><circle cx="7" cy="16" r="3.5" fill="#3A2618"/><circle cx="16" cy="16" r="3.5" fill="#3A2618"/><circle cx="25" cy="16" r="3.5" fill="#3A2618"/></symbol>
+    <symbol id="i-bunch" viewBox="0 0 32 32"><path d="M3 26c0-9 4-13 8-13s8 4 8 13z" fill="#8FD3F0" stroke="#3A2618" stroke-width="2.3" stroke-linejoin="round"/><path d="M13 26c0-11 5-16 9-16s7 5 7 16z" fill="#F59AC0" stroke="#3A2618" stroke-width="2.3" stroke-linejoin="round"/><circle cx="20" cy="17" r="1.5" fill="#3A2618"/><circle cx="25" cy="17" r="1.5" fill="#3A2618"/></symbol>
+    <symbol id="i-stick" viewBox="0 0 32 32"><path d="M5 27L27 5M14 18l-5-7" stroke="#8A5A33" stroke-width="5" stroke-linecap="round"/><path d="M5 27L27 5M14 18l-5-7" stroke="#3A2618" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".5"/></symbol>
+    <symbol id="i-grass" viewBox="0 0 32 32"><path d="M6 28c0-8-2-14-4-18 5 3 7 9 8 18M14 28c0-10 0-17 2-24 2 7 2 14 2 24M22 28c1-9 3-15 8-18-2 4-4 10-4 18" fill="#5DB043" stroke="#3A2618" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 32 32"><path d="M5 27C5 12 14 5 28 4c0 14-8 23-23 23z" fill="#7CC657" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M6 26C12 20 17 14 22 10" stroke="#3A2618" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-shiny" viewBox="0 0 32 32"><path d="M16 3l11 9-11 17L5 12z" fill="#9EE3F5" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M5 12h22M11 12l5 17 5-17-5-9z" stroke="#3A2618" stroke-width="1.6" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-food" viewBox="0 0 32 32"><circle cx="11" cy="19" r="7" fill="#E2557A" stroke="#3A2618" stroke-width="2.3"/><circle cx="21" cy="20" r="7" fill="#E2557A" stroke="#3A2618" stroke-width="2.3"/><path d="M16 12c0-4 2-7 6-8" stroke="#3A2618" stroke-width="2.3" fill="none" stroke-linecap="round"/><path d="M17 7c3-2 6-1 7 1-3 1-5 1-7-1z" fill="#5DB043" stroke="#3A2618" stroke-width="1.6"/></symbol>
+    <symbol id="i-hungry" viewBox="0 0 32 32"><path d="M3 15h26c0 8-6 12-13 12S3 23 3 15z" fill="#F5E4C3" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 10c0-3 2-3 2-6M18 10c0-3 2-3 2-6" stroke="#3A2618" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-grumble" viewBox="0 0 32 32"><path d="M6 24c-4 0-5-6-1-7 0-5 6-7 9-4 2-4 10-3 10 2 5 0 5 9 0 9z" fill="#C9C3D6" stroke="#3A2618" stroke-width="2.3" stroke-linejoin="round"/><path d="M9 29l3-4M15 29l2-4M21 29l2-4" stroke="#3A2618" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="#FFE9A8" stroke="#3A2618" stroke-width="2.4"/><path d="M16 9v7l5 3" stroke="#3A2618" stroke-width="2.5" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 32 32"><circle cx="16" cy="16" r="7" fill="#FFD45C" stroke="#3A2618" stroke-width="2.4"/><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3" stroke="#3A2618" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-speed1" viewBox="0 0 32 32"><path d="M11 7l9 9-9 9" fill="none" stroke="#3A2618" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-speed2" viewBox="0 0 32 32"><path d="M6 7l9 9-9 9M16 7l9 9-9 9" fill="none" stroke="#3A2618" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-speed4" viewBox="0 0 32 32"><path d="M2 8l7 8-7 8M10 8l7 8-7 8M18 8l7 8-7 8" fill="none" stroke="#3A2618" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 8v16" stroke="#3A2618" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 32 32"><path d="M9 9l14 14M23 9L9 23" stroke="#3A2618" stroke-width="4" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 32 32"><path d="M6 17l7 7L26 9" stroke="#3A2618" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-follow" viewBox="0 0 32 32"><path d="M2 16c4-7 9-10 14-10s10 3 14 10c-4 7-9 10-14 10S6 23 2 16z" fill="#fff" stroke="#3A2618" stroke-width="2.4"/><circle cx="16" cy="16" r="5" fill="#3A2618"/><circle cx="18" cy="14" r="1.6" fill="#fff"/></symbol>
+    <symbol id="i-next" viewBox="0 0 32 32"><path d="M4 16h20M17 8l8 8-8 8" stroke="#3A2618" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 32 32"><path d="M28 16H8M15 8l-8 8 8 8" stroke="#3A2618" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-forager" viewBox="0 0 32 32"><circle cx="10" cy="19" r="5" fill="#E2557A" stroke="#3A2618" stroke-width="2.2"/><circle cx="20" cy="22" r="5" fill="#E2557A" stroke="#3A2618" stroke-width="2.2"/><circle cx="19" cy="12" r="5" fill="#E2557A" stroke="#3A2618" stroke-width="2.2"/><path d="M19 7c1-3 4-4 7-4" stroke="#3A2618" stroke-width="2.2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-gatherer" viewBox="0 0 32 32"><path d="M4 22L26 8M6 28l22-10" stroke="#8A5A33" stroke-width="5" stroke-linecap="round"/><path d="M16 15l-3-7" stroke="#8A5A33" stroke-width="4" stroke-linecap="round"/><path d="M13 8c-3-1-5 1-5 3 3 1 5 0 5-3z" fill="#7CC657" stroke="#3A2618" stroke-width="1.6"/></symbol>
+    <symbol id="i-digger" viewBox="0 0 32 32"><use href="#i-dig"/></symbol>
+    <symbol id="i-builder" viewBox="0 0 32 32"><rect x="12" y="13" width="5" height="16" rx="2" fill="#A9744A" stroke="#3A2618" stroke-width="2.2"/><rect x="5" y="5" width="20" height="9" rx="3" fill="#B9C3C9" stroke="#3A2618" stroke-width="2.4"/></symbol>
+    <symbol id="i-caretaker" viewBox="0 0 32 32"><path d="M16 28C6 21 3 16 3 11c0-4 3-7 7-7 3 0 5 2 6 4 1-2 3-4 6-4 4 0 7 3 7 7 0 5-3 10-13 17z" fill="#F59AC0" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-hunter" viewBox="0 0 32 32"><ellipse cx="16" cy="21" rx="7" ry="6" fill="#F2C27B" stroke="#3A2618" stroke-width="2.3"/><circle cx="7" cy="13" r="3.5" fill="#F2C27B" stroke="#3A2618" stroke-width="2.2"/><circle cx="12.5" cy="7.5" r="3.5" fill="#F2C27B" stroke="#3A2618" stroke-width="2.2"/><circle cx="19.5" cy="7.5" r="3.5" fill="#F2C27B" stroke="#3A2618" stroke-width="2.2"/><circle cx="25" cy="13" r="3.5" fill="#F2C27B" stroke="#3A2618" stroke-width="2.2"/></symbol>
+    <symbol id="i-none" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="none" stroke="#3A2618" stroke-width="3"/><path d="M8 24L24 8" stroke="#3A2618" stroke-width="3"/></symbol>
+    <symbol id="i-feed" viewBox="0 0 32 32"><path d="M3 14h26c0 8-6 13-13 13S3 22 3 14z" fill="#F5E4C3" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><circle cx="12" cy="12" r="4" fill="#9B5FD1" stroke="#3A2618" stroke-width="1.8"/><circle cx="19" cy="11" r="4" fill="#9B5FD1" stroke="#3A2618" stroke-width="1.8"/></symbol>
+    <symbol id="i-wash" viewBox="0 0 32 32"><circle cx="11" cy="19" r="7" fill="#CDEFFF" stroke="#3A2618" stroke-width="2.3"/><circle cx="22" cy="12" r="5" fill="#CDEFFF" stroke="#3A2618" stroke-width="2.3"/><circle cx="23" cy="24" r="3.5" fill="#CDEFFF" stroke="#3A2618" stroke-width="2"/><path d="M8 16a4 4 0 0 1 4-3" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="#FFD45C" stroke="#3A2618" stroke-width="2.4"/><path d="M4 16c8-4 16-4 24 0M16 4c-4 8-4 16 0 24" stroke="#E2557A" stroke-width="3" fill="none"/></symbol>
+    <symbol id="i-nap" viewBox="0 0 32 32"><path d="M21 4A12 12 0 1 0 28 22 10 10 0 0 1 21 4z" fill="#C9C3F0" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 32 32"><path d="M6 9h20l-2 19H8z" fill="#F5E4C3" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M4 9h24M12 9V5h8v4M13 14v9M19 14v9" stroke="#3A2618" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-news" viewBox="0 0 32 32"><rect x="5" y="4" width="22" height="25" rx="3" fill="#fff" stroke="#3A2618" stroke-width="2.4"/><path d="M10 11h12M10 16h12M10 21h8" stroke="#3A2618" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 32 32"><path d="M4 12h6l8-6v20l-8-6H4z" fill="#FFE9A8" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 11c2 3 2 7 0 10M25 7c4 5 4 13 0 18" stroke="#3A2618" stroke-width="2.4" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-restart" viewBox="0 0 32 32"><path d="M26 16A10 10 0 1 1 22 8" stroke="#3A2618" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M17 3l7 5-6 6" stroke="#3A2618" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-home" viewBox="0 0 32 32"><path d="M4 16L16 5l12 11v12H4z" fill="#F2C27B" stroke="#3A2618" stroke-width="2.4" stroke-linejoin="round"/><path d="M13 28v-8h6v8" fill="#A9744A" stroke="#3A2618" stroke-width="2.4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 32 32"><path d="M6 14v13h20V14" fill="none" stroke="#3A2618" stroke-width="2.6" stroke-linejoin="round"/><path d="M16 20V4M10 10l6-6 6 6" stroke="#3A2618" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-history" viewBox="0 0 32 32"><circle cx="17" cy="16" r="11" fill="#fff" stroke="#3A2618" stroke-width="2.4"/><path d="M17 10v6l4 3M2 13l4 4 4-4" stroke="#3A2618" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-finger" viewBox="0 0 32 32"><path d="M12 28c-4-3-7-7-7-10 0-2 2-3 4-1l3 3V6a2.5 2.5 0 0 1 5 0v8l7 1c2 0 3 2 3 4l-1 6c0 2-2 3-4 3z" fill="#F2C27B" stroke="#3A2618" stroke-width="2.2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-egg" viewBox="0 0 32 32"><path d="M16 3c6 0 11 10 11 16a11 11 0 0 1-22 0C5 13 10 3 16 3z" fill="#7ED08A" stroke="#3A2618" stroke-width="2.4"/><circle cx="12" cy="17" r="1.8" fill="#3A2618"/><circle cx="20" cy="17" r="1.8" fill="#3A2618"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 32 32"><rect x="4" y="4" width="24" height="24" rx="6" fill="#B8E8A0" stroke="#3A2618" stroke-width="2.4"/><path d="M16 9v14M9 16h14" stroke="#3A2618" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-more" viewBox="0 0 32 32"><path d="M8 12l8 8 8-8" stroke="#3A2618" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="f-grapes" viewBox="0 0 32 32"><g fill="#9B5FD1" stroke="#3A2618" stroke-width="1.8"><circle cx="11" cy="12" r="4.5"/><circle cx="20" cy="12" r="4.5"/><circle cx="15.5" cy="19" r="4.5"/><circle cx="15.5" cy="26" r="3.5"/></g><path d="M15 7c0-3 2-4 4-5" stroke="#3A2618" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="f-fish" viewBox="0 0 32 32"><path d="M3 16c5-7 13-8 19-2l7-5v14l-7-5c-6 6-14 5-19-2z" fill="#7FB7E6" stroke="#3A2618" stroke-width="2.3" stroke-linejoin="round"/><circle cx="9" cy="15" r="1.8" fill="#3A2618"/></symbol>
+    <symbol id="f-chili" viewBox="0 0 32 32"><path d="M8 9c6 0 6 10 12 14 4 3 8 3 9 5-8 2-17-1-21-8-2-4-2-8 0-11z" fill="#E2463A" stroke="#3A2618" stroke-width="2.3" stroke-linejoin="round"/><path d="M8 9c0-3 1-5 4-6" stroke="#2E7D3E" stroke-width="3" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="f-candy" viewBox="0 0 32 32"><circle cx="16" cy="16" r="7" fill="#F59AC0" stroke="#3A2618" stroke-width="2.3"/><path d="M9 16l-6-5v10zM23 16l6-5v10z" fill="#FFD45C" stroke="#3A2618" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="f-steak" viewBox="0 0 32 32"><path d="M6 10c4-6 16-7 21 0 4 6-2 15-10 15-6 0-14-7-11-15z" fill="#D8676B" stroke="#3A2618" stroke-width="2.3"/><circle cx="20" cy="14" r="3" fill="#fff" stroke="#3A2618" stroke-width="1.8"/></symbol>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="rgba(255,212,92,.35)"/><rect width="4" height="10" fill="rgba(58,38,24,.45)"/></pattern>
+    <pattern id="clayDots" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#D98C62"/><circle cx="5" cy="6" r="1.6" fill="#C0724A"/><circle cx="14" cy="14" r="1.4" fill="#E9A57F"/></pattern>
+  </defs>
+</svg>
+
+<!-- ======================= the meadow ======================= -->
+<div id="viewport">
+  <div id="world">
+    <svg id="ground"></svg>
+    <div id="things"></div>
+    <div id="ghost"></div>
+  </div>
+</div>
+
+<!-- ======================= HUD ======================= -->
+<div id="top">
+  <div id="res" class="plate" aria-label="Meadow stock"></div>
+  <div id="cluster">
+    <button class="btn" id="bPause" title="Pause (Space)"><svg class="i"><use href="#i-pause"/></svg></button>
+    <button class="btn" id="bSpeed" title="Game speed"><svg class="i"><use href="#i-speed1"/></svg></button>
+    <button class="btn" id="bBunch" title="The bunch (U)"><svg class="i"><use href="#i-bunch"/></svg></button>
+    <button class="btn" id="bMenu" title="Menu (Esc)"><svg class="i"><use href="#i-menu"/></svg></button>
+  </div>
+</div>
+<div id="alerts"></div>
+<div id="hint" class="plate"></div>
+<div id="pausePlate" class="plate">
+  <div><div class="m">Paused</div><div class="s soft">The bunch is having a little rest. You can still mark and place things.</div></div>
+  <button class="rowbtn warm" id="bCarry"><svg class="i"><use href="#i-play"/></svg>Carry on</button>
+</div>
+<div id="bubble" class="plate"></div>
+<div id="toast" class="plate"></div>
+<nav id="tray" class="plate" aria-label="Tools"></nav>
+
+<div id="scrim"></div>
+<div id="menuSheet" class="sheet plate"></div>
+<div id="bunchSheet" class="sheet plate"></div>
+<div id="newsSheet" class="sheet plate"></div>
+
+<button id="notesBtn">Design notes</button>
+<aside id="notes">
+  <button class="x" id="notesX">Close</button>
+  <h2>Jump to a state</h2>
+  <div class="jump">
+    <button data-jump="default">Default play</button>
+    <button data-jump="picked">Morphi picked</button>
+    <button data-jump="jobs">Job picker open</button>
+    <button data-jump="place">Placing a stash</button>
+    <button data-jump="dig">Marking clay</button>
+    <button data-jump="baby">Baby needs care</button>
+    <button data-jump="feed">Feeding (food bag)</button>
+    <button data-jump="speed">Speed 4x</button>
+    <button data-jump="paused">Paused</button>
+    <button data-jump="menu">Menu</button>
+    <button data-jump="bunch">The bunch</button>
+  </div>
+  <p style="margin-top:10px">Everything is live: tap a blob, tap a tool and tap or drag on the meadow, drag empty grass to pan. Keys: 1-5 tools, Space pause, U the bunch, Esc backs out of whatever is open.</p>
+
+  <h2>Size and type scale (the only tokens)</h2>
+  <table>
+    <tr><th>Token</th><th>Value</th><th>Used for</th></tr>
+    <tr><td><code>--tap</code></td><td>56 px</td><td>Height of every tap target. Tools, bubble actions, top cluster: 56 px squares. Menu rows: 56 px tall, full width.</td></tr>
+    <tr><td><code>--icon</code></td><td>28 px</td><td>Every HUD icon (tools, stock, jobs, foods, actions).</td></tr>
+    <tr><td><code>--t-s</code></td><td>16 px / 500-600</td><td>Body, captions under buttons, hints, status lines. Nothing is smaller.</td></tr>
+    <tr><td><code>--t-m</code></td><td>20 px / 600</td><td>Names, stock counts, row-button labels, alerts, toasts.</td></tr>
+    <tr><td><code>--t-l</code></td><td>28 px / 700</td><td>Sheet titles only (Menu, The bunch, News).</td></tr>
+    <tr><td><code>--g</code> / <code>--gutter</code></td><td>8 / 16 px</td><td>Gap between things / screen edge to HUD.</td></tr>
+    <tr><td><code>--r</code> / <code>--r-plate</code></td><td>18 / 24 px</td><td>Button / plate corners. 3 px ink outline, 4-5 px "toy lip" shadow.</td></tr>
+    <tr><td>Colours</td><td colspan="2">Ink #3A2618 on cream plate #FFF6E3 (13:1). Soft ink 7:1. Good #2E7D3E, so-so #8F5600, alert #B8304B all at least 5:1 on the plate. "On" = sun #FFD45C fill. Text is only ever on a solid plate, never on the meadow.</td></tr>
+    <tr><td>Face</td><td colspan="2">Fredoka (rounded, wide counters). In LÖVE: one rounded TTF at 3 sizes, drawn at integer HUD scales (1x, 1.5x, 2x), no shrink-to-fit fallback chain.</td></tr>
+  </table>
+
+  <h2>What is wrong with the current UI</h2>
+  <ol>
+    <li><b>Too many text sizes, picked per string.</b> Two font sets of five sizes each (desk 10/12/16/26/46, touch 12/14/18/28/44) at <code>src/ui.lua:44-47</code>. Then almost every label goes through a fallback chain <code>{hud, small, tiny}</code> and takes the first size that fits (<code>printLine</code> / <code>printFit</code>, <code>src/ui.lua:375-430</code>; tool labels <code>src/ui.lua:1043-1055</code>), so labels of the same kind sit side by side in different sizes.</li>
+    <li><b>Text gets tiny, then cut off.</b> The whole HUD is drawn at a fractional scale clamped to 0.6-3.0 (<code>src/ui.lua:131-143</code>), so the 10 px face can land near 6 px. The C64 face (<code>src/ui.lua:16</code>) is very wide, so strings get cut: at 1280x720 the tray reads "2 stick..", "1 stick..", and the hint "Click a morphi with SELECT to see what i..".</li>
+    <li><b>About a dozen button sizes.</b> Top bar 28/34 tall (<code>src/ui.lua:149</code>); tools 60/64 tall and 56-120 wide (<code>src/ui.lua:157,186</code>); FOLLOW 76x22 / JOBS 56x22 (<code>src/ui.lua:1154-1155</code>); the narrow strip's JOBS 64x20 and FOLLOW 70x20 (<code>src/ui.lua:1222,1225</code>); panel rows 40 (<code>src/ui.lua:243</code>); tama buttons 34/40 (<code>src/ui.lua:1461</code>); job grid 38, then 30, then 26 (<code>src/ui.lua:1628,1671-1672</code>); MEADOW 110x32, CLOSE 96x30 (<code>src/ui.lua:1426,1550</code>). A 20 px button is half a fingertip.</li>
+    <li><b>Text straight over the meadow.</b> Alerts sit on 65% black (<code>src/ui.lua:991</code>), the toast on 75% (<code>src/ui.lua:1240</code>), the narrow morphi strip on 60% (<code>src/ui.lua:1216</code>), with red text (<code>C.warn</code>) over a busy, bright, moving map.</li>
+    <li><b>The top bar folds at an ordinary desktop size.</b> At 1280x720 the stock collapses into one "HUNGRY 0" dropdown and ten buttons hide under a gear (<code>src/ui.lua:735-736</code>). Reading your sticks takes a tap, and SPEED is gear, then SPEED.</li>
+    <li><b>Picking a morphi needs the SELECT tool.</b> With any other tool a tap on the map acts (<code>main.lua:1684-1700</code>), so after digging you go back to SELECT first. Even the J key answers "Select a morphi first (SELECT tool, then tap one)" (<code>main.lua:1226</code>).</li>
+    <li><b>Jobs are a modal form.</b> 13 buttons, three explanation sentences, UNITS and CLOSE (<code>src/ui.lua:1621-1730</code>). FORAGER shows in red in the neutral row with no reason until you tap it.</li>
+    <li><b>Baby care is two stacked full screens.</b> TEND opens the tama panel (<code>src/ui.lua:1414</code>), FOOD opens the food bag over it (<code>src/ui.lua:1524</code>), then MEADOW to get back.</li>
+    <li><b>Banned word in the voice.</b> The menu asks "Quit to the title screen?" with a QUIT button (<code>src/ui.lua:2422-2424</code>). "quit" is on the CLAUDE.md banned list.</li>
+    <li><b>Things on screen push each other around.</b> The pause banner, restart call, goal box, alerts, follow arrows and toast each place themselves against the others (<code>bannerBottom</code> / <code>restartBottom</code>, <code>src/ui.lua:1747-1790, 938-955</code>), so the layout changes with whatever happens to be showing.</li>
+    <li><b>Phone portrait wastes the tray.</b> Four tools per row (<code>src/ui.lua:165</code>) leaves a half-empty second row for 6 tools, plus a hint block in two sizes.</li>
+  </ol>
+
+  <h2>Taps per core action: before and after</h2>
+  <table>
+    <tr><th>Action</th><th>Now</th><th>Toybox</th><th>How</th></tr>
+    <tr><td>Mark clay to dig</td><td>2</td><td>2</td><td>Dig, drag. The mark stays visible; Done or Esc to leave.</td></tr>
+    <tr><td>Dig, then pick a morphi</td><td>4</td><td class="better">3</td><td>No SELECT tool: tapping a blob always picks it, in any mode.</td></tr>
+    <tr><td>Place a stash / basket / nest</td><td>2</td><td>2</td><td>Tool, tap. Ghost tile shows green/red before you tap; cost sits in the hint.</td></tr>
+    <tr><td>Lay a bridge</td><td>2</td><td>2</td><td>Bridge, drag across the stream.</td></tr>
+    <tr><td>Change a morphi's main job</td><td>4-5</td><td class="better">3</td><td>Tap blob, tap the "First" job, tap the new job. (2 once the morphi is picked.)</td></tr>
+    <tr><td>Change both jobs</td><td>5-6</td><td class="better">5</td><td>Tap blob, First, job, Then, job. No panel to close.</td></tr>
+    <tr><td>Feed a baby</td><td>5-6</td><td class="better">3</td><td>Tap baby (or its alert), Feed, tap a food. Foods show count and liking inline.</td></tr>
+    <tr><td>Wash / play / nap a baby</td><td>4-5</td><td class="better">2</td><td>Tap baby, Wash. No full screen to leave.</td></tr>
+    <tr><td>Go to the baby an alert is about</td><td>3</td><td class="better">1</td><td>The alert pill opens the baby's bubble and centres it.</td></tr>
+    <tr><td>Change game speed (1280x720)</td><td>2-3</td><td class="better">1-2</td><td>Speed is always on the bar and cycles 1x, 2x, 4x.</td></tr>
+    <tr><td>Pause</td><td>1</td><td>1</td><td>Pause button or Space.</td></tr>
+    <tr><td>Read sticks / grass / shinies (1280x720)</td><td>1</td><td class="better">0</td><td>Always shown. Phone: 4 key numbers shown, the rest 1 tap.</td></tr>
+    <tr><td>Open the bunch list (1280x720)</td><td>2</td><td class="better">1</td><td>The bunch button sits on the bar.</td></tr>
+    <tr><td>Export the run</td><td>2</td><td>2</td><td>Menu, Export. DEV leaves the top bar; the tester row is on the menu's first page.</td></tr>
+    <tr><td>Back to the title</td><td>2-3</td><td class="better">2</td><td>Menu, Back to title.</td></tr>
+  </table>
+</aside>
+
+<script>
+(() => {
+'use strict';
+// ---------------------------------------------------------------- world
+const T = 40, COLS = 36, ROWS = 22, W = COLS * T, H = ROWS * T;
+const $ = s => document.querySelector(s);
+const icon = (id, extra = '') => `<svg class="i" ${extra}><use href="#${id}"/></svg>`;
+const streamC = r => 21 + 1.6 * Math.sin(r / 2.8);
+const isWater = (c, r) => Math.abs(c + 0.5 - streamC(r + 0.5)) < 1.15;
+const patches = [{ c: 7, r: 6, rx: 5, ry: 3.6 }, { c: 11, r: 17, rx: 6, ry: 3.2 }, { c: 30.5, r: 16, rx: 3.8, ry: 3.8 }, { c: 29, r: 4, rx: 3, ry: 2.2 }];
+const key = (c, r) => c + ',' + r;
+const tiles = new Map();
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+  const water = isWater(c, r);
+  const clay = !water && patches.some(p => ((c + 0.5 - p.c) / p.rx) ** 2 + ((r + 0.5 - p.r) / p.ry) ** 2 < 1);
+  tiles.set(key(c, r), { c, r, water, clay, dug: false, marked: false, plank: 0 });
+}
+const tile = (c, r) => tiles.get(key(c, r));
+const HOME = { c: 15, r: 9 }; // 2x2
+const bushes = [[12, 11], [17, 4], [25, 8], [26, 13], [14, 13], [18, 16]];
+const trees = [[3, 13], [25, 3], [33, 9], [8, 20], [24, 19], [1, 2], [34, 20]];
+const occupied = new Set();
+for (let dc = 0; dc < 2; dc++) for (let dr = 0; dr < 2; dr++) occupied.add(key(HOME.c + dc, HOME.r + dr));
+bushes.concat(trees).forEach(([c, r]) => occupied.add(key(c, r)));
+
+// ---------------------------------------------------------------- state
+const S = {
+  sticks: 4, grass: 2, leaves: 1, shinies: 0, grumbles: 0,
+  season: 'Spring', timer: 180, speed: 1, paused: false,
+  mode: null, sel: null, sub: null, follow: false, resOpen: false,
+  sheet: null, menuPage: 'main', news: ['Spring begins. Three little blobs and a baby wake up in the meadow.'],
+  camX: 0, camY: 0, vol: { music: 70, effects: 80, alerts: 90 },
+};
+const JOBS = [
+  { id: 'forager', label: 'Forager', doing: 'Picking berries' },
+  { id: 'gatherer', label: 'Gatherer', doing: 'Gathering sticks' },
+  { id: 'digger', label: 'Digger', doing: 'Digging clay' },
+  { id: 'builder', label: 'Builder', doing: 'Building' },
+  { id: 'caretaker', label: 'Caretaker', doing: 'Looking after Pip' },
+  { id: 'hunter', label: 'Hunter', doing: 'Chasing a critter' },
+];
+const jobOf = id => JOBS.find(j => j.id === id);
+const FOODS = { grapes: 'grapes', fish: 'fish', chili: 'chili', candy: 'candy', steak: 'meat', cheese: 'cheese' };
+const morphis = [
+  { id: 'dave', name: 'Dave', species: 'Pupper', color: '#F2C27B', diet: 'steak', jobs: { main: 'forager', neutral: 'hunter', disliked: 'gatherer' }, hunger: 'Fed', mood: 'fine', x: 560, y: 360 },
+  { id: 'mimi', name: 'Mimi', species: 'Twins', color: '#F59AC0', diet: 'cheese', jobs: { main: 'gatherer', neutral: 'builder', disliked: 'hunter' }, hunger: 'Fed', mood: 'cheery', x: 720, y: 330 },
+  { id: 'bob', name: 'Bob', species: 'Blob', color: '#8FD3F0', diet: 'candy', jobs: { main: 'digger', neutral: 'forager', disliked: 'caretaker' }, hunger: 'Peckish', mood: 'fine', x: 520, y: 470 },
+  { id: 'pip', name: 'Pip', species: 'Ribbit', color: '#7ED08A', diet: 'grapes', hates: 'chili', baby: true, grows: 220,
+    needs: { tummy: 26, fun: 64, clean: 52, sleep: 78 }, x: 690, y: 450, nap: 0 },
+];
+morphis.forEach(m => { m.tx = m.x; m.ty = m.y; m.wait = Math.random() * 2; });
+let nextId = 1;
+const buildings = [
+  { id: 'b' + nextId++, type: 'basket', c: 13, r: 9, built: true, items: ['grapes', 'grapes', 'fish'] },
+  { id: 'b' + nextId++, type: 'stash', c: 18, r: 11, built: true, items: ['chili'] },
+];
+buildings.forEach(b => occupied.add(key(b.c, b.r)));
+const BUILD = {
+  stash: { label: 'Stash', icon: 'i-stash', cost: {}, costText: 'free', holds: 1, blurb: 'A leaf mat. Holds one thing.' },
+  basket: { label: 'Basket', icon: 'i-basket', cost: { grass: 1 }, costText: '1 grass', holds: 4, blurb: 'Holds four things.' },
+  nest: { label: 'Nest', icon: 'i-nest', cost: { sticks: 2, grass: 2, leaves: 1 }, costText: '2 sticks, 2 grass, 1 leaf', holds: 0, blurb: 'Naps here are shorter and do more good.' },
+};
+const TOOLS = [
+  { id: 'dig', label: 'Dig', icon: 'i-dig' },
+  { id: 'stash', label: 'Stash', icon: 'i-stash' },
+  { id: 'basket', label: 'Basket', icon: 'i-basket' },
+  { id: 'nest', label: 'Nest', icon: 'i-nest' },
+  { id: 'bridge', label: 'Bridge', icon: 'i-bridge' },
+];
+const canAfford = cost => Object.entries(cost).every(([k, v]) => S[k] >= v);
+const pay = cost => Object.entries(cost).forEach(([k, v]) => S[k] -= v);
+const foodCount = () => buildings.reduce((n, b) => n + (b.built ? b.items.length : 0), 0);
+const foodCap = () => buildings.reduce((n, b) => n + (b.built ? BUILD[b.type].holds : 0), 0);
+const pantry = () => { const p = {}; buildings.forEach(b => b.built && b.items.forEach(f => p[f] = (p[f] || 0) + 1)); return p; };
+
+// ---------------------------------------------------------------- draw the ground (static + marks)
+const svg = $('#ground');
+svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+function drawGround() {
+  let s = `<rect width="${W}" height="${H}" fill="#9BD36A"/>`;
+  // soft lighter patches of grass
+  [[200, 120, 160], [900, 640, 200], [1200, 300, 150], [420, 760, 140], [700, 200, 120]].forEach(([x, y, r]) => s += `<circle cx="${x}" cy="${y}" r="${r}" fill="#A9DB7A" opacity=".6"/>`);
+  // tufts
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * W, y = rnd() * H, c = Math.floor(x / T), r = Math.floor(y / T), t = tile(c, r);
+    if (!t || t.water || t.clay) continue;
+    s += `<path d="M${x - 6} ${y}q2 -9 4 -10M${x} ${y}q0 -10 1 -13M${x + 6} ${y}q-1 -8 -4 -10" stroke="#6BAF45" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+  }
+  // stream
+  let d = '';
+  for (let r = -1; r <= ROWS + 1; r += 0.5) d += (d ? 'L' : 'M') + (streamC(r) * T).toFixed(1) + ' ' + (r * T).toFixed(1);
+  s += `<path d="${d}" stroke="#4FA9D6" stroke-width="${2.3 * T + 8}" fill="none" stroke-linejoin="round"/>`;
+  s += `<path d="${d}" stroke="#7CC6EA" stroke-width="${2.3 * T - 6}" fill="none" stroke-linejoin="round"/>`;
+  s += `<path d="${d}" stroke="#B5E3F6" stroke-width="6" fill="none" stroke-dasharray="18 40" stroke-linecap="round"/>`;
+  // clay
+  s += '<g id="clayG"></g>';
+  // home nest
+  const hx = (HOME.c + 1) * T, hy = (HOME.r + 1) * T;
+  s += `<ellipse cx="${hx}" cy="${hy + 6}" rx="46" ry="34" fill="#8A5A33" stroke="#3A2618" stroke-width="3"/>`;
+  s += `<ellipse cx="${hx}" cy="${hy}" rx="34" ry="22" fill="#E9D3A6" stroke="#3A2618" stroke-width="3"/>`;
+  for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; s += `<path d="M${hx + Math.cos(a) * 38} ${hy + 6 + Math.sin(a) * 26}l${Math.cos(a + 1.4) * 16} ${Math.sin(a + 1.4) * 10}" stroke="#5E3B1F" stroke-width="4" stroke-linecap="round"/>`; }
+  // bushes and trees
+  bushes.forEach(([c, r]) => {
+    const x = c * T + 20, y = r * T + 22;
+    s += `<circle cx="${x - 9}" cy="${y + 2}" r="12" fill="#4E9A3E" stroke="#3A2618" stroke-width="2.5"/><circle cx="${x + 9}" cy="${y + 2}" r="12" fill="#4E9A3E" stroke="#3A2618" stroke-width="2.5"/><circle cx="${x}" cy="${y - 7}" r="13" fill="#5BAA48" stroke="#3A2618" stroke-width="2.5"/>`;
+    [[-8, -2], [6, -8], [8, 5], [-3, 7]].forEach(([dx, dy]) => s += `<circle cx="${x + dx}" cy="${y + dy}" r="3.5" fill="#E2557A" stroke="#3A2618" stroke-width="1.2"/>`);
+  });
+  trees.forEach(([c, r]) => {
+    const x = c * T + 20, y = r * T + 24;
+    s += `<rect x="${x - 5}" y="${y - 2}" width="10" height="18" rx="3" fill="#8A5A33" stroke="#3A2618" stroke-width="2.5"/><circle cx="${x}" cy="${y - 14}" r="22" fill="#3F8A3A" stroke="#3A2618" stroke-width="3"/><circle cx="${x - 7}" cy="${y - 20}" r="7" fill="#58A54C"/>`;
+  });
+  s += '<g id="plankG"></g><g id="marksG"></g><g id="previewG"></g>';
+  svg.innerHTML = s;
+  drawClay();
+}
+function drawClay() {
+  let s = '', m = '', p = '';
+  tiles.forEach(t => {
+    const x = t.c * T, y = t.r * T;
+    if (t.clay && !t.dug) s += `<rect x="${x + 1}" y="${y + 1}" width="${T - 2}" height="${T - 2}" rx="7" fill="url(#clayDots)" stroke="#B3653F" stroke-width="2"/>`;
+    if (t.clay && t.dug) s += `<rect x="${x + 1}" y="${y + 1}" width="${T - 2}" height="${T - 2}" rx="7" fill="#8C5B3B" stroke="#6E4429" stroke-width="2"/>`;
+    if (t.marked) m += `<rect x="${x + 3}" y="${y + 3}" width="${T - 6}" height="${T - 6}" rx="6" fill="url(#hatch)" stroke="#3A2618" stroke-width="2.5" stroke-dasharray="6 4"/>`;
+    if (t.plank) {
+      const solid = t.plank === 2;
+      p += `<g opacity="${solid ? 1 : .55}"><rect x="${x + 2}" y="${y + 6}" width="${T - 4}" height="${T - 12}" rx="5" fill="#C68B53" stroke="#3A2618" stroke-width="2.5" ${solid ? '' : 'stroke-dasharray="5 4"'}/><path d="M${x + 14} ${y + 8}v${T - 16}M${x + 26} ${y + 8}v${T - 16}" stroke="#3A2618" stroke-width="2"/></g>`;
+    }
+  });
+  $('#clayG').innerHTML = s; $('#marksG').innerHTML = m; $('#plankG').innerHTML = p;
+}
+
+// ---------------------------------------------------------------- things layer (buildings + morphis)
+const things = $('#things');
+function drawThings() {
+  let s = `<div class="worldlabel" style="left:${(HOME.c + 1) * T}px;top:${(HOME.r + 2) * T + 12}px">Home nest</div>`;
+  buildings.forEach(b => {
+    const picked = S.sel && S.sel.kind === 'building' && S.sel.ref === b;
+    s += `<div class="bld ${b.built ? '' : 'site'} ${picked ? 'picked' : ''}" data-b="${b.id}" style="left:${b.c * T}px;top:${b.r * T}px">${icon(BUILD[b.type].icon)}</div>`;
+  });
+  morphis.forEach(m => {
+    s += `<div class="morphi ${m.baby ? 'baby' : ''}" data-m="${m.id}"><div class="ring"></div><div class="body" style="background:${m.color}"><div class="eye l"></div><div class="eye r"></div></div>`
+      + `<div class="need">${icon('i-hungry')}</div><div class="zz">z z</div><div class="tag">${m.name}</div></div>`;
+  });
+  things.innerHTML = s;
+  morphis.forEach(m => m.el = things.querySelector(`[data-m="${m.id}"]`));
+  placeMorphis();
+}
+function placeMorphis() {
+  morphis.forEach(m => {
+    m.el.style.transform = `translate(${m.x}px,${m.y}px)`;
+    const picked = S.sel && S.sel.ref === m;
+    m.el.classList.toggle('picked', !!picked);
+    if (m.baby) {
+      const need = babyNeed(m);
+      m.el.classList.toggle('needy', !!need && !m.nap);
+      m.el.classList.toggle('napping', m.nap > 0);
+      if (need) m.el.querySelector('.need use').setAttribute('href', '#' + NEED_ICON[need]);
+    }
+  });
+}
+
+// ---------------------------------------------------------------- camera
+const world = $('#world'), vp = $('#viewport');
+function clampCam() {
+  const vw = innerWidth, vh = innerHeight;
+  S.camX = Math.min(160, Math.max(vw - W - 160, S.camX));
+  S.camY = Math.min(260, Math.max(vh - H - 160, S.camY));
+}
+function applyCam() { clampCam(); world.style.transform = `translate(${S.camX}px,${S.camY}px)`; }
+function centerOn(x, y, low) {
+  const phone = innerWidth < 720;
+  S.camX = innerWidth / 2 - x;
+  // a picked thing sits low on a desk screen so its bubble fits above it,
+  // and high on a phone so the docked bubble does not cover it
+  S.camY = innerHeight * (phone ? (low ? 0.3 : 0.45) : (low ? 0.7 : 0.5)) - y;
+  applyCam();
+}
+
+// ---------------------------------------------------------------- HUD: stock plate
+const NEED_ICON = { tummy: 'i-hungry', fun: 'i-ball', clean: 'i-wash', sleep: 'i-nap' };
+const NEED_LABEL = { tummy: 'Tummy', fun: 'Fun', clean: 'Clean', sleep: 'Sleep' };
+const NEED_SAD = { tummy: 'is hungry', fun: 'is bored', clean: 'is grubby', sleep: 'is sleepy' };
+function babyNeed(m) {
+  let worst = null;
+  for (const k in m.needs) if (m.needs[k] < 35 && (!worst || m.needs[k] < m.needs[worst])) worst = k;
+  return worst;
+}
+const fmt = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+function hungryCount() { return morphis.filter(m => !m.baby && m.hunger === 'Hungry').length + morphis.filter(m => m.baby && m.needs.tummy < 35).length; }
+function renderRes() {
+  const fc = foodCount(), cap = foodCap(), hungry = hungryCount();
+  const item = (id, val, title, cls = '') => `<div class="res ${cls}" title="${title}">${icon(id)}<span>${val}</span></div>`;
+  $('#res').innerHTML =
+    `<div class="res season" title="Season">${icon('i-sun')}<span id="timer">${fmt(S.timer)}</span></div>`
+    + item('i-food', fc + '/' + cap, 'Food in stashes and baskets', fc === 0 ? 'warn' : '')
+    + item('i-stick', S.sticks, 'Sticks')
+    + item('i-hungry', hungry, 'Hungry blobs', hungry ? 'warn' : '')
+    + item('i-grass', S.grass, 'Grass', 'wide')
+    + item('i-leaf', S.leaves, 'Leaves', 'wide')
+    + item('i-shiny', S.shinies, 'Shinies', 'wide')
+    + item('i-bunch', morphis.length, 'The bunch', 'wide')
+    + item('i-grumble', S.grumbles, 'Grumbles', 'wide' + (S.grumbles ? ' warn' : ''))
+    + `<button class="btn" id="resMore" title="More" style="width:40px;height:40px;border-radius:12px;box-shadow:0 3px 0 var(--ink)">${icon('i-more', S.resOpen ? 'style="transform:rotate(180deg)"' : '')}</button>`;
+  $('#res').classList.toggle('open', S.resOpen);
+  document.body.classList.toggle('resopen', S.resOpen);
+}
+function renderCluster() {
+  $('#bPause').classList.toggle('on', S.paused);
+  $('#bPause use').setAttribute('href', S.paused ? '#i-play' : '#i-pause');
+  $('#bSpeed').classList.toggle('on', S.speed > 1);
+  $('#bSpeed use').setAttribute('href', '#i-speed' + S.speed);
+  $('#bSpeed').title = 'Game speed ' + S.speed + 'x (tap to change)';
+  $('#bSpeed').innerHTML = icon('i-speed' + S.speed) + `<span class="badge" style="background:var(--ink)">${S.speed}x</span>`;
+  $('#bBunch').classList.toggle('on', S.sheet === 'bunch');
+  $('#bMenu').classList.toggle('on', S.sheet === 'menu');
+  $('#pausePlate').classList.toggle('show', S.paused && !S.sheet);
+  document.body.classList.toggle('pausing', S.paused && !S.sheet);
+  world.classList.toggle('paused', S.paused || !!S.sheet);
+}
+
+// ---------------------------------------------------------------- HUD: alerts
+function renderAlerts() {
+  const pip = morphis.find(m => m.baby);
+  const need = pip && !pip.nap && babyNeed(pip);
+  const showing = need && !(S.sel && S.sel.ref === pip);
+  $('#alerts').innerHTML = showing
+    ? `<div class="alert" id="alertPip">${icon(NEED_ICON[need])}<span>${pip.name} ${NEED_SAD[need]}</span><span class="go">Look</span>${icon('i-next')}</div>` : '';
+}
+
+// ---------------------------------------------------------------- HUD: tray + hint
+function renderTray() {
+  $('#tray').innerHTML = TOOLS.map((t, i) => {
+    const cost = BUILD[t.id] ? BUILD[t.id].cost : t.id === 'bridge' ? { sticks: 1 } : {};
+    const poor = !canAfford(cost);
+    return `<div class="tool ${poor ? 'poor' : ''}"><button class="btn ${S.mode === t.id ? 'on' : ''}" data-tool="${t.id}" title="${t.label} (${i + 1})">${icon(t.icon)}</button><span class="cap">${t.label}</span></div>`;
+  }).join('');
+}
+const HINTS = {
+  dig: () => `<b>Dig</b><br>Drag over clay to mark it. Drag on marks to clear them. Free.`,
+  stash: () => `<b>Stash</b> · free<br>Tap open grass. Holds one thing.`,
+  basket: () => `<b>Basket</b> · 1 grass <span class="${S.grass >= 1 ? 'good' : 'bad'}">(you have ${S.grass})</span><br>Tap open grass. Holds four things.`,
+  nest: () => `<b>Nest</b> · 2 sticks, 2 grass, 1 leaf<br><span class="${canAfford(BUILD.nest.cost) ? 'good' : 'bad'}">${canAfford(BUILD.nest.cost) ? 'You have enough.' : 'Not enough yet: you have ' + S.sticks + ' sticks, ' + S.grass + ' grass, ' + S.leaves + ' leaf.'}</span>`,
+  bridge: () => `<b>Bridge</b> · 1 stick a tile <span class="${S.sticks >= 1 ? 'good' : 'bad'}">(you have ${S.sticks})</span><br>Drag a line across the stream.`,
+};
+function renderHint() {
+  const h = $('#hint');
+  document.body.classList.toggle('hinting', !!S.mode);
+  if (!S.mode) { h.classList.remove('show'); return; }
+  const t = TOOLS.find(t => t.id === S.mode);
+  h.innerHTML = `${icon(t.icon)}<div class="txt">${HINTS[S.mode]()}</div><div class="tool" style="width:auto"><button class="btn on" id="modeDone" title="Done (Esc)">${icon('i-check')}</button></div>`;
+  h.classList.add('show');
+}
+
+// ---------------------------------------------------------------- toast
+let toastT = 0;
+function toast(text) {
+  const t = $('#toast'), b = $('#bubble');
+  t.textContent = text; t.classList.add('show'); toastT = 2.4;
+  // never on top of the open bubble: drop to just above the tray instead
+  const low = innerWidth >= 720 && b.classList.contains('show') && b.getBoundingClientRect().top < 200;
+  t.classList.toggle('low', low);
+}
+
+// ---------------------------------------------------------------- bubble
+function canSet(m, slot, job) {
+  const js = m.jobs;
+  if (slot === 'main') return { ok: true, why: job === js.disliked ? 'not keen' : '' };
+  if (job === null) return { ok: true, why: '' };
+  if (job === js.main) return { ok: false, why: 'is first' };
+  if (job === js.disliked) return { ok: false, why: 'not keen' };
+  return { ok: true, why: '' };
+}
+function moodDot(word) { return word === 'Hungry' || word === 'grumpy' ? 'var(--berry)' : word === 'Peckish' ? '#E0A000' : '#4BA34B'; }
+function statusOf(m) {
+  if (m.baby) return m.nap ? 'Napping in the home nest.' : 'Toddling about near the home nest.';
+  const j = m.jobs.main;
+  if (j === 'digger') return tilesMarked() ? 'Digging the marked clay.' : 'Nothing marked to dig, so: ' + jobOf(m.jobs.neutral || 'forager').doing.toLowerCase() + '.';
+  if (j === 'builder') return buildings.some(b => !b.built) ? 'Building a new ' + buildings.find(b => !b.built).type + '.' : 'Nothing to build, so: ' + (m.jobs.neutral ? jobOf(m.jobs.neutral).doing.toLowerCase() : 'having a sit') + '.';
+  return jobOf(j).doing + '.';
+}
+function metersHtml(m) {
+  return Object.keys(m.needs).map(k => {
+    const v = Math.round(m.needs[k]), col = v > 60 ? '#4BA34B' : v > 34 ? '#E0A000' : '#D9415E';
+    const word = v > 60 ? 'happy' : v > 34 ? 'okay' : NEED_SAD[k].replace('is ', '');
+    return `<span>${NEED_LABEL[k]}</span><div class="bar"><i style="width:${v}%;background:${col}"></i></div><span class="${v > 60 ? 'good' : v > 34 ? 'meh' : 'bad'}">${word}</span>`;
+  }).join('');
+}
+const tilesMarked = () => { let n = 0; tiles.forEach(t => t.marked && n++); return n; };
+function renderBubble() {
+  const b = $('#bubble');
+  document.body.classList.toggle('bubble-open', !!S.sel);
+  if (!S.sel) { b.classList.remove('show'); return; }
+  const { kind, ref } = S.sel;
+  let h = '';
+  const close = `<button class="btn bclose" data-act="close" title="Close (Esc)">${icon('i-close')}</button>`;
+  if (kind === 'morphi') {
+    const m = ref, js = m.jobs;
+    if (S.sub === 'main' || S.sub === 'neutral') {
+      const slot = S.sub;
+      const list = slot === 'neutral' ? [null, ...JOBS.map(j => j.id)] : JOBS.map(j => j.id);
+      h += `<div class="pickhead"><button class="btn" data-act="back" title="Back">${icon('i-back')}</button><div><div class="m">${m.name}: ${slot === 'main' ? 'first job' : 'then, when there is nothing'}</div>`
+        + `<div class="s soft">${slot === 'main' ? 'Done first, whenever there is any.' : 'Done when the first job has nothing.'}</div></div></div>`;
+      h += '<div class="picker">' + list.map(id => {
+        const cur = js[slot] === id;
+        const r = cur ? { ok: true, why: '' } : canSet(m, slot, id);
+        const label = id ? jobOf(id).label : 'None';
+        return `<div class="tool"><button class="btn ${cur ? 'on' : ''} ${r.ok ? '' : 'flat'}" data-job="${id}" data-ok="${r.ok}" data-why="${r.why}">${icon(id ? 'i-' + id : 'i-none')}</button>`
+          + `<span class="cap">${label}${r.why ? `<span class="sub">${r.why}</span>` : cur ? '<span class="sub">now</span>' : ''}</span></div>`;
+      }).join('') + '</div>';
+      h += `<p class="note">${m.name} is not keen on ${jobOf(js.disliked).label.toLowerCase()} work. That is just who ${m.name} is.</p>`;
+    } else {
+      h += `<div class="bhead"><div class="avatar" style="background:${m.color}"></div><div class="who"><div class="m">${m.name}</div>`
+        + `<div class="s soft" style="display:flex;align-items:center;gap:6px">the ${m.species} · loves ${icon('f-' + m.diet, 'style="width:24px;height:24px"')}</div></div>${close}</div>`;
+      h += `<p class="status">${statusOf(m)}</p>`;
+      h += `<div class="pills"><span class="pill"><i class="dot" style="background:${moodDot(m.hunger)}"></i>${m.hunger}</span><span class="pill"><i class="dot" style="background:#4BA34B"></i>Mood: ${m.mood}</span>`
+        + `<span class="pill">${icon('i-' + js.disliked, 'style="width:24px;height:24px;opacity:.75"')}not keen on ${jobOf(js.disliked).label.toLowerCase()}</span></div>`;
+      h += '<div class="actions">'
+        + `<div class="tool"><button class="btn" data-act="main" title="First job">${icon('i-' + js.main)}</button><span class="cap"><span class="sub">first</span>${jobOf(js.main).label}</span></div>`
+        + `<div class="tool"><button class="btn" data-act="neutral" title="Then job">${icon(js.neutral ? 'i-' + js.neutral : 'i-none')}</button><span class="cap"><span class="sub">then</span>${js.neutral ? jobOf(js.neutral).label : 'None'}</span></div>`
+        + `<div class="tool"><button class="btn ${S.follow ? 'on' : ''}" data-act="follow" title="Follow">${icon('i-follow')}</button><span class="cap"><span class="sub">&nbsp;</span>${S.follow ? 'Following' : 'Follow'}</span></div>`
+        + `<div class="tool"><button class="btn" data-act="next" title="Next blob ( ] )">${icon('i-next')}</button><span class="cap"><span class="sub">&nbsp;</span>Next</span></div>`
+        + '</div>';
+    }
+  } else if (kind === 'baby') {
+    const m = ref, n = m.needs;
+    if (S.sub === 'feed') {
+      const p = pantry();
+      const opinion = f => f === m.diet ? ['loves it', 'good', 45] : f === m.hates ? ['hates it', 'bad', 5] : ['likes it', 'meh', 25];
+      const all = ['grapes', 'fish', 'chili', 'candy'];
+      h += `<div class="pickhead"><button class="btn" data-act="back" title="Back">${icon('i-back')}</button><div><div class="m">Feed ${m.name}</div><div class="s soft">From the stashes. Tap a food to toss it.</div></div></div>`;
+      h += '<div class="picker">' + all.map(f => {
+        const have = p[f] || 0, [word, cls] = opinion(f);
+        return `<div class="tool"><button class="btn ${have ? '' : 'flat'}" data-food="${f}" data-have="${have}">${icon('f-' + f)}<span class="badge" style="background:${have ? 'var(--ink)' : '#9c8b7c'}">${have}</span></button>`
+          + `<span class="cap">${FOODS[f][0].toUpperCase() + FOODS[f].slice(1)}<span class="sub ${have ? cls : ''}">${have ? word : 'none'}</span></span></div>`;
+      }).join('') + '</div>';
+    } else {
+      h += `<div class="bhead"><div class="avatar" style="background:${m.color}"></div><div class="who"><div class="m">${m.name}, baby ${m.species}</div>`
+        + `<div class="s soft">grows up in ${fmt(m.grows)} · loves ${FOODS[m.diet]}</div></div>${close}</div>`;
+      h += `<div class="meters">${metersHtml(m)}</div>`;
+      const napping = m.nap > 0;
+      const btn = (act, ic, label, sub, ok = true, on = false) => `<div class="tool"><button class="btn ${on ? 'on' : ''} ${ok ? '' : 'flat'}" data-act="${act}" data-ok="${ok}">${icon(ic)}</button><span class="cap">${label}<span class="sub">${sub}</span></span></div>`;
+      const meals = foodCount();
+      h += '<div class="actions">'
+        + btn('feed', 'i-feed', 'Feed', meals ? meals + ' in stash' : 'none stored', meals > 0 && !napping)
+        + btn('wash', 'i-wash', 'Wash', '1 grass', S.grass > 0 && !napping)
+        + btn('play', 'i-ball', 'Play', 'free', !napping)
+        + btn('nap', 'i-nap', napping ? 'Wake' : 'Nap', napping ? Math.ceil(m.nap) + ' s left' : 'free', true, napping)
+        + '</div>';
+    }
+  } else if (kind === 'building') {
+    const bd = ref, def = BUILD[bd.type];
+    h += `<div class="bhead"><div class="avatar" style="background:var(--plate-2);display:grid;place-items:center">${icon(def.icon)}</div><div class="who"><div class="m">${bd.built ? def.label : 'New ' + def.label.toLowerCase()}</div><div class="s soft">${def.blurb}</div></div>${close}</div>`;
+    h += `<p class="status">${bd.built ? (def.holds ? (bd.items.length ? 'Holding: ' + bd.items.map(f => FOODS[f]).join(', ') + '.' : 'Empty. Foragers put food here.') : 'Ready for a nap.') : 'Waiting for a builder.'}</p>`;
+    h += `<div class="actions" style="justify-content:flex-start;gap:16px"><div class="tool"><button class="btn" data-act="remove">${icon('i-trash')}</button><span class="cap">${bd.built ? 'Take away' : 'Call off'}</span></div></div>`;
+  } else if (kind === 'home') {
+    h += `<div class="bhead"><div class="avatar" style="background:var(--plate-2);display:grid;place-items:center">${icon('i-home')}</div><div class="who"><div class="m">The home nest</div><div class="s soft">Sticks and shinies come here.</div></div>${close}</div>`;
+    h += `<p class="status">${S.sticks} sticks, ${S.grass} grass, ${S.leaves} leaf, ${S.shinies} shinies. ${foodCount()} food in ${buildings.filter(b => b.built && BUILD[b.type].holds).length} stashes and baskets.</p>`;
+    h += `<div class="actions" style="justify-content:flex-start;gap:16px"><div class="tool"><button class="btn" data-act="bunch">${icon('i-bunch')}</button><span class="cap">The bunch</span></div>`
+      + `<div class="tool"><button class="btn" data-act="news">${icon('i-news')}</button><span class="cap">News</span></div></div>`;
+  }
+  b.innerHTML = h;
+  b.classList.add('show');
+  positionBubble(true);
+}
+function anchorOf(sel) {
+  if (!sel) return null;
+  if (sel.kind === 'morphi' || sel.kind === 'baby') return { x: sel.ref.x, y: sel.ref.y - (sel.ref.baby ? 22 : 30), below: sel.ref.y + 18 };
+  if (sel.kind === 'building') return { x: sel.ref.c * T + 20, y: sel.ref.r * T, below: sel.ref.r * T + T };
+  if (sel.kind === 'home') return { x: (HOME.c + 1) * T, y: HOME.r * T - 4, below: (HOME.r + 2) * T + 40 };
+}
+// The bubble holds still while open, so its buttons never run away from a
+// finger: only its tail follows a walking blob. It moves again only when
+// the blob has wandered well off (or the camera moved), and never while
+// the pointer is on it.
+let bubbleAt = null, overBubble = false;
+function positionBubble(force) {
+  const b = $('#bubble');
+  if (!S.sel || innerWidth < 720) { b.style.left = ''; b.style.top = ''; bubbleAt = null; return; }
+  const a = anchorOf(S.sel), bw = b.offsetWidth, bh = b.offsetHeight;
+  const sx = a.x + S.camX, sy = a.y + S.camY, sb = a.below + S.camY;
+  if (!force && bubbleAt && (overBubble || Math.hypot(sx - bubbleAt.sx, sy - bubbleAt.sy) < 140)) {
+    if (!b.classList.contains('side')) b.style.setProperty('--tail', Math.max(28, Math.min(bw - 28, sx - bubbleAt.left)) + 'px');
+    return;
+  }
+  let left = Math.max(16, Math.min(innerWidth - bw - 16, sx - bw / 2));
+  let top = sy - bh - 20, below = false, side = false;
+  if (top < 96) {
+    if (sb + 20 + bh <= innerHeight - 130) { top = sb + 20; below = true; }
+    else {
+      // no room above or below: sit beside it
+      side = true;
+      left = sx + 48 + bw <= innerWidth - 16 ? sx + 48 : Math.max(16, sx - 48 - bw);
+      top = Math.max(96, Math.min(innerHeight - bh - 130, sy - bh / 2));
+    }
+  }
+  b.style.left = left + 'px'; b.style.top = top + 'px';
+  bubbleAt = { sx, sy, left };
+  b.classList.toggle('below', below);
+  b.classList.toggle('side', side);
+  b.style.setProperty('--tail', Math.max(28, Math.min(bw - 28, sx - left)) + 'px');
+}
+function pick(sel, center) {
+  S.sel = sel; S.sub = null;
+  if (!sel || sel.kind === 'building' || sel.kind === 'home') S.follow = false;
+  if (sel && center) { const a = anchorOf(sel); centerOn(a.x, a.y + 20, true); }
+  drawThings(); renderBubble(); renderAlerts();
+}
+const pickMorphi = (m, center) => pick({ kind: m.baby ? 'baby' : 'morphi', ref: m }, center);
+
+// ---------------------------------------------------------------- sheets
+function openSheet(name) {
+  S.sheet = name; S.menuPage = 'main';
+  renderSheets(); renderCluster();
+}
+function closeSheet() { S.sheet = null; renderSheets(); renderCluster(); }
+function renderSheets() {
+  $('#scrim').classList.toggle('show', !!S.sheet);
+  ['menu', 'bunch', 'news'].forEach(n => $('#' + n + 'Sheet').classList.toggle('show', S.sheet === n));
+  const head = (title) => `<div class="shead"><div class="l">${title}</div><button class="btn" data-sheet="close" title="Close (Esc)">${icon('i-close')}</button></div>`;
+  if (S.sheet === 'menu') {
+    let h;
+    if (S.menuPage === 'export') {
+      h = `<div class="shead"><button class="btn" data-sheet="menuback" title="Back">${icon('i-back')}</button><div class="l">Export this run</div></div>`
+        + `<p class="s soft" style="margin-top:0">A few words about this run, then copy it for the run viewer.</p><textarea placeholder="What happened? (optional)"></textarea>`
+        + `<div class="stack" style="margin-top:14px"><button class="rowbtn warm" data-sheet="copy">${icon('i-export')}Copy run</button><button class="rowbtn" data-sheet="download">${icon('i-export', 'style="transform:rotate(180deg)"')}Download run</button></div>`;
+    } else {
+      h = head('Menu')
+        + `<div class="stack"><button class="rowbtn warm" data-sheet="close">${icon('i-play')}Carry on</button></div>`
+        + `<div class="section">Sound</div>`
+        + ['music', 'effects', 'alerts'].map(k => `<label class="slider"><span>${k[0].toUpperCase() + k.slice(1)}</span><input type="range" min="0" max="100" value="${S.vol[k]}" data-vol="${k}"><b style="width:56px;text-align:right">${S.vol[k]}%</b></label>`).join('')
+        + `<div class="section">This meadow</div><div class="stack"><button class="rowbtn" data-sheet="restart">${icon('i-restart')}Start this meadow over</button>`
+        + `<button class="rowbtn" data-sheet="title">${icon('i-home')}Back to the title</button></div>`
+        + `<div class="section">Tester corner</div><div class="toolrow">`
+        + [['export', 'i-export', 'Export'], ['history', 'i-history', 'History'], ['fingers', 'i-finger', 'Fingers'], ['tama', 'i-egg', 'Tama test'], ['stock', 'i-plus', 'Stock up']]
+          .map(([id, ic, label]) => `<div class="tool"><button class="btn" data-sheet="${id}">${icon(ic)}</button><span class="cap">${label}</span></div>`).join('')
+        + '</div>';
+    }
+    $('#menuSheet').innerHTML = h;
+  }
+  if (S.sheet === 'bunch') {
+    $('#bunchSheet').innerHTML = head('The bunch')
+      + morphis.map(m => `<div class="row" data-row="${m.id}"><div class="avatar" style="background:${m.color}"></div><div class="grow"><div class="m">${m.name} <span class="s soft" style="font-weight:500">${m.baby ? 'baby ' : 'the '}${m.species}</span></div>`
+        + `<div class="s">${statusOf(m)}</div></div>`
+        + (m.baby ? `<span class="s ${babyNeed(m) ? 'bad' : 'good'}" style="font-weight:600">${babyNeed(m) ? NEED_SAD[babyNeed(m)].replace('is ', '') : 'happy'}</span>`
+          : `${icon('i-' + m.jobs.main)}${icon(m.jobs.neutral ? 'i-' + m.jobs.neutral : 'i-none', 'style="opacity:.6"')}`)
+        + `${icon('i-next')}</div>`).join('')
+      + '<p class="note">Tap a row to go to that blob.</p>';
+  }
+  if (S.sheet === 'news') {
+    $('#newsSheet').innerHTML = head('News') + S.news.slice().reverse().map(n => `<div class="row" style="cursor:default;min-height:56px"><div class="s grow">${n}</div></div>`).join('');
+  }
+}
+
+// ---------------------------------------------------------------- render everything
+function renderAll() { renderRes(); renderCluster(); renderAlerts(); renderTray(); renderHint(); renderBubble(); renderSheets(); }
+
+// ---------------------------------------------------------------- input on the meadow
+const toWorld = (cx, cy) => ({ x: cx - S.camX, y: cy - S.camY });
+const tileAt = (cx, cy) => { const w = toWorld(cx, cy); return { c: Math.floor(w.x / T), r: Math.floor(w.y / T) }; };
+let drag = null;
+const ghost = $('#ghost');
+function placeOk(c, r) {
+  const t = tile(c, r);
+  return t && !t.water && !(t.clay && !t.dug) && !occupied.has(key(c, r));
+}
+function showGhost(cx, cy) {
+  if (!BUILD[S.mode]) { ghost.style.display = 'none'; return; }
+  const { c, r } = tileAt(cx, cy);
+  ghost.style.display = 'grid';
+  ghost.style.left = c * T + 'px'; ghost.style.top = r * T + 'px';
+  ghost.innerHTML = icon(BUILD[S.mode].icon);
+  ghost.classList.toggle('bad', !placeOk(c, r) || !canAfford(BUILD[S.mode].cost));
+}
+function rectTiles(a, b) {
+  const out = [];
+  for (let c = Math.min(a.c, b.c); c <= Math.max(a.c, b.c); c++) for (let r = Math.min(a.r, b.r); r <= Math.max(a.r, b.r); r++) { const t = tile(c, r); if (t) out.push(t); }
+  return out;
+}
+function lineTiles(a, b) {
+  const out = [];
+  if (Math.abs(b.c - a.c) >= Math.abs(b.r - a.r)) { for (let c = Math.min(a.c, b.c); c <= Math.max(a.c, b.c); c++) { const t = tile(c, a.r); if (t) out.push(t); } }
+  else { for (let r = Math.min(a.r, b.r); r <= Math.max(a.r, b.r); r++) { const t = tile(a.c, r); if (t) out.push(t); } }
+  return out;
+}
+function drawPreview(list, color) {
+  $('#previewG').innerHTML = list.map(t => `<rect x="${t.c * T + 2}" y="${t.r * T + 2}" width="${T - 4}" height="${T - 4}" rx="7" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="7 5"/>`).join('');
+}
+vp.addEventListener('pointerdown', e => {
+  if (e.button === 2) return;
+  const mEl = e.target.closest('.morphi');
+  if (mEl) { const m = morphis.find(x => x.id === mEl.dataset.m); pickMorphi(m); e.preventDefault(); return; }
+  vp.setPointerCapture(e.pointerId);
+  drag = { x0: e.clientX, y0: e.clientY, cam0: [S.camX, S.camY], moved: false, start: tileAt(e.clientX, e.clientY), target: e.target };
+});
+vp.addEventListener('pointermove', e => {
+  if (BUILD[S.mode]) showGhost(e.clientX, e.clientY);
+  if (!drag) return;
+  const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+  if (Math.abs(dx) + Math.abs(dy) > 8) drag.moved = true;
+  const end = tileAt(e.clientX, e.clientY);
+  if (S.mode === 'dig' && drag.moved) {
+    const st = tile(drag.start.c, drag.start.r);
+    drawPreview(rectTiles(drag.start, end).filter(t => st && st.marked ? t.marked : t.clay && !t.dug), st && st.marked ? '#B8304B' : '#FFD45C');
+  } else if (S.mode === 'bridge' && drag.moved) {
+    drawPreview(lineTiles(drag.start, end).filter(t => t.water && !t.plank), '#FFD45C');
+  } else if (drag.moved) {
+    S.camX = drag.cam0[0] + dx; S.camY = drag.cam0[1] + dy; S.follow = false; applyCam(); positionBubble(true);
+  }
+});
+vp.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  $('#previewG').innerHTML = '';
+  const end = tileAt(e.clientX, e.clientY);
+  if (S.mode === 'dig') {
+    const list = rectTiles(d.start, end), st = tile(d.start.c, d.start.r);
+    if (st && st.marked) { let n = 0; list.forEach(t => { if (t.marked) { t.marked = false; n++; } }); toast(n ? `Cleared ${n} marks` : 'Nothing marked there'); }
+    else { let n = 0; list.forEach(t => { if (t.clay && !t.dug && !t.marked) { t.marked = true; n++; } }); toast(n ? `Marked ${n} clay to dig` : 'No clay there to dig'); }
+    drawClay(); renderBubble(); return;
+  }
+  if (S.mode === 'bridge') {
+    const list = lineTiles(d.start, end).filter(t => t.water && !t.plank);
+    if (!list.length) { toast('Drag across the stream'); return; }
+    let laid = 0;
+    for (const t of list) { if (S.sticks < 1) break; S.sticks--; t.plank = 1; laid++; setTimeout(() => { t.plank = 2; drawClay(); }, (900 + laid * 500) / S.speed); }
+    toast(laid < list.length ? `Laid ${laid} of ${list.length}: need ${list.length - laid} more sticks` : `Bridge marked: ${laid} sticks`);
+    drawClay(); renderRes(); renderTray(); renderHint(); return;
+  }
+  if (d.moved) return;
+  if (BUILD[S.mode]) {
+    const def = BUILD[S.mode];
+    if (!placeOk(end.c, end.r)) { toast('Pick open grass for that'); return; }
+    if (!canAfford(def.cost)) { toast(`A ${def.label.toLowerCase()} needs ${def.costText}`); return; }
+    pay(def.cost);
+    const b = { id: 'b' + nextId++, type: S.mode, c: end.c, r: end.r, built: false, items: [] };
+    buildings.push(b); occupied.add(key(b.c, b.r));
+    setTimeout(() => { b.built = true; drawThings(); renderRes(); if (S.sel && S.sel.ref === b) renderBubble(); }, 3500 / S.speed);
+    toast(`${def.label} set out. A builder will see to it.`);
+    drawThings(); renderRes(); renderTray(); renderHint(); showGhost(e.clientX, e.clientY); return;
+  }
+  // look mode tap
+  const bEl = d.target.closest && d.target.closest('.bld');
+  if (bEl) { pick({ kind: 'building', ref: buildings.find(b => b.id === bEl.dataset.b) }); return; }
+  if (end.c >= HOME.c && end.c <= HOME.c + 1 && end.r >= HOME.r && end.r <= HOME.r + 1) { pick({ kind: 'home' }); return; }
+  if (S.sel) pick(null);
+});
+vp.addEventListener('pointerleave', () => { ghost.style.display = 'none'; });
+
+// ---------------------------------------------------------------- HUD clicks
+function setMode(m) {
+  S.mode = S.mode === m ? null : m;
+  vp.className = S.mode ? 'mode-' + S.mode : '';
+  if (!S.mode) ghost.style.display = 'none';
+  renderTray(); renderHint();
+}
+function nextMorphi() {
+  const list = morphis;
+  const i = S.sel ? list.indexOf(S.sel.ref) : -1;
+  pickMorphi(list[(i + 1) % list.length], true);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('button, .alert, .row, #res .res');
+  if (!t) return;
+  if (t.dataset.tool) return setMode(t.dataset.tool);
+  if (t.id === 'modeDone') return setMode(S.mode);
+  if (t.id === 'bPause' || t.id === 'bCarry') { S.paused = !S.paused; renderCluster(); return; }
+  if (t.id === 'bSpeed') { S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 4 : 1; renderCluster(); toast('Speed ' + S.speed + 'x'); return; }
+  if (t.id === 'bBunch') return S.sheet === 'bunch' ? closeSheet() : openSheet('bunch');
+  if (t.id === 'bMenu') return S.sheet === 'menu' ? closeSheet() : openSheet('menu');
+  if (t.id === 'resMore') { S.resOpen = !S.resOpen; renderRes(); return; }
+  if (t.id === 'alertPip') return pickMorphi(morphis.find(m => m.baby), true);
+  if (t.dataset.row) { const m = morphis.find(x => x.id === t.dataset.row); closeSheet(); pickMorphi(m, true); return; }
+  if (t.id === 'notesBtn') { $('#notes').classList.add('show'); return; }
+  if (t.id === 'notesX') { $('#notes').classList.remove('show'); return; }
+  if (t.dataset.jump) { jump(t.dataset.jump); return; }
+  if (t.dataset.sheet) return sheetAction(t.dataset.sheet);
+  // bubble
+  if (!S.sel) return;
+  const ref = S.sel.ref;
+  if (t.dataset.job !== undefined) {
+    const job = t.dataset.job === 'null' ? null : t.dataset.job;
+    if (t.dataset.ok === 'false') { toast(job === ref.jobs.main ? `${jobOf(job).label} is already ${ref.name}'s first job` : `${ref.name} is not keen on ${jobOf(job).label.toLowerCase()} work`); return; }
+    const slot = S.sub;
+    ref.jobs[slot] = job;
+    if (slot === 'main' && ref.jobs.neutral === job) ref.jobs.neutral = null;
+    toast(`${ref.name}'s ${slot === 'main' ? 'first' : 'then'} job: ${job ? jobOf(job).label.toLowerCase() : 'none'}`);
+    S.sub = null; renderBubble(); renderSheets(); return;
+  }
+  if (t.dataset.food) {
+    if (t.dataset.have === '0') { toast(`No ${FOODS[t.dataset.food]} in the stashes`); return; }
+    const f = t.dataset.food, b = buildings.find(b => b.built && b.items.includes(f));
+    b.items.splice(b.items.indexOf(f), 1);
+    const gain = f === ref.diet ? 45 : f === ref.hates ? 5 : 25;
+    ref.needs.tummy = Math.min(100, ref.needs.tummy + gain);
+    if (f === ref.hates) { S.grumbles++; toast(`${ref.name} spits out the ${FOODS[f]}. Yuck!`); }
+    else toast(`${ref.name} munches the ${FOODS[f]}. ${f === ref.diet ? 'Delighted!' : 'Not bad.'}`);
+    S.sub = null; renderAll(); placeMorphis(); return;
+  }
+  const act = t.dataset.act;
+  if (!act) return;
+  if (t.dataset.ok === 'false') {
+    toast(ref.nap > 0 ? `${ref.name} is napping` : act === 'wash' ? 'Washing needs a tuft of grass' : 'No food in the stashes yet'); return;
+  }
+  if (act === 'close') return pick(null);
+  if (act === 'back') { S.sub = null; renderBubble(); return; }
+  if (act === 'main' || act === 'neutral' || act === 'feed') { S.sub = act; renderBubble(); return; }
+  if (act === 'follow') { S.follow = !S.follow; renderBubble(); return; }
+  if (act === 'next') return nextMorphi();
+  if (act === 'wash') { S.grass--; ref.needs.clean = 100; toast(`${ref.name} is squeaky clean`); renderAll(); return; }
+  if (act === 'play') { ref.needs.fun = Math.min(100, ref.needs.fun + 40); toast(`${ref.name} chases the ball. Wheee!`); renderBubble(); return; }
+  if (act === 'nap') { if (ref.nap > 0) { ref.nap = 0; toast(`${ref.name} wakes up, a bit grumpy`); } else { ref.nap = 6; toast(`${ref.name} curls up for a nap`); } renderBubble(); placeMorphis(); return; }
+  if (act === 'remove') {
+    const b = ref; buildings.splice(buildings.indexOf(b), 1); occupied.delete(key(b.c, b.r));
+    if (!b.built) pay(Object.fromEntries(Object.entries(BUILD[b.type].cost).map(([k, v]) => [k, -v])));
+    toast(b.built ? `${BUILD[b.type].label} taken away` : 'Called off, things given back'); pick(null); renderRes(); renderTray(); return;
+  }
+  if (act === 'bunch') { pick(null); openSheet('bunch'); return; }
+  if (act === 'news') { pick(null); openSheet('news'); return; }
+});
+function sheetAction(a) {
+  if (a === 'close') return closeSheet();
+  if (a === 'menuback') { S.menuPage = 'main'; renderSheets(); return; }
+  if (a === 'export') { S.menuPage = 'export'; renderSheets(); return; }
+  if (a === 'copy') { toast('Run copied (mockup)'); return; }
+  if (a === 'download') { toast('Run saved (mockup)'); return; }
+  if (a === 'restart') { closeSheet(); toast('Would ask once, then start this meadow over'); return; }
+  if (a === 'title') { closeSheet(); toast('Would ask once, then go back to the title'); return; }
+  if (a === 'stock') { S.sticks += 10; S.grass += 10; S.leaves += 5; closeSheet(); renderAll(); toast('Stocked up'); return; }
+  toast(a[0].toUpperCase() + a.slice(1) + ' (tester tool)');
+}
+document.addEventListener('input', e => {
+  if (e.target.dataset.vol) { S.vol[e.target.dataset.vol] = +e.target.value; e.target.nextElementSibling.textContent = e.target.value + '%'; }
+});
+$('#scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA') return;
+  if (e.key >= '1' && e.key <= '5') setMode(TOOLS[+e.key - 1].id);
+  else if (e.key === ' ') { e.preventDefault(); S.paused = !S.paused; renderCluster(); }
+  else if (e.key === 'u' || e.key === 'U') S.sheet === 'bunch' ? closeSheet() : openSheet('bunch');
+  else if (e.key === ']') nextMorphi();
+  else if (e.key === 'Escape') {
+    if ($('#notes').classList.contains('show')) $('#notes').classList.remove('show');
+    else if (S.sheet) closeSheet();
+    else if (S.sub) { S.sub = null; renderBubble(); }
+    else if (S.sel) pick(null);
+    else if (S.mode) setMode(S.mode);
+    else openSheet('menu');
+  }
+});
+addEventListener('resize', () => { applyCam(); positionBubble(true); });
+$('#bubble').addEventListener('pointerenter', () => overBubble = true);
+$('#bubble').addEventListener('pointerleave', () => overBubble = false);
+
+// ---------------------------------------------------------------- state jumps (design notes)
+function jump(name) {
+  $('#notes').classList.remove('show');
+  S.sheet = null; S.paused = false; S.speed = 1; S.follow = false;
+  if (S.mode) setMode(S.mode);
+  pick(null);
+  const dave = morphis[0], pip = morphis[3];
+  if (name === 'picked') pickMorphi(dave, true);
+  if (name === 'jobs') { pickMorphi(dave, true); S.sub = 'main'; renderBubble(); }
+  if (name === 'place') { setMode('stash'); centerOn((HOME.c + 1) * T, (HOME.r + 1) * T); const c = HOME.c + 3, r = HOME.r + 2; showGhost(c * T + 20 + S.camX, r * T + 20 + S.camY); }
+  if (name === 'dig') {
+    setMode('dig'); centerOn(8 * T, 7 * T);
+    if (!tilesMarked()) { for (let c = 7; c <= 10; c++) for (let r = 5; r <= 7; r++) { const t = tile(c, r); if (t.clay && !t.dug) t.marked = true; } drawClay(); }
+  }
+  if (name === 'baby' || name === 'feed') { pip.needs.tummy = Math.min(pip.needs.tummy, 24); pip.nap = 0; centerOn(pip.x, pip.y); if (name === 'feed') { pickMorphi(pip, true); S.sub = 'feed'; renderBubble(); } }
+  if (name === 'speed') S.speed = 4;
+  if (name === 'paused') S.paused = true;
+  if (name === 'menu') S.sheet = 'menu';
+  if (name === 'bunch') S.sheet = 'bunch';
+  S.menuPage = 'main';
+  renderAll(); placeMorphis();
+}
+
+// ---------------------------------------------------------------- the loop
+function wanderTarget(m) {
+  for (let i = 0; i < 30; i++) {
+    const c = 9 + Math.floor(Math.random() * 10), r = 3 + Math.floor(Math.random() * 15);
+    const t = tile(c, r);
+    if (!t || t.water || (t.clay && !t.dug) || c + 0.5 > streamC(r + 0.5) - 1.4) continue;
+    if (m.baby && (Math.abs(c - HOME.c) > 3 || Math.abs(r - HOME.r) > 3)) continue;
+    return { x: c * T + 20, y: r * T + 26 };
+  }
+  return { x: m.x, y: m.y };
+}
+let last = performance.now(), digT = 0;
+function loop(now) {
+  const real = Math.min(0.1, (now - last) / 1000); last = now;
+  const running = !S.paused && !S.sheet;
+  const dt = running ? real * S.speed : 0;
+  if (toastT > 0) { toastT -= real; if (toastT <= 0) $('#toast').classList.remove('show'); }
+  if (dt > 0) {
+    S.timer = Math.max(0, S.timer - dt);
+    const tm = $('#timer'); if (tm) tm.textContent = fmt(S.timer);
+    morphis.forEach(m => {
+      if (m.baby) {
+        m.grows = Math.max(0, m.grows - dt);
+        if (m.nap > 0) { m.nap = Math.max(0, m.nap - dt); m.needs.sleep = Math.min(100, m.needs.sleep + dt * 12); if (!m.nap) { toast(`${m.name} wakes up rested`); } }
+        else { m.needs.tummy = Math.max(0, m.needs.tummy - dt * 0.6); m.needs.fun = Math.max(0, m.needs.fun - dt * 0.4); m.needs.clean = Math.max(0, m.needs.clean - dt * 0.3); m.needs.sleep = Math.max(0, m.needs.sleep - dt * 0.25); }
+        if (m.nap > 0) return;
+      }
+      if (m.wait > 0) { m.wait -= dt; return; }
+      const dx = m.tx - m.x, dy = m.ty - m.y, dist = Math.hypot(dx, dy), sp = (m.baby ? 22 : 36) * dt;
+      if (dist < sp) { m.x = m.tx; m.y = m.ty; m.wait = 0.6 + Math.random() * 2; const t = wanderTarget(m); m.tx = t.x; m.ty = t.y; }
+      else { m.x += dx / dist * sp; m.y += dy / dist * sp; }
+    });
+    digT += dt;
+    if (digT > 2.5) {
+      digT = 0;
+      const digger = morphis.find(m => !m.baby && m.jobs.main === 'digger');
+      const marked = [...tiles.values()].filter(t => t.marked);
+      if (digger && marked.length) {
+        const t = marked[Math.floor(Math.random() * marked.length)];
+        t.marked = false; t.dug = true; drawClay();
+        if (Math.random() < 0.3) { S.shinies++; renderRes(); toast(`${digger.name} dug up a shiny!`); S.news.push(`${digger.name} dug up a shiny.`); }
+      }
+    }
+    placeMorphis();
+    const before = $('#alerts').innerHTML; renderAlerts();
+    if (before !== $('#alerts').innerHTML) renderRes();
+    if (S.sel && S.sel.kind === 'baby' && !S.sub) { const mt = $('#bubble .meters'); if (mt) mt.innerHTML = metersHtml(S.sel.ref); }
+  }
+  if (S.follow && S.sel && S.sel.ref.x !== undefined) { centerOn(S.sel.ref.x, S.sel.ref.y + 20, true); positionBubble(true); }
+  else if (S.sel) positionBubble();
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- go
+drawGround(); drawThings();
+centerOn((HOME.c + 1) * T, (HOME.r + 1) * T + 20);
+renderAll();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

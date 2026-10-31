@@ -7,26 +7,31 @@ local JobSets = require('src.jobsets')
 local Worker = require('src.worker')
 local Version = require('src.version')
 local Audio = require('src.audio')
+local Toy = require('src.toy')
 
 local UI = {}
 UI.__index = UI
+-- The radial tool (epic-toybox-radial-ui): no tool tray, taps open a ring.
+UI.RADIAL = true
 
 TOP_BAR_H = 40
 BOTTOM_BAR_H = 80
 FONT_PATH = 'assets/fonts/commodore64.ttf'
 local ALERT_TTL = 10
 
+-- Ink on cream, the Toybox palette (src/toy.lua). Every text colour reads
+-- on the cream plates the screens are drawn on.
 local C = {
-    bar = { 0.08, 0.09, 0.07, 0.92 },
-    panel = { 0.1, 0.11, 0.09, 0.96 },
-    text = { 0.93, 0.93, 0.85 },
-    dim = { 0.6, 0.62, 0.5 },
-    accent = { 0.58, 0.64, 0.36 },
-    warn = { 0.92, 0.45, 0.35 },
-    good = { 0.55, 0.82, 0.55 },
-    gold = { 1.0, 0.9, 0.45 },  -- the perfect clear, a cut above the stars' yellow
-    amber = { 0.95, 0.72, 0.25 },
-    blue = { 0.5, 0.75, 1.0 },
+    bar = Toy.C.plate,
+    panel = Toy.C.plate,
+    text = Toy.C.ink,
+    dim = Toy.C.inkSoft,
+    accent = Toy.C.leaf,
+    warn = Toy.C.berry,
+    good = Toy.C.leaf,
+    gold = { 0.62, 0.42, 0.0 },  -- the perfect clear, a cut above the stars
+    amber = Toy.C.amber,
+    blue = { 0.18, 0.43, 0.62 },
 }
 
 -- Hunger as a word and a colour.
@@ -42,9 +47,11 @@ UI.hungerLook = hungerLook
 local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4] or 1) end
 
 UI.FONT_SETS = {
-    desk = { tiny = 10, small = 12, hud = 16, big = 26, title = 46 },
-    touch = { tiny = 12, small = 14, hud = 18, big = 28, title = 44 },
+    desk = { tiny = 16, small = 16, hud = 20, big = 28, title = 44 },
+    touch = { tiny = 16, small = 16, hud = 20, big = 28, title = 44 },
 }
+-- which sizes are the semibold face
+local BOLD = { hud = true, big = true, title = true }
 
 function UI.new()
     local self = setmetatable({}, UI)
@@ -102,11 +109,7 @@ function UI:useFonts(set)
     if not self.fontCache[set] then
         local f = {}
         for name, size in pairs(self.fontSets[set]) do
-            f[name] = love.graphics.newFont(FONT_PATH, size)
-            -- the game's default filter is nearest, for the pixel art; text
-            -- drawn under the HUD's fractional scale needs linear or it
-            -- drops and doubles pixel columns
-            f[name]:setFilter('linear', 'linear')
+            f[name] = Toy.font(size, BOLD[name])
         end
         self.fontCache[set] = f
     end
@@ -120,7 +123,7 @@ function UI:layout(w, h)
     self.portrait = h > w * 1.2
     if self.portrait then
         -- a phone held upright: fit the width, the HUD stacks up
-        self.scale = w / 420
+        self.scale = w / 390
     elseif handheld then
         -- a phone on its side or a small window: big type, bounded by width
         self.scale = math.min(h / 340, w / 760)
@@ -130,6 +133,9 @@ function UI:layout(w, h)
     end
     self.scale = Util.clamp(self.scale, 0.6, 3.0)
     self.vw, self.vh = w / self.scale, h / self.scale
+    Toy.setScale(self.scale)
+    self.fontCache, self.fontSet = {}, nil
+    self:useFonts(handheld and 'touch' or 'desk')
     local gap = 8
     local n = #ABILITY_ORDER
     -- quick buttons, for fingers and for people who forget keys. The top
@@ -196,6 +202,13 @@ function UI:layout(w, h)
             self.buttons[i] = { tool = tool, x = 16 + (i - 1) * (bw + gap), y = self.vh - BOTTOM_BAR_H + 10, w = bw, h = th, key = tostring(i) }
         end
     end
+    if UI.RADIAL then
+        BOTTOM_BAR_H = 0
+        self.buttons = {}
+        self.panelW, self.infoH = 0, 0
+        self.goalBox = true
+        self:layoutToy()
+    end
 end
 
 function UI:toVirtual(x, y)
@@ -233,20 +246,54 @@ function UI:panelButtonAt(mx, my)
     return nil
 end
 
+-- A 56 px close button at a panel's top right corner (right edge, top).
+function UI:closeButton(id, right, top)
+    local r = { x = right - Toy.TAP, y = top, w = Toy.TAP, h = Toy.TAP }
+    Toy.button(r, { icon = 'close' })
+    self.panelButtons[#self.panelButtons + 1] = { id = id, x = r.x, y = r.y, w = r.w, h = r.h }
+    return r
+end
+
 function UI:panelButton(id, r, label, active, color)
     self:button(r, label, active, color)
     self.panelButtons[#self.panelButtons + 1] = { id = id, x = r.x, y = r.y, w = r.w, h = r.h }
 end
 
 -- A row of buttons centred at the bottom of a panel. defs = { {id, label, active, color} }
+-- Toybox buttons, 56 tall. On a narrow panel (a phone held upright) they
+-- wrap onto more rows, from the bottom up, rather than squeezing their words.
+local ROW_BH, ROW_GAP = 56, 12
+function UI:buttonRowLayout(pw, defs)
+    local need = 0
+    for _, d in ipairs(defs) do need = math.max(need, self.fonts.hud:getWidth(d[2]) + 32) end
+    local room = pw - 40
+    local perRow = math.max(1, math.min(#defs, math.floor((room + ROW_GAP) / (math.max(need, 110) + ROW_GAP))))
+    -- even rows: 4 buttons that do not fit become 2 and 2, not 3 and 1
+    local rows = math.ceil(#defs / perRow)
+    perRow = math.ceil(#defs / rows)
+    local bw = math.min(200, math.floor((room - (perRow - 1) * ROW_GAP) / perRow))
+    return perRow, rows, bw
+end
+
+-- How much taller a panel gets for its button rows than the one row of 40
+-- it was laid out for.
+function UI:buttonRowExtra(pw, defs)
+    local _, rows = self:buttonRowLayout(pw, defs)
+    return rows * ROW_BH + (rows - 1) * ROW_GAP - 40
+end
+
 function UI:panelButtonRow(x, y, pw, ph, defs)
-    local bw, bh, gap = math.min(200, math.floor((pw - 40) / #defs) - 12), 40, 12
-    local total = #defs * bw + (#defs - 1) * gap
-    local bx = x + math.floor(pw / 2 - total / 2)
-    for _, d in ipairs(defs) do
-        self:panelButton(d[1], { x = bx, y = y + ph - bh - 20, w = bw, h = bh }, d[2], d[3], d[4])
-        bx = bx + bw + gap
+    local perRow, rows, bw = self:buttonRowLayout(pw, defs)
+    for i, d in ipairs(defs) do
+        local r = math.floor((i - 1) / perRow)
+        local inRow = math.min(perRow, #defs - r * perRow)
+        local c = (i - 1) % perRow
+        local total = inRow * bw + (inRow - 1) * ROW_GAP
+        local bx = x + math.floor(pw / 2 - total / 2) + c * (bw + ROW_GAP)
+        local by = y + ph - 18 - (rows - r) * ROW_BH - (rows - 1 - r) * ROW_GAP
+        self:panelButton(d[1], { x = bx, y = by, w = bw, h = ROW_BH }, d[2], d[3], d[4])
     end
+    return rows * ROW_BH + (rows - 1) * ROW_GAP
 end
 
 -- A box with a tick in it when done.
@@ -293,8 +340,14 @@ function UI:alert(text, tile)
     self.alerts = { { text = text, ttl = ALERT_TTL, tile = tile } }
 end
 
-function UI:toast(text)
-    self.toastText, self.toastTtl = text, 2.2
+function UI:toast(text, icon)
+    self.toastText, self.toastTtl, self.toastIcon = text, 2.2, icon
+end
+
+-- A count on the stock plate bumps when it goes up.
+function UI:bump(key)
+    self.bumps = self.bumps or {}
+    self.bumps[key] = love.timer.getTime()
 end
 
 function UI:clear()
@@ -333,7 +386,8 @@ function UI:alertTiles()
     return tiles
 end
 
-function UI:isOverBars(_, my)
+function UI:isOverBars(mx, my)
+    if UI.RADIAL then return self:toyButtonAt(mx, my) ~= nil or hit(self.toyPlateRect, mx, my) end
     return my < TOP_BAR_H or my > self.vh - BOTTOM_BAR_H
 end
 
@@ -611,16 +665,13 @@ end
 
 -- A small labelled button. Returns nothing; the rect is whatever was passed.
 function UI:button(r, label, active, color)
-    if active then love.graphics.setColor(0.28, 0.32, 0.2, 1) else love.graphics.setColor(0.16, 0.17, 0.14, 1) end
-    love.graphics.rectangle('fill', r.x, r.y, r.w, r.h)
-    setColor(active and C.accent or C.dim)
-    love.graphics.rectangle('line', r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1)
-    local fonts = r.h >= 52 and { self.fonts.big, self.fonts.hud, self.fonts.small } or { self.fonts.small, self.fonts.tiny }
+    Toy.button(r, { on = active })
+    local fonts = r.h >= 40 and { self.fonts.hud, self.fonts.small } or { self.fonts.small }
     local f = fonts[#fonts]
     for _, cand in ipairs(fonts) do
         if cand:getWidth(label) <= r.w - 8 then f = cand break end
     end
-    self:printLine(label, r.x, r.y + math.floor((r.h - f:getHeight()) / 2), r.w, 'center', color or (active and C.good or C.text), { f })
+    self:printLine(label, r.x, r.y + math.floor((r.h - f:getHeight()) / 2), r.w, 'center', color or C.text, { f })
 end
 
 -- The values the top bar can show, most important first, each with its width.
@@ -1037,6 +1088,7 @@ function UI:drawBottomBar(game)
     local abilities = game.abilities
     self.jobsButton = nil
     self.followButton = nil
+    if UI.RADIAL then return end
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
     -- one label size for the whole bar: the largest every label fits in
@@ -1423,7 +1475,7 @@ function UI:drawTama(game, view)
     local lx = x + 18
     -- header: name, MEADOW
     local btnW = math.max(110, small:getWidth('MEADOW') + 28)
-    self:panelButton('tama:close', { x = x + pw - btnW - 14, y = y + 10, w = btnW, h = 32 }, 'MEADOW', false)
+    self:closeButton('tama:close', x + pw - 14, y + 10)
     self:printLine(w.name .. (game.tamaSandbox and '  (test)' or ''), lx, y + 12, pw - btnW - 46, 'left', C.good, { self.fonts.big, hud, small })
     local cy = y + 50
     -- what the colony has to care with
@@ -1455,14 +1507,19 @@ function UI:drawTama(game, view)
     cy = cy + 6
     -- bottom up: buttons (cost under each), last line, needs
     local bottom = y + ph - 14
-    local cols = 4
+    -- four across, or two by two on a phone held upright
+    local cols = inner < 480 and 2 or 4
     local gap = 8
     local bw = math.floor((inner - (cols - 1) * gap) / cols)
-    local bh = self.touch and 40 or 34
-    local by = bottom - bh - th - 4
+    local bh = Toy.TAP
+    local rowH = bh + th + 10
+    local gridRows = math.ceil(#TAMA_BUTTONS / cols)
+    local by0 = bottom - gridRows * rowH + 6
+    local by = by0
     local napping = game.tamaNap ~= nil
     for i, a in ipairs(TAMA_BUTTONS) do
-        local bx = lx + (i - 1) * (bw + gap)
+        local bx = lx + ((i - 1) % cols) * (bw + gap)
+        by = by0 + math.floor((i - 1) / cols) * rowH
         local info = a[1] ~= 'food' and w:tendInfo(a[1], game.world) or nil
         local ok = a[1] == 'food' and (game.tamaSandbox or meals > 0) or (info and info.ok)
         local label = (a[1] == 'nap' and napping) and 'WAKE' or a[2]
@@ -1475,7 +1532,7 @@ function UI:drawTama(game, view)
         else under = ok and info.cost or info.have end
         self:printLine(under, bx, by + bh + 2, bw, 'center', ok and C.amber or C.warn, { tiny })
     end
-    local ry = by - 6
+    local ry = by0 - 6
     if game.tamaLast then
         ry = ry - lh
         self:printLine(game.tamaLast, lx, ry, inner, 'left', C.good, { small, tiny })
@@ -1547,7 +1604,7 @@ function UI:drawTamaFoodBag(game, w)
     local colW = math.floor((pw - 28 - (cols - 1) * 10) / cols)
     self.tamaMenu = { x = x, y = y, w = pw, h = ph }
     self:printLine('FOOD BAG', x + 18, y + 14, pw - 140, 'left', C.text, { self.fonts.hud, small })
-    self:panelButton('tamamenu:close', { x = x + pw - 110, y = y + 10, w = 96, h = 30 }, 'CLOSE', false)
+    self:closeButton('tamamenu:close', x + pw - 14, y + 10)
     self:printLine('Tap a food to toss it to ' .. w.name .. '.', x + 18, y + 44, pw - 36, 'left', C.dim, { small, tiny })
     local ry = y + 66
     if #list == 0 then
@@ -1576,7 +1633,7 @@ end
 function UI:drawTamaWake(game, w)
     local small = self.fonts.small
     local leave = game.tamaMenu == 'wakeLeave'
-    local x, y, pw, ph = self:panel(math.min(480, self.vw - 24), 200)
+    local x, y, pw, ph = self:panel(math.min(480, self.vw - 24), 200 + self:buttonRowExtra(math.min(480, self.vw - 24), { { 'a', 'LET IT SLEEP' }, { 'b', 'WAKE, LEAVE' } }))
     self.tamaMenu = { x = x, y = y, w = pw, h = ph }
     self:printLine('Wake ' .. w.name .. '?', x + 18, y + 16, pw - 36, 'left', C.warn, { self.fonts.hud, small })
     local left = math.max(0, math.ceil(TAMA_NAP_SECONDS - game.tamaNap.t))
@@ -1686,7 +1743,7 @@ function UI:drawJobs(game)
     local navY = y + top + math.floor((ph - top - navH) / 2)
     self:panelButton('jobprev', { x = x + 10, y = navY, w = navW, h = navH }, '<', false)
     self:panelButton('jobnext', { x = x + pw - 10 - navW, y = navY, w = navW, h = navH }, '>', false)
-    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    self:closeButton('close', x + pw - 14, y + 12)
     local cy = y + top
     local lx = x + side
     self:printLine(w:describeState(), lx, cy, inner, 'left', C.text, { self.fonts.small, self.fonts.tiny })
@@ -1780,7 +1837,8 @@ function UI:drawGoalBox(game)
     self:drawGoalList(game, r.x + 8, r.y + 6, r.w - 16, r.rowH)
 end
 
-function UI:drawHUD(game)
+function UI:drawHUD(game, menuOpen)
+    if UI.RADIAL then return self:drawToyHUD(game, menuOpen) end
     self.bannerBottom = TOP_BAR_H
     self:drawTopBar(game)
     self:drawPauseBanner(game)
@@ -1904,7 +1962,7 @@ function UI:drawUnits(game, view)
         end
         ry = ry + rowH
     end
-    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    self:closeButton('close', x + pw - 14, y + 12)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1917,14 +1975,15 @@ local LOG_KIND = {
 function UI:drawLog(game)
     local log = game.log or {}
     local pw = math.min(900, self.vw - 24)
-    local ph = self.vh - TOP_BAR_H - 24
+    local topH = UI.RADIAL and 0 or TOP_BAR_H
+    local ph = self.vh - topH - 24
     local x, y
     x, y, pw, ph = self:panel(pw, ph)
-    y = math.max(y, TOP_BAR_H + 8)
+    y = math.max(y, topH + 8)
     self.logPanel = { x = x, y = y, w = pw, h = ph }
     local btnW = self.touch and 100 or 110
     self:printLine('LOG', x + 18, y + 14, pw - btnW - 52, 'left', C.text, { self.fonts.big, self.fonts.hud })
-    self:panelButton('close', { x = x + pw - btnW - 18, y = y + 12, w = btnW, h = 30 }, 'CLOSE', false)
+    self:closeButton('close', x + pw - 14, y + 12)
     -- this season, by kind
     local season = game.scoring and game.scoring:seasonLabel() or ''
     local counts, order = {}, {}
@@ -2000,17 +2059,14 @@ function UI:panel(w, h)
     w = math.min(w, self.vw - 16)
     h = math.min(h, self.vh - 16)
     local x, y = math.floor(self.vw / 2 - w / 2), math.floor(self.vh / 2 - h / 2)
-    love.graphics.setColor(0, 0, 0, 0.45)
+    love.graphics.setColor(40 / 255, 28 / 255, 18 / 255, 0.45)
     love.graphics.rectangle('fill', 0, 0, self.vw, self.vh)
-    setColor(C.panel)
-    love.graphics.rectangle('fill', x, y, w, h)
-    setColor(C.accent)
-    love.graphics.rectangle('line', x + 0.5, y + 0.5, w - 1, h - 1)
+    Toy.plate(x, y, w, h)
     return x, y, w, h
 end
 
 function UI:drawReport(report, scoring)
-    local x, y, pw, ph = self:panel(700, 460)
+    local x, y, pw, ph = self:panel(700, 460 + self:buttonRowExtra(math.min(700, self.vw - 16), { { 'next', 'THE YEAR ENDS' } }))
     self:centeredFit('END OF ' .. Scoring.seasonName(report.quarter):upper(), y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     love.graphics.setFont(self.fonts.hud)
     local rows = {
@@ -2023,7 +2079,7 @@ function UI:drawReport(report, scoring)
         { 'Wandered off', tostring(report.attrition) },
         { 'New eggs', '+' .. (report.eggs or report.hires or 0), UI.iconMorphi },
     }
-    local rs = math.min(30, math.floor((ph - 130) / #rows))
+    local rs = math.min(30, math.floor((ph - 130 - math.max(0, self:buttonRowExtra(pw, { { 'next', 'THE YEAR ENDS' } }))) / #rows))
     local ry = y + 70
     local gradeW = self.fonts.title:getWidth('F') + 40
     local lx = x + math.floor(pw * 0.06)
@@ -2043,17 +2099,27 @@ function UI:drawReport(report, scoring)
 end
 
 function UI:drawTitle(title, highScore)
-    love.graphics.setColor(0.09, 0.1, 0.08, 1)
+    Toy.set(Toy.C.plate)
     love.graphics.rectangle('fill', 0, 0, self.vw, self.vh)
     self.titleButtons = {}
     local cx = self.vw / 2
+    self.titleButtons.mute = { x = self.vw - 16 - Toy.TAP, y = 16, w = Toy.TAP, h = Toy.TAP }
+    if title.editingSeed and self.touch and self.vh < 520 then
+        -- a short screen typing a seed: just the seed and the keys
+        local seedText = 'SEED: ' .. title.seed .. (math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' ')
+        local _, sh = self:centered(seedText, 20, self.fonts.big, C.good, self.vw - 2 * (Toy.TAP + 24))
+        self.titleButtons.seed = { x = Toy.TAP + 24, y = 12, w = self.vw - 2 * (Toy.TAP + 24), h = sh + 16 }
+        self:drawSeedKeyboard(math.max(16 + Toy.TAP + 8, 20 + sh + 16))
+        Toy.button(self.titleButtons.mute, { icon = 'sound', on = title.muted })
+        return
+    end
     local short = self.vh < 520
     local g = self.vh / 800            -- gaps shrink on short screens
     local function gap(px) return math.floor(px * g) end
-    local mh = self.touch and 34 or 28
-    self.titleButtons.mute = { x = self.vw - 90, y = 10, w = 80, h = mh }
+    self.titleButtons.mute = { x = self.vw - 16 - Toy.TAP, y = 16, w = Toy.TAP, h = Toy.TAP }
     -- the name keeps clear of MUTE in the corner
     local y = math.max(gap(40), 10)
+    if self.vw < 480 then y = 16 + Toy.TAP + 8 end
     local _, th = self:centered('MORPHIS', y, self.fonts.title, C.text, self.vw - 2 * 100)
     y = y + th + gap(14)
     if not short then
@@ -2128,7 +2194,7 @@ function UI:drawTitle(title, highScore)
         if title.editingSeed and self.touch then
             -- phones will not raise a keyboard for love.js: here is one
             self:drawSeedKeyboard(y + 4)
-            self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+            Toy.button(self.titleButtons.mute, { icon = 'sound', on = title.muted })
             return
         end
         local hint = title.editingSeed and 'type a seed, then press ENTER' or (self.touch and 'tap the seed to change it' or 'tap or press S to change the seed')
@@ -2140,11 +2206,8 @@ function UI:drawTitle(title, highScore)
     y = y + gap(30)
     local stw = math.min(self.vw - 40, math.max(260, self.fonts.big:getWidth('START') + 80))
     self.titleButtons.start = { x = cx - stw / 2, y = y, w = stw, h = 54 }
-    love.graphics.setColor(0.2, 0.24, 0.14, 1)
-    love.graphics.rectangle('fill', self.titleButtons.start.x, y, stw, 54)
-    setColor(C.accent)
-    love.graphics.rectangle('line', self.titleButtons.start.x + 0.5, y + 0.5, stw - 1, 53)
-    self:centered('START', y + 14, self.fonts.big, C.good)
+    Toy.button(self.titleButtons.start, { on = true })
+    self:centered('START', y + math.floor((54 - self.fonts.big:getHeight()) / 2), self.fonts.big, C.text)
     y = y + 54 + gap(14)
     -- the small print, as much of it as there is room for
     local notes = {
@@ -2165,7 +2228,7 @@ function UI:drawTitle(title, highScore)
         if y + h > self.vh - 6 then break end
         y = y + self:centeredFit(note, y, self.vw - 40, C.dim, fonts) + 6
     end
-    self:button(self.titleButtons.mute, title.muted and 'UNMUTE' or 'MUTE', title.muted)
+    Toy.button(self.titleButtons.mute, { icon = 'sound', on = title.muted })
     -- which build this is, for telling a stale page from a new one
     love.graphics.setFont(self.fonts.tiny)
     setColor(C.dim)
@@ -2209,7 +2272,7 @@ local RUN_BUTTONS = { { 'history', 'HISTORY', false }, { 'export', 'EXPORT', fal
 function UI:drawLevelClear(game)
     local lv = game.level
     local last = lv.index >= #game.levels
-    local x, y, pw, ph = self:panel(720, last and 350 or 320)
+    local x, y, pw, ph = self:panel(720, (last and 350 or 320) + self:buttonRowExtra(math.min(720, self.vw - 16), { { 'next', 'NEXT LEVEL' }, { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centeredFit(Campaign.title[lv.set] .. ' ' .. lv.index .. ' CLEAR: ' .. lv.def.name:upper(), y + 28, pw - 40, C.good, { self.fonts.big, self.fonts.hud })
     -- a perfect clear (not a single log) earns a fourth star, in gold
     local n = lv.perfect and 4 or 3
@@ -2258,7 +2321,7 @@ function UI:drawGoal(game)
         title = 'FREE PLAY'
         lines = {
             { 'A random meadow, four seasons, newcomers when the haul is good. Grumbles and hunger wear their mood down; at zero a morphi leaves.', C.text },
-            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored: DIG through the clay (shinies hide in it) and BRIDGE to open the way, and lay a STASH or a BASKET for the berries.', C.text },
+            { 'Bushes wear out and new ones pop up out of reach. A morphi with nothing it can get at gets bored. Tap the meadow to see what you can do there: dig through clay (shinies hide in it), bridge the streams, set out a stash or a basket for the berries.', C.text },
             { 'Each morphi loves one food (a big meal and a better mood) and hates one. Shinies from the diggers buy happy thoughts at the home nest.', C.dim },
         }
     end
@@ -2333,7 +2396,7 @@ function UI:drawArcadeGoal(game)
     local t = def.targets
     local costs = points .. ' points to spend on ' .. diff.name:lower() .. '. Spend ' .. t.easy .. ' or fewer for two stars, ' .. t.clever .. ' or fewer for three, none at all for a PERFECT. Bins, walls, doors and bridge tiles cost a log each; floors and mining are free.'
     if points == 0 then costs = 'Nothing to spend and nothing to build. Just watch.' end
-    local footer = 'GOAL up top brings this back, SPEED fast forwards, MENU starts the level over.'
+    local footer = 'The goal is in the menu too. Speed fast forwards; the menu starts the level over.'
     local band = {}
     for _, w in ipairs(game.workers) do
         if w.alive then band[#band + 1] = w.species .. ' the ' .. w.roleInfo.label:lower() end
@@ -2410,7 +2473,7 @@ end
 
 function UI:drawLevelFailed(game)
     local lv = game.level
-    local x, y, pw, ph = self:panel(720, 260)
+    local x, y, pw, ph = self:panel(720, 260 + self:buttonRowExtra(math.min(720, self.vw - 16), { { 'next', 'NEXT LEVEL' }, { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centeredFit('LEVEL ' .. lv.index .. ' FAILED', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit(game.failReason or 'Somebody wandered off.', y + 86, pw - 40, C.text, { self.fonts.hud, self.fonts.small })
     self:centeredFit('Nobody can be lost. Feed everyone to the end of the clock.', y + 120, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
@@ -2418,7 +2481,7 @@ function UI:drawLevelFailed(game)
 end
 
 function UI:drawConfirmQuit()
-    local x, y, pw, ph = self:panel(720, 230)
+    local x, y, pw, ph = self:panel(720, 230 + self:buttonRowExtra(math.min(720, self.vw - 16), { { 'restart', 'RESTART (R)' }, { 'yes', 'QUIT (Y)' }, { 'no', 'KEEP PLAYING' } }))
     self:centeredFit('Quit to the title screen?', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Or start this one over.', y + 76, pw - 40, C.dim)
     self:panelButtonRow(x, y, pw, ph, { { 'restart', self.touch and 'RESTART' or 'RESTART (R)', false }, { 'yes', self.touch and 'QUIT' or 'QUIT (Y)', false, C.warn }, { 'no', 'KEEP PLAYING', true } })
@@ -2430,20 +2493,27 @@ function UI:drawMilestones(stats, x, y, w, bottom)
     local list = stats and stats.milestones or {}
     if #list == 0 then return y end
     local tiny = self.fonts.tiny
-    local lh = tiny:getHeight() + 4
-    self:printLine('MILESTONES', x, y, w, 'center', C.accent, { self.fonts.small, tiny })
+    self:printLine('MILESTONES', x, y, w, 'center', C.accent, { self.fonts.small })
     y = y + self.fonts.small:getHeight() + 6
-    local first = math.max(1, #list - math.floor((bottom - y) / lh) + 1)
+    -- the newest that fit, each wrapped (never cut short)
+    local heights, used, first = {}, 0, #list + 1
+    for i = #list, 1, -1 do
+        local _, lines = tiny:getWrap(list[i].season .. ': ' .. list[i].text, w)
+        local h = #lines * tiny:getHeight() + 4
+        if y + used + h > bottom then break end
+        heights[i], used, first = h, used + h, i
+    end
+    love.graphics.setFont(tiny)
+    setColor(C.text)
     for i = first, #list do
-        local m = list[i]
-        self:printLine(m.season .. ': ' .. m.text, x, y, w, 'center', C.text, { self.fonts.small, tiny })
-        y = y + lh
+        love.graphics.printf(list[i].season .. ': ' .. list[i].text, x, y, w, 'center')
+        y = y + heights[i]
     end
     return y
 end
 
 function UI:drawGameOver(scoring, highScore, isNew, stats)
-    local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0))
+    local x, y, pw, ph = self:panel(720, 360 + (stats and #stats.milestones > 0 and 40 + 22 * math.min(#stats.milestones, 4) or 0) + self:buttonRowExtra(math.min(720, self.vw - 16), { { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centeredFit('Everyone wandered off.', y + 30, pw - 40, C.warn, { self.fonts.big, self.fonts.hud })
     self:centeredFit('Nobody was left by ' .. Scoring.seasonName(scoring.quarter):lower(), y + 80, pw - 40, C.dim)
     self:centeredFit('FINAL SCORE: ' .. scoring:finalScore(), y + math.floor(ph * 0.42), pw - 40, C.text, { self.fonts.big, self.fonts.hud })
@@ -2452,12 +2522,12 @@ function UI:drawGameOver(scoring, highScore, isNew, stats)
     else
         self:centered('HIGH SCORE: ' .. highScore, y + math.floor(ph * 0.58), self.fonts.hud, C.dim)
     end
-    self:drawMilestones(stats, x + 20, y + math.floor(ph * 0.58) + 40, pw - 40, y + ph - 70)
+    self:drawMilestones(stats, x + 20, y + math.floor(ph * 0.58) + 40, pw - 40, y + ph - 70 - math.max(0, self:buttonRowExtra(pw, { { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] })))
     self:panelButtonRow(x, y, pw, ph, { { 'title', 'TITLE', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
 function UI:drawAnnual(scoring, highScore, isNew, stats)
-    local x, y, pw, ph = self:panel(720, 420 + (stats and #stats.milestones > 0 and 40 + 22 * #stats.milestones or 0))
+    local x, y, pw, ph = self:panel(720, 420 + (stats and #stats.milestones > 0 and 40 + 22 * #stats.milestones or 0) + self:buttonRowExtra(math.min(720, self.vw - 16), { { 'next', 'NEXT LEVEL' }, { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centered('THE YEAR IS OVER', y + 24, self.fonts.big, C.good)
     love.graphics.setFont(self.fonts.hud)
     local rs = math.min(26, math.floor((ph - 200) / math.max(#scoring.reports, 1)))
@@ -2476,13 +2546,13 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
     else
         self:centered('HIGH SCORE: ' .. highScore, ry + 66, self.fonts.hud, C.dim)
     end
-    self:drawMilestones(stats, x + 20, ry + 106, pw - 40, y + ph - 70)
+    self:drawMilestones(stats, x + 20, ry + 106, pw - 40, y + ph - 70 - math.max(0, self:buttonRowExtra(pw, { { 'next', 'KEEP GOING' }, { 'title', 'TITLE' }, RUN_BUTTONS[1], RUN_BUTTONS[2] })))
     self:panelButtonRow(x, y, pw, ph, { { 'next', 'KEEP GOING', true }, { 'title', 'TITLE', false }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
 end
 
 -- The tester's corner: FINGERS, and the run's audit log.
 function UI:drawTools(fingerDebug)
-    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44))
+    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44) + self:buttonRowExtra(math.min(620, self.vw - 16), { { 'back', 'BACK' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     self:centeredFit('For finding bugs and tuning the meadow.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
@@ -2500,14 +2570,15 @@ end
 -- the page shows the text in a box of its own over the game; here, the
 -- start of it, with COPY and DOWNLOAD.
 function UI:drawExport(text, saved)
-    local x, y, pw, ph = self:panel(760, saved and not saved.web and 460 or 380)
+    local x, y, pw, ph = self:panel(760, (saved and not saved.web and 460 or 380) + self:buttonRowExtra(math.min(760, self.vw - 16), { { 'a', 'COPY' }, { 'b', 'DOWNLOAD' }, { 'c', 'DONE' } }))
     self:centeredFit('EXPORT THIS RUN', y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     if saved then
         local tiny = self.fonts.tiny
         local head = saved.days .. ' days as ' .. saved.name
-        self:printWrap(head, x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, tiny }, 2)
+        local headH = self:printWrap(head, x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, tiny }, 3)
+        local below = math.max(y + 116, y + 70 + headH + 10)
         if saved.web and not saved.message then
-            self:printWrap('The run is in the text box over the game. Copy it, or download it, then paste it into the run viewer.', x + 24, y + 120, pw - 48, C.good, { self.fonts.small, tiny }, 4)
+            self:printWrap('The run is in the text box over the game. Copy it, or download it, then paste it into the run viewer.', x + 24, below, pw - 48, C.good, { self.fonts.small, tiny }, 4)
             self:panelButtonRow(x, y, pw, ph, { { 'done', 'DONE', true } })
             return
         end
@@ -2517,9 +2588,11 @@ function UI:drawExport(text, saved)
             local _, ml = tiny:getWrap(saved.message, pw - 48)
             msgH = #ml * tiny:getHeight() + 8
         end
-        local box = { x = x + 24, y = y + 116, w = pw - 48, h = math.max(tiny:getHeight() + 12, ph - 200 - msgH) }
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle('fill', box.x, box.y, box.w, box.h)
+        local rowDefs = saved.web and { { 'done', 'DONE', true } } or { { 'copy', 'COPY', true }, { 'download', 'DOWNLOAD', false }, { 'done', 'DONE', false } }
+        local extra = math.max(0, self:buttonRowExtra(pw, rowDefs))
+        local box = { x = x + 24, y = below, w = pw - 48, h = math.max(tiny:getHeight() + 12, ph - 84 - (below - y) - msgH - extra) }
+        Toy.set(Toy.C.plate2)
+        Toy.rrect('fill', box.x, box.y, box.w, box.h, 12)
         local _, lines = tiny:getWrap(saved.json:sub(1, 4000), box.w - 16)
         local fit = math.max(1, math.floor((box.h - 12) / tiny:getHeight()))
         setColor(C.text)
@@ -2535,11 +2608,14 @@ function UI:drawExport(text, saved)
         return
     end
     self:printWrap('What was fun? What was not? (' .. STATS_BLURB_MAX .. ' letters at most)', x + 24, y + 70, pw - 48, C.dim, { self.fonts.small, self.fonts.tiny }, 2)
-    local box = { x = x + 24, y = y + 120, w = pw - 48, h = ph - 210 }
-    love.graphics.setColor(0, 0, 0, 0.5)
-    love.graphics.rectangle('fill', box.x, box.y, box.w, box.h)
-    setColor(C.accent)
-    love.graphics.rectangle('line', box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1)
+    local saveDefs = { { 'cancel', 'CANCEL', false }, { 'save', self.touch and 'SAVE' or 'SAVE (ENTER)', true } }
+    local box = { x = x + 24, y = y + 120, w = pw - 48, h = ph - 226 - math.max(0, self:buttonRowExtra(pw, saveDefs)) }
+    Toy.set(Toy.C.white)
+    Toy.rrect('fill', box.x, box.y, box.w, box.h, 12)
+    Toy.set(Toy.C.ink)
+    love.graphics.setLineWidth(Toy.LINE)
+    Toy.rrect('line', box.x, box.y, box.w, box.h, 12)
+    love.graphics.setLineWidth(1)
     self.panelButtons[#self.panelButtons + 1] = { id = 'typing', x = box.x, y = box.y, w = box.w, h = box.h }
     local caret = math.floor(love.timer.getTime() * 2) % 2 == 0 and '_' or ' '
     self:printWrap(text .. caret, box.x + 10, box.y + 8, box.w - 20, C.text, { self.fonts.small, self.fonts.tiny }, 5)
@@ -2553,23 +2629,38 @@ function UI:drawHistory(lines, scroll)
     local x, y, pw, ph = self:panel(900, self.vh - 24)
     self:printLine('HISTORY', x + 18, y + 14, pw - 36, 'left', C.text, { self.fonts.big, self.fonts.hud })
     local tiny = self.fonts.tiny
-    local lh = tiny:getHeight() + 6
-    local top, bottom = y + 60, y + ph - 70
-    local fit = math.max(1, math.floor((bottom - top) / lh))
+    local w = pw - 36
+    local defs = { { 'older', 'OLDER', false }, { 'close', 'CLOSE', true }, { 'newer', 'NEWER', false } }
+    local top, bottom = y + 60, y + ph - 70 - math.max(0, self:buttonRowExtra(pw, defs))
     if #lines == 0 then
-        self:printLine('Nothing worth writing down yet.', x + 18, top, pw - 36, 'left', C.dim, { self.fonts.small, tiny })
+        self:printLine('Nothing worth writing down yet.', x + 18, top, w, 'left', C.dim, { self.fonts.small })
     end
-    local first = math.max(1, math.min(#lines - fit + 1, #lines - fit + 1 - (scroll or 0)))
-    for i = first, math.min(#lines, first + fit - 1) do
-        self:printLine(lines[i], x + 18, top + (i - first) * lh, pw - 36, 'left', C.text, { tiny })
+    -- whole entries, wrapped, newest at the bottom; scroll steps back by entries
+    local function hOf(i)
+        local _, l = tiny:getWrap(lines[i], w)
+        return #l * tiny:getHeight() + 6
     end
-    local defs = { { 'close', 'CLOSE', true } }
-    if #lines > fit then
-        table.insert(defs, 1, { 'older', 'OLDER', false })
-        defs[#defs + 1] = { 'newer', 'NEWER', false }
+    local last = math.max(0, #lines - (scroll or 0))
+    local first, used = last + 1, 0
+    for i = last, 1, -1 do
+        local h = hOf(i)
+        if used + h > bottom - top then break end
+        first, used = i, used + h
     end
+    local fit = math.max(1, last - first + 1)
+    love.graphics.setFont(tiny)
+    setColor(C.text)
+    local cy = top
+    for i = first, last do
+        love.graphics.printf(lines[i], x + 18, cy, w, 'left')
+        cy = cy + hOf(i)
+    end
+    if #lines <= fit then defs = { { 'close', 'CLOSE', true } } end
     self:panelButtonRow(x, y, pw, ph, defs)
     return fit
 end
+
+-- the Toybox HUD (src/ui_toy.lua)
+require('src.ui_toy')(UI)
 
 return UI

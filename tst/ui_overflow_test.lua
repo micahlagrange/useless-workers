@@ -86,10 +86,24 @@ local function fail(screen, msg)
     f.count = f.count + 1
 end
 
+-- Text is never cut short (epic-toybox-radial-ui, tb-type): printLine trims
+-- with '..' only when no font it was given fits, so that is a failure.
+local cuts = {}
+local printLine = UI.printLine
+function UI:printLine(text, x, y, maxWidth, align, color, fonts)
+    local list = fonts or { self.fonts.hud, self.fonts.small, self.fonts.tiny }
+    local fits = false
+    for _, f in ipairs(list) do if f:getWidth(text) <= maxWidth then fits = true break end end
+    if not fits then cuts[#cuts + 1] = text end
+    return printLine(self, text, x, y, maxWidth, align, color, fonts)
+end
+
 -- Draw one frame and check every text the HUD drew (in its virtual space).
 local function frame(screen)
     Stub.texts, buttons = {}, {}
+    cuts = {}
     love.draw()
+    for _, c in ipairs(cuts) do fail(screen, string.format('%q is cut short', c)) end
     local ui = H.ui()
     local screenRect = { x = 0, y = 0, w = ui.vw, h = ui.vh }
     local texts = {}
@@ -160,23 +174,33 @@ local function playingScreens(tag)
     game.suggestRestart = true
     frame(tag .. ' stuck')
     game.suggestRestart = false
-    H.setState('units')
-    frame(tag .. ' units')
-    -- the job screen, for each morphi (free play), and with no neutral job
+    -- the ring on each morphi (its jobs, or just its caption), and on the
+    -- home nest (the units list and the job screen it replaced)
+    local Ring, Hud = require('src.ring'), require('src.hud')
+    local hud = H.hud()
     for _, w in ipairs(game.workers) do
-        if w.jobSet then
-            game.selectedWorker = w
-            H.setState('jobs')
-            frame(tag .. ' jobs ' .. w.name)
-            local keep = w.jobSet.neutral
-            w.jobSet.neutral = nil
-            H.setState('playing')
-            frame(tag .. ' selected, no neutral ' .. w.name)
-            H.setState('jobs')
-            frame(tag .. ' jobs, no neutral ' .. w.name)
-            w.jobSet.neutral = keep
+        if w.alive and not w:isBaby() and not w:isEgg() then
+            local spec = Ring.forWorker(w) or { kind = 'morphi', worker = w, items = {}, center = { id = 'follow', icon = 'follow' } }
+            spec.caption = Hud.workerCaption(w)
+            hud:open(spec, 0)
+            -- the game nudges the camera so the ring and its caption fit
+            love.draw()
+            local dx, dy = hud:fitShift(game, TOP_BAR_H + 8)
+            game.camera:pan(dx, dy)
+            frame(tag .. ' ring ' .. w.name)
         end
     end
+    local br = game.world.breakroom
+    if br then
+        local spec = Ring.forTile(game.world, br.x, br.y, ABILITY_ORDER)
+        hud.homeItems = {}
+        for i, w in ipairs(game.workers) do
+            if w.alive then hud.homeItems[#hud.homeItems + 1] = { id = 'look:' .. i, face = true, color = Hud.workerColor(w), label = w.name } end
+        end
+        hud:open(spec, 0)
+        frame(tag .. ' home ring')
+    end
+    hud:close()
     game.selectedWorker = nil
     H.setState('playing')
     -- Tamagotchi mode, for each baby
@@ -343,8 +367,14 @@ function TestUiOverflow:testEveryScreenFits()
         setSize(size)
         Highscore.resetMemory()
         titleScreens('fresh')
-        arcadeScreens()
-        survivalScreens()
+        -- the arcade and survival levels are off the title and kept for the
+        -- hunting events: their screens are not checked here (Micah,
+        -- 2026-10-23: no more work on arcade). arcade_test and levels_test
+        -- still play them.
+        if TITLE_LEVELS then
+            arcadeScreens()
+            survivalScreens()
+        end
         freePlayScreens()
         titleScreens('all clear')
     end
