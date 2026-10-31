@@ -1,6 +1,6 @@
 name = "morphis"
 love_version = "11.4"
-default_targets = ["lovejs", "win64", "macos", "appimage"]
+default_targets = ["lovejs"]
 build_directory = "makelove-build"
 
 love_files = [
