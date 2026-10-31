@@ -7,3 +7,4 @@ stats/*
 
 # itch devlog post sources are scratch; the posts live on itch as drafts
 devlog/
+.jam/

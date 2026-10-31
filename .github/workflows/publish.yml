@@ -1,0 +1,23 @@
+# Vended by game-jam/scripts/jamci.mjs; the build lives in micahlagrange/jam-ci.
+# Edit the inputs, not the steps. Every push builds and tests; only the default
+# branch publishes to itch, including the push of an approved epic's merge.
+name: publish
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    uses: micahlagrange/jam-ci/.github/workflows/publish-love.yml@main
+    with:
+      itch_game: 'morphi'
+      game_name: 'morphis'
+      test: 'pip install lupa && python3 tst/run.py'
+      makelove: 'git+https://github.com/pfirsich/makelove'
+      post_build: 'python3 tools/patch_lovejs.py makelove-build/lovejs/morphis-lovejs.zip'
+    secrets: inherit
