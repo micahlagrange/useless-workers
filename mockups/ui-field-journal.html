@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Morphis Field Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* ======================================================================
+   FIELD JOURNAL - design tokens
+   spacing: 8px grid (4px half-step only inside components)
+   type: 4 steps - 12 caption / 14 body / 18 heading / 24 display
+   ====================================================================== */
+:root{
+  --s-h:4px; --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s6:48px;
+  --t-cap:12px; --lh-cap:16px;
+  --t-body:14px; --lh-body:20px;
+  --t-head:18px; --lh-head:24px;
+  --t-disp:24px; --lh-disp:32px;
+  --paper:#F6F0E1; --paper-2:#EDE4CE; --paper-3:#E3D7B9; --line:#CFC19F;
+  --ink:#2B281F; --ink-2:#575140; --ink-off:#8F876F;
+  --moss:#3F6B35; --moss-soft:#DDE7CC;
+  --berry:#A13A2D; --berry-soft:#F4DAD3;
+  --honey:#865710; --honey-soft:#F5E3B9; --honey-fill:#D9A441;
+  --sky:#2E5E7D;
+  --r1:8px; --r2:16px;
+  --btn-md:40px; --btn-sm:32px;
+  --sheet-w:336px; --strip-h:48px;
+  --shadow:0 1px 0 rgba(43,40,31,.06),0 8px 24px rgba(43,40,31,.14);
+  --font:'Nunito',system-ui,sans-serif; --font-d:'Fraunces',Georgia,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#D9D2BF;color:var(--ink);font:400 var(--t-body)/var(--lh-body) var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+svg.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.ic.l{width:24px;height:24px}
+
+/* ---------- mockup chrome (not part of the game) ---------- */
+.mockbar{display:flex;align-items:center;gap:var(--s1);padding:var(--s1) var(--s2);background:#2B281F;color:#F6F0E1;position:sticky;top:0;z-index:50;overflow-x:auto;scrollbar-width:none}
+.mockbar::-webkit-scrollbar{display:none}
+.mockbar b{font:600 var(--t-head)/var(--lh-head) var(--font-d);white-space:nowrap;margin-right:var(--s1)}
+.mockbar .grp{display:flex;gap:var(--s-h);flex:none}
+.mockbar button{height:32px;padding:0 12px;border-radius:var(--r1);border:1px solid #57513f;background:transparent;color:#F6F0E1;font-weight:600;white-space:nowrap;cursor:pointer}
+.mockbar button[aria-pressed=true]{background:#F6F0E1;color:#2B281F}
+.mockbar .sep{width:1px;height:24px;background:#57513f;flex:none;margin:0 var(--s1)}
+.stage{display:flex;justify-content:center;padding:var(--s2)}
+#game{position:relative;width:min(1280px,100%);height:min(720px,calc(100vh - 80px));min-height:520px;border-radius:var(--r2);overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.25);container-type:size;container-name:game;background:#9DC07A}
+.stage.phone #game{width:390px;height:844px;border-radius:32px;border:8px solid #2B281F}
+@media (max-width:600px){
+  .stage{padding:0}
+  #game,.stage.phone #game{width:100%;height:calc(100dvh - 48px);min-height:0;border-radius:0;border:0}
+  .frame-grp{display:none}
+}
+
+/* ---------- the game UI ---------- */
+.ui{position:absolute;inset:0;display:grid;grid-template-rows:var(--strip-h) 1fr;grid-template-columns:1fr var(--sheet-w);user-select:none;-webkit-user-select:none}
+.ui.sheet-hidden{grid-template-columns:1fr 0}
+
+/* top strip */
+.strip{grid-column:1/-1;display:flex;align-items:center;gap:var(--s2);padding:0 var(--s1) 0 var(--s2);background:rgba(246,240,225,.97);border-bottom:1px solid var(--line);z-index:5;min-width:0}
+.res{display:flex;gap:var(--s2);align-items:center;min-width:0}
+.res .it{display:flex;align-items:center;gap:var(--s-h);white-space:nowrap}
+.res .it b{font-weight:800}
+.res .it span{color:var(--ink-2)}
+.res .it.low b{color:var(--berry)}
+.when{display:flex;gap:var(--s1);align-items:center;color:var(--ink-2);white-space:nowrap;padding-left:var(--s2);border-left:1px solid var(--line)}
+.when b{color:var(--ink);font-weight:800}
+.when .sicon{display:none}
+.when .t.warn{color:var(--berry);font-weight:800}
+.strip .spacer{flex:1}
+.strip .ctl{display:flex;gap:var(--s1);align-items:center}
+
+/* ONE button, two sizes */
+.btn{height:var(--btn-md);min-width:var(--btn-md);padding:0 var(--s2);display:inline-flex;align-items:center;justify-content:center;gap:var(--s1);border-radius:var(--r1);border:1px solid var(--line);background:var(--paper);color:var(--ink);font:600 var(--t-body)/var(--lh-body) var(--font);cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s}
+.btn.sm{height:var(--btn-sm);min-width:var(--btn-sm);padding:0 12px}
+.btn.ico{padding:0}
+.btn:hover{background:var(--paper-2)}
+.btn:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.btn[aria-pressed=true]{background:var(--moss);border-color:var(--moss);color:#fff}
+.btn[aria-pressed=true] .k{color:#fff;border-color:rgba(255,255,255,.5)}
+.btn:disabled,.btn[aria-disabled=true]{color:var(--ink-off);background:var(--paper);border-style:dashed;cursor:not-allowed}
+.btn.warn{color:var(--berry)}
+.btn.full{width:100%}
+.k{font:800 var(--t-cap)/var(--lh-cap) var(--font);color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:0 4px;min-width:16px;text-align:center}
+.seg{display:inline-flex}
+.seg .btn{border-radius:0;margin-left:-1px}
+.seg .btn:first-child{border-radius:var(--r1) 0 0 var(--r1);margin-left:0}
+.seg .btn:last-child{border-radius:0 var(--r1) var(--r1) 0}
+
+/* map */
+.map{grid-row:2;grid-column:1;position:relative;overflow:hidden;touch-action:none}
+.ui.sheet-hidden .map{grid-column:1/-1}
+.map svg.world{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:default}
+.ui[data-tool=dig] svg.world,.ui[data-tool=bridge] svg.world{cursor:crosshair}
+.ui[data-tool=stash] svg.world,.ui[data-tool=basket] svg.world,.ui[data-tool=nest] svg.world{cursor:copy}
+.ui.paused svg.world{filter:saturate(.45) brightness(1.04)}
+.mo{transition-property:transform;transition-timing-function:ease-in-out;cursor:pointer}
+.mo .ring{opacity:0}
+.mo.sel .ring{opacity:1}
+.bld{cursor:pointer}
+.bld.sel .ring{opacity:1}
+.bld .ring{opacity:0}
+.tile{stroke:rgba(70,40,20,.18);stroke-width:1}
+.tile.mark{fill:url(#hatch)}
+.tile.dug{fill:#C9A57A}
+.site{opacity:.55}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.bob{animation:bob 1.6s ease-in-out infinite}
+.ui.paused .bob{animation-play-state:paused}
+
+/* notices on the map: mode chip, paused, alerts */
+.notices{position:absolute;top:var(--s2);left:var(--s2);right:var(--s2);display:flex;flex-direction:column;align-items:center;gap:var(--s1);pointer-events:none;z-index:4}
+.chip{pointer-events:auto;display:flex;align-items:center;gap:var(--s1);min-height:var(--btn-md);padding:var(--s-h) var(--s-h) var(--s-h) var(--s2);background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--shadow);max-width:100%}
+.chip .txt{display:flex;flex-direction:column;min-width:0;padding:var(--s-h) 0}
+.chip .txt b{font-weight:800}
+.chip .txt span{color:var(--ink-2)}
+.chip.alert{border-color:#D9A095;background:#FBEDE8}
+.chip.alert .dot{width:8px;height:8px;border-radius:50%;background:var(--berry);flex:none}
+.chip.pause{padding-right:var(--s2)}
+.toast{position:absolute;left:50%;bottom:var(--s3);transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--paper);padding:var(--s1) var(--s2);border-radius:var(--r2);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:6;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+/* the ONE side sheet */
+.sheet{grid-row:2;grid-column:2;display:flex;flex-direction:column;min-height:0;background:var(--paper);border-left:1px solid var(--line);z-index:5;position:relative;
+  background-image:repeating-linear-gradient(transparent 0 23px,rgba(140,120,80,.10) 23px 24px)}
+.ui.sheet-hidden .sheet{display:none}
+.grab{display:none}
+.sh-head{padding:var(--s2) var(--s2) var(--s1);display:flex;flex-direction:column;gap:var(--s1);background:var(--paper);border-bottom:1px solid var(--line)}
+.sh-top{display:flex;align-items:flex-start;gap:var(--s1)}
+.sh-top .ttl{flex:1;min-width:0}
+.cap{font:800 var(--t-cap)/var(--lh-cap) var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+h2{margin:0;font:600 var(--t-disp)/var(--lh-disp) var(--font-d)}
+h3{margin:0;font:800 var(--t-head)/var(--lh-head) var(--font)}
+.sub{margin:0;color:var(--ink-2)}
+.sh-body{flex:1;overflow-y:auto;padding:var(--s2);display:flex;flex-direction:column;gap:var(--s3);overscroll-behavior:contain}
+.sh-foot{padding:var(--s1) var(--s2) var(--s2);display:flex;gap:var(--s1);background:var(--paper);border-top:1px solid var(--line)}
+.sh-foot .btn{flex:1}
+.tabs{display:flex}
+.tabs .btn{flex:1}
+.sec{display:flex;flex-direction:column;gap:var(--s1)}
+.sec .hint{color:var(--ink-2);margin:0}
+
+/* card + list row */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden}
+.card.pad{padding:var(--s2)}
+.row{display:flex;align-items:center;gap:var(--s2);min-height:56px;padding:var(--s1) var(--s2);border:0;border-bottom:1px solid var(--line);background:transparent;width:100%;text-align:left;cursor:pointer}
+.row:last-child{border-bottom:0}
+button.row:hover{background:var(--paper-2)}
+.row[aria-pressed=true]{background:var(--moss-soft);box-shadow:inset 4px 0 0 var(--moss)}
+.row[aria-disabled=true]{cursor:not-allowed}
+.row[aria-disabled=true] .nm{color:var(--ink-off)}
+.row .mid{flex:1;min-width:0;display:flex;flex-direction:column}
+.row .nm{font-weight:800}
+.row .ds{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .end{display:flex;align-items:center;gap:var(--s1);color:var(--ink-2);white-space:nowrap}
+.row .end.bad{color:var(--berry);font-weight:800}
+.row .end.good{color:var(--moss);font-weight:800}
+.row .end.ok{color:var(--honey);font-weight:800}
+.row .icon{width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:var(--r1);background:var(--paper-2)}
+
+/* meter */
+.meter{display:grid;grid-template-columns:64px 1fr 96px;align-items:center;gap:var(--s1)}
+.meter .bar{height:8px;border-radius:4px;background:var(--paper-3);overflow:hidden}
+.meter .bar i{display:block;height:100%;border-radius:4px;transition:width .4s}
+.meter .w{font-weight:800;text-align:right}
+.lv-good i{background:var(--moss)} .lv-good .w{color:var(--moss)}
+.lv-ok i{background:var(--honey-fill)} .lv-ok .w{color:var(--honey)}
+.lv-bad i{background:var(--berry)} .lv-bad .w{color:var(--berry)}
+
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s1)}
+.chips .btn{padding:0 var(--s1)}
+.chips .btn.disliked{border-style:dashed;color:var(--honey)}
+.chips .btn.disliked[aria-pressed=true]{background:var(--honey);border-color:var(--honey);border-style:solid;color:#fff}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s1)}
+.acts .a{display:flex;flex-direction:column;align-items:center;gap:var(--s-h)}
+.acts .a .btn{width:100%}
+.acts .a small{font:600 var(--t-cap)/var(--lh-cap) var(--font);color:var(--ink-2)}
+.acts .a small.bad{color:var(--berry)}
+.pockets{display:flex;gap:var(--s1)}
+.pocket{flex:1;display:flex;align-items:center;gap:var(--s1);height:var(--btn-md);padding:0 12px;border:1px dashed var(--line);border-radius:var(--r1);color:var(--ink-2)}
+.pocket b{color:var(--ink)}
+.vign{height:128px;border-radius:var(--r2);overflow:hidden;border:1px solid var(--line);display:block;width:100%}
+.slots{display:flex;gap:var(--s1)}
+.slot{width:48px;height:48px;border:1px dashed var(--line);border-radius:var(--r1);display:grid;place-items:center;background:var(--paper-2)}
+.slot.full{border-style:solid;background:var(--paper)}
+.field{width:100%;min-height:80px;padding:var(--s1) 12px;border:1px solid var(--line);border-radius:var(--r1);background:#FFFDF7;font:400 var(--t-body)/var(--lh-body) var(--font);color:var(--ink);resize:vertical}
+.slider{display:grid;grid-template-columns:72px 1fr 40px;gap:var(--s1);align-items:center}
+.slider input{width:100%;accent-color:var(--moss)}
+.slider b{text-align:right}
+.inline-confirm{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2);border:1px solid #D9A095;background:#FBEDE8;border-radius:var(--r2)}
+.palette .row .icon{color:var(--moss)}
+.palette .row .ds{white-space:normal}
+.row .ds .cost{color:var(--ink);font-weight:600}.row .ds .cost.bad{color:var(--berry)}.pc{display:none}
+.pile{display:flex;gap:var(--s2);color:var(--ink-2)}
+.pile b{color:var(--ink)}
+
+/* ---------- phone: the sheet becomes a bottom sheet ---------- */
+@container game (max-width: 640px){
+  .ui{--btn-md:48px;--btn-sm:40px;grid-template-columns:1fr}
+  .ui.sheet-hidden{grid-template-columns:1fr}
+  .map,.ui.sheet-hidden .map{grid-column:1}
+  .strip{gap:var(--s1);padding:0 var(--s1)}
+  .res{gap:var(--s1)}
+  .res .it span,.when .long,.when .season,.k,.hide-phone{display:none}
+  .when .sicon{display:block}
+  .when{padding-left:var(--s1);gap:var(--s-h)}
+  .strip .ctl{gap:var(--s-h)}
+  .strip .ctl .seg{display:none}
+  .strip .ctl .speedcycle{display:inline-flex}
+  .sheet{position:absolute;left:0;right:0;bottom:0;grid-row:auto;grid-column:auto;border-left:0;border-top:1px solid var(--line);border-radius:var(--r2) var(--r2) 0 0;box-shadow:0 -8px 24px rgba(43,40,31,.16);max-height:62%;transition:max-height .25s}
+  .sheet.tall{max-height:88%}
+  .ui.sheet-hidden .sheet{display:flex}
+  .grab{display:flex;justify-content:center;padding:var(--s1) 0 0;border:0;background:transparent;width:100%;cursor:pointer}
+  .grab i{width:40px;height:4px;border-radius:2px;background:var(--line)}
+  .sh-head{padding-top:var(--s1)}
+  .palette.card{border:0;border-radius:0;background:transparent;display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s1)}
+  .palette .row{flex-direction:column;gap:var(--s-h);min-height:88px;padding:var(--s1) var(--s-h);border:1px solid var(--line);border-radius:var(--r1);background:var(--paper);text-align:center;justify-content:center}
+  .palette .row .mid{align-items:center}
+  .palette .row .ds{display:none}
+  .palette .row .pc{display:block}
+  .palette .row .end{font:600 var(--t-cap)/var(--lh-cap) var(--font);white-space:normal;justify-content:center}
+  .palette .row[aria-pressed=true]{box-shadow:inset 0 -4px 0 var(--moss)}
+  .notices{top:var(--s1);left:var(--s1);right:var(--s1)}
+  .meter{grid-template-columns:56px 1fr 88px}
+}
+@container game (min-width: 641px){ .speedcycle{display:none !important} }
+@media (pointer:coarse){ .k{display:none} }
+
+/* ---------- design notes drawer ---------- */
+.notes{position:fixed;top:48px;right:0;bottom:0;width:min(720px,100%);background:#FFFDF7;border-left:1px solid var(--line);box-shadow:-16px 0 48px rgba(0,0,0,.2);transform:translateX(100%);transition:transform .25s;z-index:60;overflow-y:auto;padding:var(--s3)}
+.notes.open{transform:none}
+.notes h2{margin-bottom:var(--s1)}
+.notes h3{margin:var(--s3) 0 var(--s1)}
+.notes p,.notes li{color:var(--ink)}
+.notes table{border-collapse:collapse;width:100%;margin:var(--s1) 0}
+.notes th,.notes td{text-align:left;vertical-align:top;padding:var(--s1);border-bottom:1px solid var(--line)}
+.notes th{font:800 var(--t-cap)/var(--lh-cap) var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.notes code{font:600 12px/16px ui-monospace,Consolas,monospace;background:var(--paper-2);padding:0 4px;border-radius:4px}
+.notes td.n{font-weight:800;white-space:nowrap}
+.notes td.n.good{color:var(--moss)}
+.notes ol{padding-left:var(--s3)}
+.notes li{margin-bottom:var(--s1)}
+.sw{display:inline-block;width:16px;height:16px;border-radius:4px;vertical-align:-3px;border:1px solid rgba(0,0,0,.15);margin-right:var(--s-h)}
+.specimen{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2);border:1px solid var(--line);border-radius:var(--r2);background:var(--paper)}
+.notes .close{position:sticky;top:0;float:right}
+</style>
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#B07A4A"/><rect width="3" height="8" fill="#F6F0E1" opacity=".75"/>
+    </pattern>
+    <radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <symbol id="i-berry" viewBox="0 0 24 24"><circle cx="9" cy="14" r="5" fill="#C2453A" stroke="none"/><circle cx="15.5" cy="13" r="4.5" fill="#D9584B" stroke="none"/><path d="M12 9c0-3 2-5 5-5" stroke="#3F6B35"/></symbol>
+  <symbol id="i-stick" viewBox="0 0 24 24"><path d="M4 19 19 5M9 14l-3-5M14 9l4 2" stroke="#7A5230" stroke-width="2.4"/></symbol>
+  <symbol id="i-shiny" viewBox="0 0 24 24"><path d="M12 3l3 6 6 3-6 3-3 6-3-6-6-3 6-3z" fill="#E9C24A" stroke="#9C7A18" stroke-width="1.4"/></symbol>
+  <symbol id="i-grass" viewBox="0 0 24 24"><path d="M6 20c0-6 1-10 3-13M12 20c0-7 0-11 0-15M18 20c0-6-1-10-3-13" stroke="#4F8A3A" stroke-width="2.2"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19C5 10 11 5 20 4c0 9-5 15-15 15z" fill="#7DB35A" stroke="#3F6B35" stroke-width="1.4"/><path d="M5 19 14 10" stroke="#3F6B35"/></symbol>
+  <symbol id="i-blob" viewBox="0 0 24 24"><path d="M4 18c0-7 3.5-12 8-12s8 5 8 12z" fill="#D9A066" stroke="#7A5230" stroke-width="1.4"/><circle cx="9.5" cy="13" r="1.2" fill="#2B281F" stroke="none"/><circle cx="14.5" cy="13" r="1.2" fill="#2B281F" stroke="none"/></symbol>
+  <symbol id="i-dig" viewBox="0 0 24 24"><path d="M14 4l6 6M17 7 8 16"/><path d="M8 16l-4 4 1-5 3-3 4 4-3 3-5 1z" fill="currentColor" stroke="none" opacity=".25"/><path d="M5 15l4 4"/></symbol>
+  <symbol id="i-stash" viewBox="0 0 24 24"><ellipse cx="12" cy="15" rx="8" ry="4"/><path d="M6 13c2-4 10-4 12 0"/></symbol>
+  <symbol id="i-basket" viewBox="0 0 24 24"><path d="M4 10h16l-2 9H6z"/><path d="M8 10c0-4 8-4 8 0M7 14h10"/></symbol>
+  <symbol id="i-nest" viewBox="0 0 24 24"><path d="M3 13c2 6 16 6 18 0"/><path d="M4 13c3-2 13-2 16 0M6 16l3-3M11 17l2-4M16 16l-2-3"/></symbol>
+  <symbol id="i-bridge" viewBox="0 0 24 24"><path d="M3 9h18M3 15h18M6 9v6M10 9v6M14 9v6M18 9v6"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12" stroke-width="2.6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-l" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-r" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+</svg>
+
+<div class="mockbar">
+  <b>Morphis &middot; Field Journal</b>
+  <div class="grp" id="stateBtns">
+    <button data-state="play">Play view</button>
+    <button data-state="morphi">Morphi picked</button>
+    <button data-state="place">Placing a basket</button>
+    <button data-state="dig">Marking clay</button>
+    <button data-state="baby">Baby needs care</button>
+    <button data-state="speed">Speed 4&times;</button>
+    <button data-state="pause">Paused</button>
+    <button data-state="menu">Menu</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grp frame-grp">
+    <button id="fDesk" aria-pressed="true">Desktop</button>
+    <button id="fPhone" aria-pressed="false">Phone 390&times;844</button>
+  </div>
+  <span class="sep"></span>
+  <button id="notesBtn" aria-pressed="false">Design notes</button>
+</div>
+
+<div class="stage" id="stage">
+  <div id="game">
+    <div class="ui" id="ui" data-tool="">
+      <header class="strip" id="strip"></header>
+      <main class="map" id="map">
+        <svg class="world" id="world" viewBox="300 140 1000 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <rect x="-400" y="-400" width="2400" height="1800" fill="#A5C77F"/>
+          <!-- meadow texture -->
+          <g id="tufts" opacity=".55"></g>
+          <!-- streams -->
+          <path id="stream1" d="M560 -50 C 520 120, 640 220, 600 360 S 520 620, 610 760 S 720 960, 690 1060 L 760 1060 C 790 960, 680 780, 670 760 S 580 600, 660 370 S 600 140, 630 -50 Z" fill="#6FA9C9" stroke="#4E88A8" stroke-width="3"/>
+          <path id="stream2" d="M1330 -50 C 1300 200, 1400 300, 1370 500 S 1300 800, 1360 1060 L 1400 1060 C 1350 800, 1420 700, 1405 500 S 1340 200, 1370 -50 Z" fill="#6FA9C9" stroke="#4E88A8" stroke-width="3"/>
+          <g id="clay"></g>
+          <g id="trees"></g>
+          <g id="bushes"></g>
+          <!-- home nest -->
+          <g id="home" class="bld" data-kind="home" data-id="home" transform="translate(860 520)">
+            <ellipse class="ring" rx="96" ry="54" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="8 6"/>
+            <ellipse rx="80" ry="44" fill="#8C6239"/>
+            <ellipse rx="64" ry="32" fill="#B88A57"/>
+            <ellipse rx="48" ry="22" fill="#E8D7A8"/>
+            <path d="M-70 -6 l20 8 M-40 -28 l10 14 M30 -30 l-6 14 M66 -8 l-20 8 M-20 34 l6 -12 M40 30 l-8 -12" stroke="#6B4626" stroke-width="3" stroke-linecap="round"/>
+          </g>
+          <g id="builds"></g>
+          <g id="bridges"></g>
+          <g id="morphis"></g>
+          <g id="ghost" pointer-events="none"></g>
+        </svg>
+        <div class="notices" id="notices"></div>
+        <div class="toast" id="toast"></div>
+      </main>
+      <aside class="sheet" id="sheet"></aside>
+    </div>
+  </div>
+</div>
+
+<aside class="notes" id="notes" aria-label="Design notes"></aside>
+
+<script>
+/* =====================================================================
+   data
+   ===================================================================== */
+const JOBS = ['forager','gatherer','digger','builder','caretaker','hunter'];
+const JOB_WHAT = {forager:'picks berries',gatherer:'gathers sticks',digger:'digs marked clay',builder:'builds what you set out',caretaker:'looks after babies',hunter:'chases critters for meat'};
+const S = {
+  tool:null, sel:null, tab:'build', speed:1, paused:false, menu:false, follow:false, sheetHidden:false, tall:false,
+  res:{food:7,cap:9,sticks:4,grass:2,leaves:1,shinies:3},
+  day:12, season:'Spring', left:220, mute:false, vol:{music:60,effects:80,alerts:70}, tiles:'meadow', fingers:false,
+  exportOpen:false, leaveAsk:false, alertDismissed:false, napT:0
+};
+const morphis = [
+  {id:'bumble',name:'Bumble',species:'Pupper',color:'#D9A066',loves:'meat',main:'gatherer',neutral:'builder',disliked:'hunter',doing:'Carrying 2 sticks home',tummy:72,mood:80,pocket:'2 sticks',snack:'berries',ax:1010,ay:420},
+  {id:'dot',name:'Dot',species:'Woofoof',color:'#B9C6D1',loves:'fish',main:'forager',neutral:'caretaker',disliked:'digger',doing:'Picking berries by the bushes',tummy:55,mood:66,pocket:'1 berry',snack:'',ax:1150,ay:720},
+  {id:'tib',name:'Tib',species:'Twins',color:'#F0CF66',loves:'cheese',main:'builder',neutral:'forager',disliked:'gatherer',doing:'Napping in the home nest',tummy:40,mood:52,pocket:'',snack:'grapes',ax:780,ay:560},
+  {id:'snip',name:'Snip',species:'Cwab',color:'#E07A5F',loves:'chili',main:'digger',neutral:'gatherer',disliked:'caretaker',doing:'Digging marked clay',tummy:83,mood:91,pocket:'',snack:'berries',ax:1060,ay:270},
+  {id:'mallow',name:'Mallow',species:'Blob',color:'#C9A2E2',loves:'candy',main:'hunter',neutral:null,disliked:'builder',doing:'Chasing a critter',tummy:30,mood:38,pocket:'',snack:'',ax:480,ay:380},
+  {id:'fern',name:'Fern',species:'Ribbit',color:'#8CC56A',loves:'grapes',main:'caretaker',neutral:'forager',disliked:'hunter',doing:'Looking for a baby to tend',tummy:64,mood:70,pocket:'',snack:'',ax:920,ay:600},
+];
+const baby = {id:'pip',name:'Pip',species:'Ribbit',color:'#8CC56A',loves:'grapes',hates:'chili',grows:192,need:{tummy:22,fun:64,clean:48,sleep:80},x:860,y:508};
+const pantry = [
+  {food:'grapes',n:2,word:'loves it',gain:30,taste:'loved'},
+  {food:'berries',n:3,word:'likes it',gain:15,taste:'ok'},
+  {food:'fish',n:1,word:'never tried',gain:0,taste:'new'},
+  {food:'chili',n:1,word:'hates it',gain:0,taste:'hated'},
+];
+const FOOD_COL = {grapes:'#7B4FA6',berries:'#C2453A',fish:'#6E9BB8',chili:'#D2402A'};
+const TOOLS = [
+  {id:'dig',key:'1',name:'Dig',ds:'Drag over clay. Diggers dig it.',cost:{},costTxt:'free',icon:'i-dig',drag:true},
+  {id:'stash',key:'2',name:'Stash',ds:'Tap open ground. Holds 1 thing.',cost:{},costTxt:'free',icon:'i-stash'},
+  {id:'basket',key:'3',name:'Basket',ds:'Tap open ground. Holds 4 things.',cost:{grass:1},costTxt:'1 grass',icon:'i-basket'},
+  {id:'nest',key:'4',name:'Nest',ds:'Tap open ground. A better nap.',cost:{sticks:2,grass:2,leaves:1},costTxt:'2 sticks, 2 grass, 1 leaf',icon:'i-nest'},
+  {id:'bridge',key:'5',name:'Bridge',ds:'Drag across a stream.',cost:{sticks:1},costTxt:'1 stick a tile',icon:'i-bridge',drag:true},
+];
+const builds = [
+  {id:'b1',kind:'stash',x:760,y:430,items:['berries'],site:false},
+  {id:'b2',kind:'stash',x:960,y:610,items:[],site:false},
+  {id:'b3',kind:'basket',x:980,y:470,items:['grapes','grapes','fish'],site:false},
+];
+const diary = [
+  {t:'d12 0:40',x:'Snip dug up a shiny in the clay.'},
+  {t:'d12 0:12',x:'Pip is hungry. A caretaker or you can feed it.'},
+  {t:'d11 3:02',x:'Two newcomers waddled in: Fern and Mallow.'},
+  {t:'d11 1:30',x:'The bunch finished a basket by the home nest.'},
+];
+let bridges = [];
+let tiles = [];
+
+/* =====================================================================
+   helpers
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const ui = $('#ui'), world = $('#world'), sheet = $('#sheet');
+const NS = 'http://www.w3.org/2000/svg';
+const ic = (id,cls='') => `<svg class="ic ${cls}"><use href="#${id}"/></svg>`;
+const kbd = k => `<span class="k">${k}</span>`;
+const isPhone = () => $('#game').clientWidth <= 640;
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+const lvl = v => v > 60 ? 'good' : v > 30 ? 'ok' : 'bad';
+const word = (k,v) => ({tummy:['starving','hungry','fed','full'],fun:['bored','glum','happy','delighted'],clean:['grubby','dusty','clean','sparkly'],sleep:['drooping','yawny','rested','bouncy'],mood:['grumbly','meh','cheery','beaming']})[k][v<=30?0:v<=60?1:v<=85?2:3];
+const canAfford = c => Object.entries(c).every(([k,v]) => S.res[k] >= v);
+const short = c => Object.entries(c).filter(([k,v]) => S.res[k] < v).map(([k,v]) => `${v - S.res[k]} more ${k === 'leaves' ? (v - S.res[k] > 1 ? 'leaves':'leaf') : k === 'sticks' ? (v - S.res[k] > 1 ? 'sticks':'stick') : k}`).join(', ');
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+let toastT;
+function toast(t){ const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 2200); placeToast(); }
+function placeToast(){ $('#toast').style.bottom = isPhone() ? (sheet.offsetHeight + 16) + 'px' : '24px'; }
+function log(x){ diary.unshift({t:`d${S.day} ${fmt(240 - S.left)}`, x}); }
+
+/* =====================================================================
+   meadow drawing
+   ===================================================================== */
+function rnd(seed){ let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function drawMeadow(){
+  const r = rnd(7);
+  const tufts = $('#tufts');
+  for (let i = 0; i < 220; i++){ const x = r()*1600, y = r()*1000; el('path',{d:`M${x} ${y} l-3 -8 M${x+3} ${y} l0 -10 M${x+6} ${y} l3 -8`, stroke:'#6E9A4E','stroke-width':2,'stroke-linecap':'round'},tufts); }
+  for (let i = 0; i < 40; i++){ const x = r()*1600, y = r()*1000; el('circle',{cx:x,cy:y,r:3,fill:['#F6F0E1','#F2D16B','#E9A6B8'][i%3]},tufts); }
+  // trees, top left
+  const trees = $('#trees');
+  [[320,200],[400,160],[260,300],[380,300],[460,250],[200,180],[1480,260],[1520,380]].forEach(([x,y]) => {
+    const g = el('g',{transform:`translate(${x} ${y})`},trees);
+    el('ellipse',{cx:0,cy:34,rx:30,ry:8,fill:'rgba(40,60,20,.25)'},g);
+    el('rect',{x:-5,y:8,width:10,height:26,rx:3,fill:'#7A5230'},g);
+    el('circle',{cx:0,cy:-6,r:30,fill:'#4F8A3A'},g);
+    el('circle',{cx:-12,cy:-14,r:14,fill:'#66A24C'},g);
+  });
+  // berry bushes, bottom right
+  const bushes = $('#bushes');
+  [[1120,760],[1200,700],[1060,820],[1230,800],[1150,860]].forEach(([x,y],i) => {
+    const g = el('g',{transform:`translate(${x} ${y})`},bushes);
+    el('ellipse',{cx:0,cy:18,rx:30,ry:7,fill:'rgba(40,60,20,.25)'},g);
+    el('circle',{cx:-12,cy:0,r:18,fill:'#3F7A35'},g); el('circle',{cx:12,cy:-2,r:20,fill:'#4C8C3E'},g); el('circle',{cx:0,cy:-12,r:16,fill:'#58994A'},g);
+    if (i !== 2) [[-10,-4],[6,-12],[14,4],[-2,6]].forEach(([a,b]) => el('circle',{cx:a,cy:b,r:4,fill:'#C2453A'},g));
+  });
+  // clay patches as tiles
+  const clay = $('#clay');
+  const patch = (ox,oy,cols,rows,skip) => {
+    for (let r0 = 0; r0 < rows; r0++) for (let c = 0; c < cols; c++){
+      if (skip(c,r0)) continue;
+      const t = {x:ox + c*28, y:oy + r0*28, mark:false, dug:false, shiny: ((c*7 + r0*13) % 9) === 0};
+      t.el = el('rect',{x:t.x,y:t.y,width:28,height:28,fill:'#B07A4A',class:'tile'},clay);
+      t.el.setAttribute('fill', (c + r0) % 2 ? '#B07A4A' : '#A87244');
+      tiles.push(t);
+    }
+  };
+  patch(1000,140,9,7,(c,r) => (r===0 && (c<2||c>6)) || (r===6 && (c<1||c>5)) || (c===8 && r>4));
+  patch(170,620,7,6,(c,r) => (r===0 && (c===0||c===6)) || (r===5 && c>4));
+  // a couple pre-dug tunnel tiles
+  tiles.slice(20,23).forEach(t => { t.dug = true; });
+  paintTiles();
+}
+function paintTiles(){ tiles.forEach(t => { t.el.classList.toggle('mark', t.mark && !t.dug); t.el.classList.toggle('dug', t.dug); }); }
+
+function blob(g, m, s=1){
+  el('ellipse',{class:'ring',cx:0,cy:2,rx:22*s,ry:9*s,fill:'none',stroke:'#fff','stroke-width':3,'stroke-dasharray':'6 4'},g);
+  el('ellipse',{cx:0,cy:2,rx:15*s,ry:5*s,fill:'rgba(40,60,20,.28)'},g);
+  const b = el('g',{class:'bob'},g);
+  b.style.animationDelay = (Math.random()*1.5).toFixed(2) + 's';
+  if (m.species === 'Twins'){
+    el('path',{d:`M${-16*s} 0 c0 -14 ${4*s} -20 ${9*s} -20 s${9*s} 6 ${9*s} 20 z`,fill:m.color,stroke:'rgba(0,0,0,.35)','stroke-width':1.5},b);
+    el('path',{d:`M${-1*s} 0 c0 -12 ${4*s} -17 ${8*s} -17 s${8*s} 5 ${8*s} 17 z`,fill:m.color,stroke:'rgba(0,0,0,.35)','stroke-width':1.5},b);
+    [[-10,-8],[-4,-8],[4,-7],[10,-7]].forEach(([x,y]) => el('circle',{cx:x*s,cy:y*s,r:1.6*s,fill:'#2B281F'},b));
+    return;
+  }
+  el('path',{d:`M${-15*s} 0 c0 -18 ${6*s} -26 ${15*s} -26 s${15*s} 8 ${15*s} 26 z`,fill:m.color,stroke:'rgba(0,0,0,.35)','stroke-width':1.5},b);
+  if (m.species === 'Pupper') { el('ellipse',{cx:-13*s,cy:-16*s,rx:4*s,ry:8*s,fill:'#9C6A3A'},b); el('ellipse',{cx:13*s,cy:-16*s,rx:4*s,ry:8*s,fill:'#9C6A3A'},b); }
+  if (m.species === 'Cwab') { el('circle',{cx:-18*s,cy:-8*s,r:5*s,fill:m.color,stroke:'rgba(0,0,0,.35)'},b); el('circle',{cx:18*s,cy:-8*s,r:5*s,fill:m.color,stroke:'rgba(0,0,0,.35)'},b); }
+  if (m.species === 'Ribbit') { el('circle',{cx:-6*s,cy:-23*s,r:5*s,fill:m.color,stroke:'rgba(0,0,0,.35)'},b); el('circle',{cx:6*s,cy:-23*s,r:5*s,fill:m.color,stroke:'rgba(0,0,0,.35)'},b); }
+  if (m.species === 'Woofoof') { el('path',{d:`M${-10*s} ${-22*s} q${-6*s} ${-8*s} ${-2*s} ${-12*s} M${10*s} ${-22*s} q${6*s} ${-8*s} ${2*s} ${-12*s}`,stroke:'#8A97A3','stroke-width':3*s,fill:'none','stroke-linecap':'round'},b); }
+  if (m.species === 'Blob') { el('circle',{cx:-5*s,cy:-20*s,r:3*s,fill:'#fff',opacity:.6},b); }
+  el('circle',{cx:-5*s,cy:-12*s,r:2*s,fill:'#2B281F'},b); el('circle',{cx:5*s,cy:-12*s,r:2*s,fill:'#2B281F'},b);
+  el('path',{d:`M${-3*s} ${-6*s} q${3*s} ${3*s} ${6*s} 0`,stroke:'#2B281F','stroke-width':1.5,fill:'none','stroke-linecap':'round'},b);
+}
+function drawMorphis(){
+  const root = $('#morphis'); root.innerHTML = '';
+  morphis.forEach(m => {
+    m.x = m.x ?? m.ax; m.y = m.y ?? m.ay;
+    const g = el('g',{class:'mo','data-kind':'morphi','data-id':m.id},root);
+    g.style.transform = `translate(${m.x}px,${m.y}px)`;
+    el('circle',{r:30,cy:-10,fill:'transparent'},g);
+    blob(g, m);
+    m.el = g;
+  });
+  // the baby in the home nest
+  const g = el('g',{class:'mo','data-kind':'baby','data-id':'pip'},root);
+  g.style.transform = `translate(${baby.x}px,${baby.y}px)`;
+  el('circle',{r:26,cy:-8,fill:'transparent'},g);
+  blob(g, baby, .62);
+  const bub = el('g',{id:'babyBubble',transform:'translate(0 -36)'},g);
+  el('rect',{x:-11,y:-13,width:22,height:22,rx:8,fill:'#FBEDE8',stroke:'#A13A2D','stroke-width':2},bub);
+  const t = el('text',{x:0,y:4,'text-anchor':'middle','font-family':'Nunito','font-weight':800,'font-size':15,fill:'#A13A2D'},bub); t.textContent = '!';
+  baby.el = g;
+}
+function drawBuilds(){
+  const root = $('#builds'); root.innerHTML = '';
+  builds.forEach(b => {
+    const g = el('g',{class:'bld' + (b.site ? ' site' : ''),'data-kind':'build','data-id':b.id,transform:`translate(${b.x} ${b.y})`},root);
+    buildShape(g, b.kind);
+    b.el = g;
+  });
+  markSel();
+}
+function buildShape(g, kind, ghost){
+  el('ellipse',{class:'ring',rx:30,ry:16,cy:4,fill:'none',stroke:'#fff','stroke-width':3,'stroke-dasharray':'6 4'},g);
+  if (kind === 'stash'){
+    el('ellipse',{rx:22,ry:11,fill:'#5E9A45',stroke:'#3F6B35','stroke-width':2},g);
+    el('path',{d:'M-16 0 Q0 -8 16 0 M-8 -6 L-2 6 M6 -6 L2 6',stroke:'#3F6B35','stroke-width':1.5,fill:'none'},g);
+  } else if (kind === 'basket'){
+    el('path',{d:'M-20 -10 h40 l-5 20 h-30 z',fill:'#C89B5C',stroke:'#7A5230','stroke-width':2},g);
+    el('path',{d:'M-14 -10 q14 -18 28 0 M-18 -2 h36 M-16 5 h32',stroke:'#7A5230','stroke-width':1.6,fill:'none'},g);
+  } else if (kind === 'nest'){
+    el('ellipse',{rx:26,ry:13,fill:'#8C6239'},g); el('ellipse',{rx:18,ry:8,cy:-1,fill:'#E8D7A8'},g);
+  }
+  if (ghost) g.setAttribute('opacity', .7);
+}
+function markSel(){
+  morphis.forEach(m => m.el && m.el.classList.toggle('sel', S.sel?.type === 'morphi' && S.sel.id === m.id));
+  baby.el && baby.el.classList.toggle('sel', S.sel?.type === 'baby');
+  builds.forEach(b => b.el && b.el.classList.toggle('sel', S.sel?.type === 'build' && S.sel.id === b.id));
+  $('#home').classList.toggle('sel', S.sel?.type === 'home');
+}
+
+/* =====================================================================
+   camera: viewBox pan and zoom
+   ===================================================================== */
+const vb = {x:300,y:140,w:1000,h:700};
+function setVB(){ vb.x = Math.max(-100, Math.min(1700 - vb.w, vb.x)); vb.y = Math.max(-100, Math.min(1100 - vb.h, vb.y)); world.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+function unitsPerPx(){ const r = world.getBoundingClientRect(); return 1 / Math.max(r.width / vb.w, r.height / vb.h); }
+function toSvg(e){ const p = new DOMPoint(e.clientX, e.clientY); return p.matrixTransform(world.getScreenCTM().inverse()); }
+function lookAt(x,y){ const k = unitsPerPx(); vb.x = x - vb.w/2; vb.y = y - vb.h/2 + (isPhone() ? sheet.offsetHeight*k/2 : 0); setVB(); }
+
+/* =====================================================================
+   pointer input on the meadow
+   ===================================================================== */
+let drag = null;
+world.addEventListener('contextmenu', e => e.preventDefault());
+world.addEventListener('pointerdown', e => {
+  world.setPointerCapture(e.pointerId);
+  const p = toSvg(e);
+  drag = {p0:p, sx:e.clientX, sy:e.clientY, vx:vb.x, vy:vb.y, moved:false, pan: e.button === 2 || !S.tool || ['stash','basket','nest'].includes(S.tool), target: e.target.closest('[data-kind]')};
+  if (S.tool === 'dig' && e.button !== 2){ const t = tileAt(p); drag.clearing = !!(t && t.mark); }
+});
+world.addEventListener('pointermove', e => {
+  const p = toSvg(e);
+  if (!drag){ ghostAt(p); return; }
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
+  if (!drag.moved) return;
+  if (drag.pan){ const k = unitsPerPx(); vb.x = drag.vx - (e.clientX - drag.sx)*k; vb.y = drag.vy - (e.clientY - drag.sy)*k; setVB(); if (S.follow){ S.follow = false; renderSheet(); } return; }
+  if (S.tool === 'dig') ghostRect(drag.p0, p);
+  if (S.tool === 'bridge') ghostLine(drag.p0, p);
+});
+world.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const p = toSvg(e), d = drag; drag = null;
+  $('#ghost').innerHTML = '';
+  // a tap on a morphi, a baby or a building always picks it, whatever tool is out
+  if (!d.moved && d.target){ const k = d.target.dataset.kind; pick(k === 'morphi' ? 'morphi' : k === 'baby' ? 'baby' : k === 'home' ? 'home' : 'build', d.target.dataset.id); return; }
+  if (d.pan && d.moved) return;
+  if (S.tool === 'dig'){ markRect(d.p0, p, d.clearing); return; }
+  if (S.tool === 'bridge'){ if (d.moved) layBridge(d.p0, p); else toast('Drag across a stream to lay a bridge'); return; }
+  if (['stash','basket','nest'].includes(S.tool)){ place(S.tool, p, e.shiftKey); return; }
+  if (!d.moved){ S.sel = null; renderAll(); }
+});
+world.addEventListener('wheel', e => {
+  e.preventDefault();
+  const p = toSvg(e), f = e.deltaY > 0 ? 1.12 : 1/1.12;
+  const nw = Math.max(500, Math.min(1500, vb.w * f)), nh = nw * 0.7;
+  vb.x = p.x - (p.x - vb.x) * nw / vb.w; vb.y = p.y - (p.y - vb.y) * nh / vb.h; vb.w = nw; vb.h = nh; setVB();
+}, {passive:false});
+
+function tileAt(p){ return tiles.find(t => p.x >= t.x && p.x < t.x + 28 && p.y >= t.y && p.y < t.y + 28); }
+function ghostRect(a,b){
+  const g = $('#ghost'); g.innerHTML = '';
+  const x = Math.min(a.x,b.x), y = Math.min(a.y,b.y), w = Math.abs(a.x-b.x), h = Math.abs(a.y-b.y);
+  el('rect',{x,y,width:w,height:h,fill: drag?.clearing ? 'rgba(161,58,45,.15)' : 'rgba(246,240,225,.25)',stroke: drag?.clearing ? '#A13A2D' : '#fff','stroke-width':3,'stroke-dasharray':'8 6',rx:4},g);
+}
+function ghostLine(a,b){
+  const g = $('#ghost'); g.innerHTML = '';
+  const n = Math.max(1, Math.round(Math.hypot(b.x-a.x, b.y-a.y) / 24));
+  const ok = n <= S.res.sticks;
+  el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke: ok ? '#fff' : '#A13A2D','stroke-width':18,'stroke-linecap':'round',opacity:.6},g);
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2 - 24;
+  el('rect',{x:mx-56,y:my-14,width:112,height:24,rx:8,fill:'#F6F0E1',stroke:'#CFC19F'},g);
+  const t = el('text',{x:mx,y:my+3,'text-anchor':'middle','font-family':'Nunito','font-weight':800,'font-size':13,fill: ok ? '#2B281F' : '#A13A2D'},g);
+  t.textContent = `${n} ${n>1?'sticks':'stick'} (have ${S.res.sticks})`;
+}
+function onWater(p){ try { return ['stream1','stream2'].some(id => document.getElementById(id).isPointInFill(new DOMPoint(p.x,p.y))); } catch(_) { return false; } }
+function ghostAt(p){
+  const g = $('#ghost');
+  if (!['stash','basket','nest'].includes(S.tool)){ if (g.childNodes.length) g.innerHTML = ''; return; }
+  g.innerHTML = '';
+  const bad = onWater(p) || tileAt(p);
+  const gg = el('g',{transform:`translate(${p.x} ${p.y})`},g);
+  el('ellipse',{rx:32,ry:18,fill: bad ? 'rgba(161,58,45,.3)' : 'rgba(246,240,225,.35)',stroke: bad ? '#A13A2D' : '#fff','stroke-width':2,'stroke-dasharray':'5 4'},gg);
+  buildShape(gg, S.tool, true);
+}
+function markRect(a,b,clearing){
+  const x0 = Math.min(a.x,b.x), x1 = Math.max(a.x,b.x), y0 = Math.min(a.y,b.y), y1 = Math.max(a.y,b.y);
+  let n = 0;
+  tiles.forEach(t => { const cx = t.x + 14, cy = t.y + 14; const hit = (x1 - x0 < 6 && y1 - y0 < 6) ? (a.x >= t.x && a.x < t.x+28 && a.y >= t.y && a.y < t.y+28) : (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1);
+    if (hit && !t.dug){ t.mark = !clearing; n++; } });
+  paintTiles();
+  if (!n) toast('That is not clay. Drag over the brown patches.');
+  else toast(clearing ? `Cleared ${n} marks` : `Marked ${n} clay for the diggers`);
+  renderNotices();
+}
+function place(kind, p, keep){
+  const t = TOOLS.find(x => x.id === kind);
+  if (onWater(p) || tileAt(p)){ toast(`A ${t.name.toLowerCase()} needs open grass`); return; }
+  if (!canAfford(t.cost)){ toast(`Needs ${short(t.cost)}`); return; }
+  Object.entries(t.cost).forEach(([k,v]) => S.res[k] -= v);
+  const b = {id:'b' + (builds.length + 1) + Date.now()%1000, kind, x:p.x, y:p.y, items:[], site:true};
+  builds.push(b); drawBuilds();
+  setTimeout(() => { b.site = false; drawBuilds(); log(`The bunch finished a ${kind}.`); }, 3000 / S.speed);
+  toast(`${t.name} set out. A builder will make it.`);
+  if (!keep) S.tool = null;
+  renderAll();
+}
+function layBridge(a,b){
+  const n = Math.max(1, Math.round(Math.hypot(b.x-a.x, b.y-a.y) / 24));
+  if (n > S.res.sticks){ toast(`Needs ${n} sticks, the pile has ${S.res.sticks}`); return; }
+  S.res.sticks -= n;
+  const g = el('g',{},$('#bridges'));
+  const ang = Math.atan2(b.y-a.y, b.x-a.x) * 180 / Math.PI;
+  for (let i = 0; i < n; i++){ const f = (i + .5) / n; const x = a.x + (b.x-a.x)*f, y = a.y + (b.y-a.y)*f;
+    el('rect',{x:-12,y:-14,width:22,height:28,rx:3,fill:'#B88A57',stroke:'#7A5230','stroke-width':2,transform:`translate(${x} ${y}) rotate(${ang})`,opacity:.55},g); }
+  setTimeout(() => g.querySelectorAll('rect').forEach(r => r.setAttribute('opacity',1)), 2500 / S.speed);
+  toast(`Bridge marked: ${n} ${n>1?'sticks':'stick'}`);
+  renderStrip();
+}
+
+/* =====================================================================
+   actions
+   ===================================================================== */
+function pick(type, id){
+  if (type === 'morphi' || type === 'baby' || type === 'build' || type === 'home') S.sel = {type, id};
+  S.menu = false; S.leaveAsk = false;
+  if (type === 'baby') S.alertDismissed = true;
+  if (isPhone()) S.tall = false;
+  renderAll();
+}
+function setTool(id){
+  S.tool = S.tool === id ? null : id;
+  if (S.tool){ S.menu = false; if (S.sel && S.sel.type !== 'morphi') S.sel = null; S.tab = 'build'; }
+  renderAll();
+}
+function setJob(m, slot, job){
+  if (slot === 'main'){
+    if (job === m.main) return;
+    if (job === m.neutral) m.neutral = m.main;
+    m.main = job;
+    toast(`${m.name} is a ${job} first now${job === m.disliked ? ', and grumbles about it' : ''}`);
+  } else {
+    if (job === m.disliked){ toast(`${m.name} dislikes ${job} work. That is part of who it is.`); return; }
+    if (job === m.main){ m.main = m.neutral || m.main; }
+    m.neutral = job;
+    toast(job ? `When there is no ${m.main} work, ${m.name} does ${job} work` : `${m.name} only does its main job now`);
+  }
+  renderSheet();
+}
+function feed(f){
+  const e = pantry.find(x => x.food === f);
+  if (!e || e.n < 1) return;
+  e.n--; S.res.food--;
+  let emo = 'heart', msg;
+  if (e.taste === 'loved'){ baby.need.tummy = Math.min(100, baby.need.tummy + 30); baby.need.fun = Math.min(100, baby.need.fun + 6); msg = `${baby.name} gobbles the ${f} and wiggles`; }
+  else if (e.taste === 'ok'){ baby.need.tummy = Math.min(100, baby.need.tummy + 15); emo = 'smile'; msg = `${baby.name} munches the ${f}`; }
+  else if (e.taste === 'new'){ baby.need.tummy = Math.min(100, baby.need.tummy + 15); emo = 'question'; e.word = 'likes it'; e.taste = 'ok'; e.gain = 15; msg = `${baby.name} sniffs the ${f}... and likes it!`; }
+  else { emo = 'yuck'; baby.need.fun = Math.max(0, baby.need.fun - 10); msg = `${baby.name} pushes the ${f} away. Yuck.`; }
+  toast(msg); log(msg + '.');
+  emote(emo);
+  renderAll();
+}
+function tend(kind){
+  if (kind === 'wash'){ if (S.res.grass < 1){ toast('Washing needs a tuft of grass'); return; } S.res.grass--; baby.need.clean = 100; emote('smile'); toast(`${baby.name} is sparkly clean`); }
+  if (kind === 'play'){ baby.need.fun = Math.min(100, baby.need.fun + 35); emote('heart'); toast(`${baby.name} bounces about`); }
+  if (kind === 'nap'){ if (S.napT > 0){ S.napT = 0; toast(`${baby.name} wakes up, a bit grumpy`); } else { S.napT = 6; toast(`${baby.name} curls up for a nap`); } }
+  renderAll();
+}
+let lastEmote = null;
+function emote(k){ lastEmote = {k, t: Date.now()}; }
+function cycleSpeed(){ S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 4 : 1; S.paused = false; applySpeed(); renderAll(); }
+function setSpeed(v){ S.speed = v; S.paused = false; applySpeed(); renderAll(); }
+function togglePause(){ S.paused = !S.paused; renderAll(); }
+function applySpeed(){ morphis.forEach(m => m.el && (m.el.style.transitionDuration = (1.4 / S.speed) + 's')); }
+function stepMorphi(dir){
+  const list = morphis;
+  let i = S.sel?.type === 'morphi' ? list.findIndex(m => m.id === S.sel.id) : -1;
+  i = (i + dir + list.length) % list.length;
+  pick('morphi', list[i].id);
+  if (S.follow) lookAt(list[i].x, list[i].y);
+}
+function openMenu(){ S.menu = !S.menu; S.leaveAsk = false; S.exportOpen = false; if (isPhone()) S.tall = S.menu; renderAll(); }
+function closeSel(){ if (S.menu){ S.menu = false; } else if (S.tool){ S.tool = null; } else S.sel = null; S.follow = false; renderAll(); }
+
+/* =====================================================================
+   rendering: strip
+   ===================================================================== */
+function renderStrip(){
+  const r = S.res, warnT = S.left <= 15;
+  $('#strip').innerHTML = `
+    <div class="res">
+      <div class="it ${r.food <= 2 ? 'low' : ''}" title="Food in the stashes and baskets">${ic('i-berry')}<b>${r.food}/${r.cap}</b><span>food</span></div>
+      <div class="it" title="Sticks in the pile">${ic('i-stick')}<b>${r.sticks}</b><span>sticks</span></div>
+      <div class="it" title="Shinies dug up">${ic('i-shiny')}<b>${r.shinies}</b><span>shinies</span></div>
+    </div>
+    <div class="when" title="${S.season}, day ${S.day}, time left">${ic('i-leaf','sicon')}<b class="season">${S.season}</b><span class="long">&middot; day ${S.day} &middot;</span><span class="t ${warnT ? 'warn' : ''}">${fmt(S.left)}</span><span class="long">left</span></div>
+    <div class="spacer"></div>
+    <div class="ctl">
+      <div class="seg" role="group" aria-label="Game speed">
+        <button class="btn sm" aria-pressed="${S.paused}" data-act="pause" title="Pause (Space)">${ic(S.paused ? 'i-play' : 'i-pause')}${kbd('Space')}</button>
+        ${[1,2,4].map(v => `<button class="btn sm" aria-pressed="${!S.paused && S.speed === v}" data-act="speed" data-v="${v}" title="${v}x speed (Tab cycles)">${v}&times;</button>`).join('')}
+      </div>
+      <button class="btn sm speedcycle" aria-pressed="${S.paused}" data-act="pause" aria-label="Pause">${ic(S.paused ? 'i-play' : 'i-pause')}</button>
+      <button class="btn sm speedcycle" data-act="cycle" aria-label="Speed">${S.speed}&times;</button>
+      <button class="btn sm hide-phone" aria-pressed="${!S.sheetHidden}" data-act="sheet" title="Show or hide the sheet (H)">${ic('i-panel')}${kbd('H')}</button>
+      <button class="btn sm" aria-pressed="${S.menu}" data-act="menu" title="Menu (Esc)">${ic('i-menu')}<span class="hide-phone">Menu</span>${kbd('Esc')}</button>
+    </div>`;
+}
+
+/* =====================================================================
+   rendering: notices on the map
+   ===================================================================== */
+function renderNotices(){
+  const n = [];
+  if (S.tool){
+    const t = TOOLS.find(x => x.id === S.tool);
+    const how = {dig: isPhone() ? 'Drag over clay to mark it. Drag from a mark to clear.' : 'Drag over clay to mark it. Drag from a mark to clear. Right-drag pans.',
+      stash:'Tap open grass to set it out.', basket:'Tap open grass to set it out.', nest:'Tap open grass to set it out.', bridge:'Drag across a stream, one stick a tile.'}[S.tool];
+    const marked = tiles.filter(t => t.mark && !t.dug).length;
+    n.push(`<div class="chip">${ic(t.icon,'l')}<div class="txt"><b>${t.name}${S.tool === 'dig' && marked ? ` &middot; ${marked} marked` : ''}${t.cost && Object.keys(t.cost).length && S.tool !== 'bridge' ? ` &middot; ${t.costTxt}` : ''}</b><span>${how}</span></div><button class="btn sm" data-act="tooloff">Done${kbd('Esc')}</button></div>`);
+  }
+  if (S.paused && !S.menu) n.push(`<div class="chip pause">${ic('i-pause')}<div class="txt"><b>Paused</b><span>The meadow holds its breath. ${isPhone() ? 'Tap play' : 'Space'} to carry on.</span></div></div>`);
+  if (baby.need.tummy < 35 && !(S.sel?.type === 'baby') && !S.tool) n.push(`<div class="chip alert"><span class="dot"></span><div class="txt"><b>${baby.name}'s tummy is rumbling</b><span>Baby ${baby.species.toLowerCase()} in the home nest</span></div><button class="btn sm" data-act="lookbaby">Look</button></div>`);
+  $('#notices').innerHTML = n.join('');
+}
+
+/* =====================================================================
+   rendering: the sheet
+   ===================================================================== */
+function head({eyebrow, title, sub, right='', tabs=''}){
+  return `<button class="grab" data-act="grab" aria-label="Taller or shorter"><i></i></button>
+  <div class="sh-head"><div class="sh-top"><div class="ttl">${eyebrow ? `<div class="cap">${eyebrow}</div>` : ''}${title ? `<h2>${title}</h2>` : ''}${sub ? `<p class="sub">${sub}</p>` : ''}</div>${right}</div>${tabs}</div>`;
+}
+const closeBtn = `<button class="btn sm ico" data-act="close" aria-label="Close (Esc)" title="Close (Esc)">${ic('i-x')}</button>`;
+function meter(k, label, v){ return `<div class="meter lv-${lvl(v)}"><span>${label}</span><div class="bar"><i style="width:${Math.round(v)}%"></i></div><span class="w">${word(k,v)}</span></div>`; }
+
+function pageTabs(){
+  const t = (id,label,k) => `<button class="btn sm" aria-pressed="${S.tab === id}" data-act="tab" data-v="${id}">${label}${kbd(k)}</button>`;
+  return `<div class="seg tabs" role="tablist">${t('build','Build','B')}${t('bunch','Bunch','U')}${t('diary','Diary','L')}</div>`;
+}
+function pageBuild(){
+  const rows = TOOLS.map(t => {
+    const ok = canAfford(t.cost);
+    return `<button class="row" aria-pressed="${S.tool === t.id}" ${ok ? '' : 'aria-disabled="true"'} data-act="tool" data-v="${t.id}">
+      <span class="icon">${ic(t.icon,'l')}</span>
+      <span class="mid"><span class="nm">${t.name}</span><span class="ds">${ok ? `<b class="cost">${t.costTxt}</b> &middot; ${t.ds}` : `<b class="cost bad">needs ${short(t.cost)}</b> &middot; ${t.ds}`}</span></span>
+      <span class="end ${ok ? '' : 'bad'}"><span class="pc">${ok ? t.costTxt.replace(', ', ' ').replace(' a tile','/tile') : 'need more'}</span>${kbd(t.key)}</span></button>`;
+  }).join('');
+  return head({tabs: pageTabs()}) + `<div class="sh-body">
+    <div class="sec"><div class="palette card">${rows}</div></div>
+    <div class="sec"><div class="cap">In the pile</div><div class="pile">
+      <span>${ic('i-stick')} <b>${S.res.sticks}</b> sticks</span><span>${ic('i-grass')} <b>${S.res.grass}</b> grass</span><span>${ic('i-leaf')} <b>${S.res.leaves}</b> ${S.res.leaves === 1 ? 'leaf' : 'leaves'}</span></div></div>
+    <div class="sec hide-phone"><div class="cap">Around the meadow</div><p class="hint">Tap a morphi, a baby or a stash to see its page here. Drag to look around, wheel to zoom.</p></div>
+  </div>`;
+}
+function pageBunch(){
+  const rows = morphis.map(m => `<button class="row" data-act="pick" data-v="${m.id}">
+      <span class="icon"><svg viewBox="-20 -30 40 36" width="28" height="28">${'' }<path d="M-15 0 c0 -18 6 -26 15 -26 s15 8 15 26 z" fill="${m.color}" stroke="rgba(0,0,0,.35)"/><circle cx="-5" cy="-12" r="2" fill="#2B281F"/><circle cx="5" cy="-12" r="2" fill="#2B281F"/></svg></span>
+      <span class="mid"><span class="nm">${m.name} <span style="font-weight:400;color:var(--ink-2)">the ${m.species.toLowerCase()}</span></span><span class="ds">${m.doing}</span></span>
+      <span class="end ${lvl(m.tummy)}">${word('tummy',m.tummy)}</span></button>`).join('');
+  const b = `<button class="row" data-act="pickbaby">
+      <span class="icon"><svg viewBox="-20 -30 40 36" width="24" height="24"><path d="M-15 0 c0 -18 6 -26 15 -26 s15 8 15 26 z" fill="${baby.color}" stroke="rgba(0,0,0,.35)"/><circle cx="-5" cy="-12" r="2" fill="#2B281F"/><circle cx="5" cy="-12" r="2" fill="#2B281F"/></svg></span>
+      <span class="mid"><span class="nm">${baby.name} <span style="font-weight:400;color:var(--ink-2)">baby ${baby.species.toLowerCase()}</span></span><span class="ds">In the home nest, grows up in ${fmt(baby.grows)}</span></span>
+      <span class="end ${lvl(baby.need.tummy)}">${word('tummy',baby.need.tummy)}</span></button>`;
+  return head({tabs: pageTabs()}) + `<div class="sh-body"><div class="sec"><div class="cap">${morphis.length} morphis and 1 baby</div><div class="card">${b}${rows}</div></div></div>`;
+}
+function pageDiary(){
+  return head({tabs: pageTabs()}) + `<div class="sh-body"><div class="sec"><div class="cap">What happened</div><div class="card">${diary.slice(0,12).map(d => `<div class="row" style="cursor:default"><span class="mid"><span>${d.x}</span><span class="ds">${d.t}</span></span></div>`).join('')}</div></div></div>`;
+}
+function pageMorphi(m){
+  const chip = (slot, job) => {
+    const on = slot === 'main' ? m.main === job : m.neutral === job;
+    const dis = job === m.disliked;
+    const off = slot === 'neutral' && dis;
+    return `<button class="btn sm ${dis ? 'disliked' : ''}" aria-pressed="${on}" ${off ? 'aria-disabled="true"' : ''} data-act="job" data-slot="${slot}" data-v="${job ?? ''}" title="${job ? JOB_WHAT[job] : 'nothing else'}">${job ?? 'none'}</button>`;
+  };
+  const nav = `<div class="seg"><button class="btn sm ico" data-act="prev" title="Previous ([)" aria-label="Previous">${ic('i-l')}</button><button class="btn sm ico" data-act="next" title="Next (])" aria-label="Next">${ic('i-r')}</button></div>${closeBtn}`;
+  return head({eyebrow:`Morphi &middot; ${m.species} &middot; loves ${m.loves}`, title:m.name, sub:m.doing, right:nav}) + `<div class="sh-body">
+    <div class="sec">
+      ${meter('tummy','Tummy',m.tummy)}
+      ${meter('mood','Mood',m.mood)}
+      <div class="pockets"><div class="pocket">Carrying <b>${m.pocket || 'nothing'}</b></div><div class="pocket">Snack <b>${m.snack || 'none'}</b></div></div>
+    </div>
+    <div class="sec">
+      <div class="cap">Main job &middot; done first</div>
+      <div class="chips">${JOBS.map(j => chip('main', j)).join('')}</div>
+    </div>
+    <div class="sec">
+      <div class="cap">Then &middot; when the main job has nothing</div>
+      <div class="chips">${[null, ...JOBS.filter(j => j !== m.main)].map(j => chip('neutral', j)).join('')}</div>
+    </div>
+    <div class="sec">
+      <div class="cap">Dislikes</div>
+      <p class="hint"><b style="color:var(--honey)">${m.disliked}</b> &middot; only when nothing else is left. Part of who ${m.name} is.</p>
+    </div>
+  </div>
+  <div class="sh-foot"><button class="btn" aria-pressed="${S.follow}" data-act="follow">${ic('i-eye')}${S.follow ? 'Following' : 'Follow'}${kbd('F')}</button><button class="btn" data-act="next">Next morphi${kbd(']')}</button></div>`;
+}
+function pageBaby(){
+  const nd = baby.need, napping = S.napT > 0;
+  const emo = lastEmote && Date.now() - lastEmote.t < 2200 ? lastEmote.k : (napping ? 'zzz' : (nd.tummy < 35 ? 'hungry' : ''));
+  const bubble = {heart:'<path d="M0 6 C-14 -4 -6 -14 0 -7 C6 -14 14 -4 0 6z" fill="#E0607A"/>', smile:'<text y="5" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="14" fill="#3F6B35">:)</text>', question:'<text y="6" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="16" fill="#2E5E7D">?</text>', yuck:'<circle r="8" fill="#9CC46A"/><path d="M-4 3 l2 -2 2 2 2 -2 2 2" stroke="#2B4A1C" stroke-width="1.5" fill="none"/>', zzz:'<text y="5" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="15" fill="#2E5E7D">z z</text>', hungry:'<g transform="scale(.9)"><circle cx="-4" cy="0" r="5" fill="#C2453A"/><circle cx="4" cy="0" r="5" fill="#D9584B"/></g>'}[emo] || '';
+  const vign = `<svg class="vign" viewBox="0 0 300 128" preserveAspectRatio="xMidYMid slice"><rect width="300" height="128" fill="#B9D597"/><rect y="88" width="300" height="40" fill="#A5C77F"/>
+    <ellipse cx="150" cy="96" rx="70" ry="20" fill="#8C6239"/><ellipse cx="150" cy="92" rx="52" ry="12" fill="#E8D7A8"/>
+    <g transform="translate(150 ${napping ? 96 : 92}) scale(${napping ? '1.15 .85' : '1'})"><path d="M-20 0 c0 -24 8 -34 20 -34 s20 10 20 34 z" fill="${baby.color}" stroke="rgba(0,0,0,.35)" stroke-width="1.5"/><circle cx="-8" cy="-30" r="6" fill="${baby.color}" stroke="rgba(0,0,0,.35)"/><circle cx="8" cy="-30" r="6" fill="${baby.color}" stroke="rgba(0,0,0,.35)"/>
+      ${napping ? '<path d="M-10 -15 h5 M5 -15 h5" stroke="#2B281F" stroke-width="2"/>' : '<circle cx="-7" cy="-16" r="2.5" fill="#2B281F"/><circle cx="7" cy="-16" r="2.5" fill="#2B281F"/>'}</g>
+    ${bubble ? `<g transform="translate(186 34)"><rect x="-18" y="-15" width="36" height="28" rx="10" fill="#fff" stroke="#CFC19F"/>${bubble}</g>` : ''}</svg>`;
+  const act = (k, label, small, bad, dis) => `<div class="a"><button class="btn" ${dis ? 'disabled' : ''} data-act="tend" data-v="${k}" ${k === 'nap' && napping ? 'aria-pressed="true"' : ''}>${label}</button><small class="${bad ? 'bad' : ''}">${small}</small></div>`;
+  const food = pantry.map((e,i) => {
+    const col = e.taste === 'loved' ? 'good' : e.taste === 'hated' ? 'bad' : 'ok';
+    return `<button class="row" data-act="feed" data-v="${e.food}" ${e.n < 1 || napping ? 'aria-disabled="true"' : ''}>
+      <span class="icon"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="13" r="7" fill="${FOOD_COL[e.food]}"/><path d="M12 6c0-2 1-3 3-4" stroke="#3F6B35" stroke-width="2" fill="none"/></svg></span>
+      <span class="mid"><span class="nm">${e.food}</span><span class="ds">${e.n} stored</span></span>
+      <span class="end ${col}">${e.word}${e.gain ? ' +' + e.gain : ''}${i < 4 ? kbd(i + 1) : ''}</span></button>`;
+  }).join('');
+  return head({eyebrow:`Baby &middot; ${baby.species} &middot; grows up in ${fmt(baby.grows)}`, title:baby.name, sub:`Loves ${baby.loves}, hates ${baby.hates}. ${napping ? 'Asleep in the home nest.' : 'In the home nest.'}`, right:closeBtn}) + `<div class="sh-body">
+    <div class="sec">${vign}
+      ${meter('tummy','Tummy',nd.tummy)}${meter('fun','Fun',nd.fun)}${meter('clean','Clean',nd.clean)}${meter('sleep','Sleep',nd.sleep)}
+    </div>
+    <div class="sec"><div class="cap">Food bag &middot; tap one to toss it over</div><div class="card">${food}</div></div>
+    <div class="sec"><div class="cap">Tend</div><div class="acts">
+      ${act('wash','Wash', S.res.grass ? '1 grass' : 'no grass', !S.res.grass, napping || !S.res.grass)}
+      ${act('play','Play','free',false,napping)}
+      ${act('nap', napping ? 'Wake' : 'Nap', napping ? Math.ceil(S.napT) + ' s left' : 'free')}
+      ${act('auto','Leave it','a caretaker will')}
+    </div></div>
+  </div>`;
+}
+function pageBuild1(b){
+  const cap = b.kind === 'basket' ? 4 : b.kind === 'stash' ? 1 : 0;
+  const what = {stash:'Leaf-mat stash', basket:'Basket', nest:'Nest'}[b.kind];
+  const slots = cap ? `<div class="sec"><div class="cap">Holds ${b.items.length} of ${cap}</div><div class="slots">${Array.from({length:cap}, (_,i) => b.items[i] ? `<div class="slot full" title="${b.items[i]}"><svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="13" r="7" fill="${FOOD_COL[b.items[i]]}"/></svg></div>` : '<div class="slot"></div>').join('')}</div></div>` : `<div class="sec"><div class="cap">Who naps here</div><p class="hint">Nobody yet. A nap in a nest is shorter and does more good.</p></div>`;
+  return head({eyebrow: b.site ? 'Being built' : 'Building', title: what, sub: b.site ? 'Waiting for a builder' : (b.kind === 'stash' ? 'Food is put down here, one thing at a time.' : b.kind === 'basket' ? 'Holds four things, in the order they came.' : 'Somewhere soft for a nap.'), right: closeBtn}) +
+    `<div class="sh-body">${slots}</div><div class="sh-foot"><button class="btn" data-act="move">Move it</button><button class="btn warn" data-act="remove">Take it apart</button></div>`;
+}
+function pageHome(){
+  return head({eyebrow:'The home nest', title:'Home nest', sub:'Sticks and shinies brought home go in the pile.', right:closeBtn}) + `<div class="sh-body">
+    <div class="sec"><div class="cap">The pile</div><div class="pile"><span>${ic('i-stick')} <b>${S.res.sticks}</b> sticks</span><span>${ic('i-shiny')} <b>${S.res.shinies}</b> shinies</span><span>${ic('i-grass')} <b>${S.res.grass}</b> grass</span></div></div>
+    <div class="sec"><div class="cap">Napping here</div><div class="card"><button class="row" data-act="pick" data-v="tib"><span class="mid"><span class="nm">Tib</span><span class="ds">Napping, 12 s to go</span></span></button><button class="row" data-act="pickbaby"><span class="mid"><span class="nm">Pip</span><span class="ds">Baby, ${word('tummy', baby.need.tummy)}</span></span></button></div></div></div>`;
+}
+function pageMenu(){
+  const sl = (k,l) => `<div class="slider"><span>${l}</span><input type="range" min="0" max="100" value="${S.vol[k]}" data-vol="${k}" ${S.mute ? 'disabled' : ''}><b data-volv="${k}">${S.vol[k]}</b></div>`;
+  return head({eyebrow:'Menu &middot; the meadow waits', title:'Taking a breather', right:closeBtn}) + `<div class="sh-body">
+    <div class="sec"><div class="cap">Sound</div>
+      <button class="btn full" aria-pressed="${S.mute}" data-act="mute">${S.mute ? 'Muted, tap for sound' : 'Mute all'}${kbd('M')}</button>
+      ${sl('music','Music')}${sl('effects','Effects')}${sl('alerts','Alerts')}</div>
+    <div class="sec"><div class="cap">Look</div><div class="seg" style="display:flex">
+      <button class="btn sm" style="flex:1" aria-pressed="${S.tiles === 'meadow'}" data-act="tiles" data-v="meadow">Meadow tiles</button>
+      <button class="btn sm" style="flex:1" aria-pressed="${S.tiles === 'rogue'}" data-act="tiles" data-v="rogue">Pixel tiles${kbd('T')}</button></div></div>
+    <div class="sec"><div class="cap">This year's goal</div><p class="hint">Bring home 40 shinies before winter. You have ${S.res.shinies}.</p></div>
+    <div class="sec"><div class="cap">This run</div>
+      ${S.exportOpen ? `<div class="card pad sec"><label class="cap" for="note">A few words for the run viewer</label><textarea class="field" id="note" placeholder="what happened this run..."></textarea>
+        <div style="display:flex;gap:8px"><button class="btn" style="flex:1" data-act="copy">Copy</button><button class="btn" style="flex:1" data-act="download">Download</button></div></div>`
+        : `<button class="btn full" data-act="export">Export this run${kbd('E')}</button>`}
+    </div>
+    <div class="sec"><div class="cap">Tester corner</div><div class="chips" style="grid-template-columns:repeat(3,1fr)">
+      <button class="btn sm" aria-pressed="${S.fingers}" data-act="fingers">Fingers</button>
+      <button class="btn sm" data-act="tamatest">Tama test</button>
+      <button class="btn sm" data-act="stockup">Stock up</button></div></div>
+    ${S.leaveAsk ? `<div class="inline-confirm"><b>Back to the title?</b><span>This run ends. The bunch will be fine. Probably.</span><div style="display:flex;gap:8px"><button class="btn" style="flex:1" data-act="stay">Stay</button><button class="btn warn" style="flex:1" data-act="leave">Back to title</button></div></div>` : ''}
+  </div>
+  <div class="sh-foot"><button class="btn" aria-pressed="true" data-act="close">Carry on${kbd('Esc')}</button><button class="btn warn" data-act="askleave">Back to title</button></div>`;
+}
+function renderSheet(){
+  const body = sheet.querySelector('.sh-body'); const st = body ? body.scrollTop : 0; const same = sheet.dataset.page;
+  let html, page;
+  if (S.menu){ html = pageMenu(); page = 'menu'; }
+  else if (S.sel?.type === 'morphi'){ html = pageMorphi(morphis.find(m => m.id === S.sel.id)); page = 'm:' + S.sel.id; }
+  else if (S.sel?.type === 'baby'){ html = pageBaby(); page = 'baby'; }
+  else if (S.sel?.type === 'build'){ const b = builds.find(x => x.id === S.sel.id); html = b ? pageBuild1(b) : pageBuild(); page = 'b:' + S.sel.id; }
+  else if (S.sel?.type === 'home'){ html = pageHome(); page = 'home'; }
+  else { html = S.tab === 'bunch' ? pageBunch() : S.tab === 'diary' ? pageDiary() : pageBuild(); page = 'tab:' + S.tab; }
+  sheet.innerHTML = html; sheet.dataset.page = page;
+  sheet.classList.toggle('tall', S.tall);
+  const nb = sheet.querySelector('.sh-body'); if (nb && same === page) nb.scrollTop = st;
+  markSel(); placeToast();
+}
+function renderAll(){
+  ui.dataset.tool = S.tool || '';
+  ui.classList.toggle('paused', S.paused || S.menu);
+  ui.classList.toggle('sheet-hidden', S.sheetHidden && !S.sel && !S.menu);
+  renderStrip(); renderNotices(); renderSheet();
+  $('#babyBubble') && ($('#babyBubble').style.display = (baby.need.tummy < 35 || baby.need.fun < 35 || baby.need.clean < 35) ? '' : 'none');
+}
+
+/* =====================================================================
+   clicks inside the HUD
+   ===================================================================== */
+ui.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.getAttribute('aria-disabled') === 'true') { if (b && b.dataset.act === 'job') setJob(morphis.find(m => m.id === S.sel.id), b.dataset.slot, b.dataset.v); else if (b && b.dataset.act === 'tool'){ const t = TOOLS.find(x => x.id === b.dataset.v); toast(`${t.name} needs ${short(t.cost)}`); } return; }
+  const a = b.dataset.act, v = b.dataset.v;
+  const m = S.sel?.type === 'morphi' ? morphis.find(x => x.id === S.sel.id) : null;
+  switch (a){
+    case 'pause': togglePause(); break;
+    case 'speed': setSpeed(+v); break;
+    case 'cycle': cycleSpeed(); toast(`Speed ${S.speed}x`); break;
+    case 'menu': openMenu(); break;
+    case 'sheet': S.sheetHidden = !S.sheetHidden; renderAll(); break;
+    case 'close': closeSel(); break;
+    case 'grab': S.tall = !S.tall; renderSheet(); break;
+    case 'tab': S.tab = v; S.sel = null; renderAll(); break;
+    case 'tool': setTool(v); break;
+    case 'tooloff': S.tool = null; renderAll(); break;
+    case 'pick': pick('morphi', v); { const mm = morphis.find(x => x.id === v); lookAt(mm.x, mm.y); } break;
+    case 'pickbaby': pick('baby'); lookAt(baby.x, baby.y); break;
+    case 'lookbaby': pick('baby'); lookAt(baby.x, baby.y); break;
+    case 'job': setJob(m, b.dataset.slot, v || null); break;
+    case 'prev': stepMorphi(-1); break;
+    case 'next': stepMorphi(1); break;
+    case 'follow': S.follow = !S.follow; if (S.follow) lookAt(m.x, m.y); renderSheet(); toast(S.follow ? `Following ${m.name}` : 'Camera is free'); break;
+    case 'feed': feed(v); break;
+    case 'tend': if (v === 'auto'){ closeSel(); toast(`Fern the caretaker will see to ${baby.name}`); } else tend(v); break;
+    case 'move': toast('Tap where it should go (mockup)'); break;
+    case 'remove': { const i = builds.findIndex(x => x.id === S.sel.id); builds.splice(i,1); S.sel = null; drawBuilds(); renderAll(); toast('Taken apart. What it held is put down nearby.'); } break;
+    case 'mute': S.mute = !S.mute; renderSheet(); break;
+    case 'tiles': S.tiles = v; renderSheet(); toast(v === 'rogue' ? 'Pixel tiles' : 'Meadow tiles'); break;
+    case 'export': S.exportOpen = true; renderSheet(); setTimeout(() => $('#note')?.focus(), 30); break;
+    case 'copy': toast('Run copied. Paste it into the run viewer.'); break;
+    case 'download': toast('Run saved as a file (mockup)'); break;
+    case 'fingers': S.fingers = !S.fingers; renderSheet(); break;
+    case 'tamatest': S.menu = false; pick('baby'); toast('Tama test: every food, free'); break;
+    case 'stockup': Object.assign(S.res, {sticks:20, grass:10, leaves:10, food:9}); renderAll(); toast('Stocked up'); break;
+    case 'askleave': S.leaveAsk = true; renderSheet(); setTimeout(() => sheet.querySelector('.sh-body').scrollTop = 9999, 10); break;
+    case 'stay': S.leaveAsk = false; renderSheet(); break;
+    case 'leave': S.leaveAsk = false; S.menu = false; renderAll(); toast('(Mockup) this would go back to the title'); break;
+  }
+});
+ui.addEventListener('input', e => { const k = e.target.dataset.vol; if (k){ S.vol[k] = +e.target.value; sheet.querySelector(`[data-volv="${k}"]`).textContent = S.vol[k]; } });
+
+/* =====================================================================
+   keys (desktop)
+   ===================================================================== */
+const held = new Set();
+document.addEventListener('keydown', e => {
+  if (e.target.matches('textarea,input[type=text]')) { if (e.key === 'Escape') e.target.blur(); return; }
+  const k = e.key;
+  if (S.sel?.type === 'baby' && ['1','2','3','4'].includes(k)){ feed(pantry[+k - 1].food); return; }
+  const t = TOOLS.find(x => x.key === k); if (t){ if (canAfford(t.cost)) setTool(t.id); else toast(`${t.name} needs ${short(t.cost)}`); return; }
+  if (k === ' '){ e.preventDefault(); togglePause(); }
+  else if (k === 'Tab'){ e.preventDefault(); cycleSpeed(); toast(`Speed ${S.speed}x`); }
+  else if (k === 'Escape'){ if (S.menu || S.tool || S.sel) closeSel(); else openMenu(); }
+  else if (k === '[') stepMorphi(-1);
+  else if (k === ']') stepMorphi(1);
+  else if (k === 'f' && S.sel?.type === 'morphi'){ const m = morphis.find(x => x.id === S.sel.id); S.follow = !S.follow; if (S.follow) lookAt(m.x, m.y); renderSheet(); }
+  else if (k === 'b'){ S.tab = 'build'; S.sel = null; S.menu = false; renderAll(); }
+  else if (k === 'u'){ S.tab = 'bunch'; S.sel = null; S.menu = false; renderAll(); }
+  else if (k === 'l'){ S.tab = 'diary'; S.sel = null; S.menu = false; renderAll(); }
+  else if (k === 'h'){ S.sheetHidden = !S.sheetHidden; renderAll(); }
+  else if (k === 'm'){ S.mute = !S.mute; toast(S.mute ? 'Muted' : 'Sound on'); if (S.menu) renderSheet(); }
+  else if (k === 't'){ S.tiles = S.tiles === 'meadow' ? 'rogue' : 'meadow'; toast(S.tiles === 'rogue' ? 'Pixel tiles' : 'Meadow tiles'); if (S.menu) renderSheet(); }
+  else if (k === 'e' && S.menu){ S.exportOpen = true; renderSheet(); setTimeout(() => $('#note')?.focus(), 30); e.preventDefault(); }
+  else if ('wasd'.includes(k) && k.length === 1) held.add(k);
+});
+document.addEventListener('keyup', e => held.delete(e.key));
+(function panLoop(){ if (held.size){ const s = 12; if (held.has('a')) vb.x -= s; if (held.has('d')) vb.x += s; if (held.has('w')) vb.y -= s; if (held.has('s')) vb.y += s; setVB(); } requestAnimationFrame(panLoop); })();
+
+/* =====================================================================
+   the meadow ticks along
+   ===================================================================== */
+const DOING = {forager:'Picking berries',gatherer:'Gathering sticks by the trees',digger:'Digging marked clay',builder:'Building a stash',caretaker:'Looking for a baby to tend',hunter:'Chasing a critter'};
+let acc = 0;
+setInterval(() => {
+  if (S.paused || S.menu) return;
+  acc += S.speed;
+  // wander
+  morphis.forEach(m => {
+    if (m.id === 'tib') return;
+    const tx = m.ax + (Math.random() - .5) * 140, ty = m.ay + (Math.random() - .5) * 90;
+    m.x = m.x + (tx - m.x) * .5; m.y = m.y + (ty - m.y) * .5;
+    m.el.style.transform = `translate(${m.x}px,${m.y}px)`;
+  });
+  if (S.follow && S.sel?.type === 'morphi'){ const m = morphis.find(x => x.id === S.sel.id); lookAt(m.x, m.y); }
+  while (acc >= 2){
+    acc -= 2;
+    S.left = Math.max(0, S.left - 2);
+    if (S.left === 0){ S.left = 240; S.day++; }
+    baby.grows = Math.max(0, baby.grows - 2);
+    baby.need.fun = Math.max(0, baby.need.fun - .4); baby.need.clean = Math.max(0, baby.need.clean - .3);
+    if (S.napT > 0){ S.napT = Math.max(0, S.napT - 2); baby.need.sleep = Math.min(100, baby.need.sleep + 7); if (!S.napT) toast(`${baby.name} wakes up rested`); }
+    else baby.need.sleep = Math.max(0, baby.need.sleep - .3);
+    // a digger digs a marked tile now and then
+    const m = tiles.filter(t => t.mark && !t.dug);
+    if (m.length && Math.random() < .6){ const t = m[Math.floor(Math.random() * m.length)]; t.dug = true; t.mark = false; paintTiles();
+      if (t.shiny){ S.res.shinies++; log('Snip dug up a shiny!'); toast('Snip dug up a shiny!'); } }
+    if (Math.random() < .15 && S.res.food < S.res.cap){ S.res.food++; }
+  }
+  renderStrip(); renderNotices();
+  if (S.sel?.type === 'baby') renderSheet();
+  $('#babyBubble') && ($('#babyBubble').style.display = (baby.need.tummy < 35 || baby.need.fun < 35 || baby.need.clean < 35) ? '' : 'none');
+}, 1000);
+
+/* =====================================================================
+   mockup chrome: state jumps, frames, notes
+   ===================================================================== */
+function reset(){ Object.assign(S, {tool:null, sel:null, tab:'build', paused:false, menu:false, follow:false, leaveAsk:false, exportOpen:false, tall:false, sheetHidden:false}); }
+const STATES = {
+  play(){ reset(); S.speed = 1; },
+  morphi(){ reset(); S.sel = {type:'morphi', id:'bumble'}; lookAt(1010, 420); },
+  place(){ reset(); S.tool = 'basket'; setTimeout(() => { const r = world.getBoundingClientRect(); ghostAt(toSvg({clientX: r.left + r.width*.38, clientY: r.top + r.height*.42})); }, 50); },
+  dig(){ reset(); S.tool = 'dig'; tiles.slice(0,14).forEach(t => { if (!t.dug) t.mark = true; }); paintTiles(); lookAt(1120, 260); },
+  baby(){ reset(); baby.need.tummy = 22; S.sel = {type:'baby'}; lookAt(860, 520); },
+  speed(){ reset(); S.speed = 4; applySpeed(); toast('Speed 4x: one tap, or Tab'); },
+  pause(){ reset(); S.paused = true; },
+  menu(){ reset(); S.menu = true; S.tall = true; },
+};
+document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-state]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  STATES[b.dataset.state](); renderAll();
+}));
+function frame(phone){ $('#stage').classList.toggle('phone', phone); $('#fDesk').setAttribute('aria-pressed', !phone); $('#fPhone').setAttribute('aria-pressed', phone); setTimeout(() => { renderAll(); }, 30); }
+$('#fDesk').onclick = () => frame(false); $('#fPhone').onclick = () => frame(true);
+$('#notesBtn').onclick = () => { const o = $('#notes').classList.toggle('open'); $('#notesBtn').setAttribute('aria-pressed', o); };
+new ResizeObserver(() => { renderNotices(); placeToast(); }).observe($('#game'));
+
+/* =====================================================================
+   design notes
+   ===================================================================== */
+$('#notes').innerHTML = `
+<button class="btn sm close" onclick="document.getElementById('notes').classList.remove('open');document.getElementById('notesBtn').setAttribute('aria-pressed',false)">Close</button>
+<h2>Design notes</h2>
+<p>Field Journal: one thin strip for the bunch's essentials, one sheet for whatever you are looking at, the meadow in between. Everything is built from five parts on one 8px grid, in four type sizes.</p>
+
+<h3>Tokens</h3>
+<table>
+<tr><th>Type step</th><th>Size / line</th><th>Used for</th></tr>
+<tr><td><span class="cap">Caption</span></td><td>12 / 16, 800, caps</td><td>Section labels, key hints, costs under baby actions. Never body text.</td></tr>
+<tr><td>Body</td><td>14 / 20, 400 &amp; 600 &amp; 800</td><td>Everything you read: rows, buttons, meters, chips, the strip.</td></tr>
+<tr><td><h3 style="margin:0">Heading</h3></td><td>18 / 24, 800</td><td>Rare: a card title.</td></tr>
+<tr><td><h2 style="margin:0">Display</h2></td><td>24 / 32, Fraunces</td><td>The name on a page: Bumble, Pip, Basket.</td></tr>
+</table>
+<p>No size ever shrinks to fit. Long text wraps or ends in an ellipsis at the same size. On a phone the type stays the same and only the targets grow.</p>
+<table>
+<tr><th>Space</th><th>Value</th><th>Where</th></tr>
+<tr><td>half-step</td><td>4</td><td>Inside components only (icon to label, chip padding)</td></tr>
+<tr><td>s1</td><td>8</td><td>Between buttons, between rows of a section</td></tr>
+<tr><td>s2</td><td>16</td><td>Sheet padding, strip padding, card padding</td></tr>
+<tr><td>s3</td><td>24</td><td>Between sections</td></tr>
+<tr><td>s4 / s6</td><td>32 / 48</td><td>Strip height is 48; list row 56 (48 + 8)</td></tr>
+</table>
+<table>
+<tr><th>Part</th><th>Desktop</th><th>Touch / phone</th></tr>
+<tr><td>Button md</td><td>40 high</td><td>48 high</td></tr>
+<tr><td>Button sm</td><td>32 high</td><td>40 high</td></tr>
+<tr><td>List row</td><td>56 min</td><td>56 min (palette: 88 tile)</td></tr>
+<tr><td>Sheet</td><td>336 wide, right</td><td>bottom sheet, 62% (88% tall)</td></tr>
+<tr><td>Radius</td><td>8 controls / 16 cards</td><td>same</td></tr>
+</table>
+<p><span class="sw" style="background:#F6F0E1"></span>paper #F6F0E1 &nbsp; <span class="sw" style="background:#EDE4CE"></span>paper-2 &nbsp; <span class="sw" style="background:#CFC19F"></span>line &nbsp; <span class="sw" style="background:#2B281F"></span>ink #2B281F (~14:1) &nbsp; <span class="sw" style="background:#575140"></span>ink-2 #575140 (~7:1) &nbsp; <span class="sw" style="background:#3F6B35"></span>moss (~5.4:1) &nbsp; <span class="sw" style="background:#A13A2D"></span>berry (~5.7:1) &nbsp; <span class="sw" style="background:#865710"></span>honey (~5.4:1). Every text colour passes WCAG AA on paper at 14px. The meadow keeps its own colours; only the chrome is paper.</p>
+
+<h3>The component library (all of it)</h3>
+<div class="specimen">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn">Button md<span class="k">F</span></button><button class="btn sm">Button sm</button><button class="btn" aria-pressed="true">Pressed = toggle</button><button class="btn" disabled>Can't</button></div>
+  <div class="seg"><button class="btn sm" aria-pressed="false">1&times;</button><button class="btn sm" aria-pressed="true">2&times;</button><button class="btn sm" aria-pressed="false">4&times;</button></div>
+  <div class="card"><div class="row"><span class="icon"><svg class="ic l"><use href="#i-basket"/></svg></span><span class="mid"><span class="nm">List row</span><span class="ds">in a card</span></span><span class="end">1 grass<span class="k">3</span></span></div></div>
+  <div class="meter lv-ok"><span>Meter</span><div class="bar"><i style="width:48%"></i></div><span class="w">dusty</span></div>
+</div>
+<p>Button (2 sizes; pressed is the toggle, so speed, tabs, job chips, Follow and Mute are all the same control), Card, List row, Meter, Chip notice. One sheet layout: caption, display name, one line of what it is doing, sections, an optional footer of at most two buttons.</p>
+
+<h3>What is wrong with the current UI</h3>
+<ol>
+<li><b>Text changes size to fit.</b> The C64 face (<code>src/ui.lua:16</code>) is so wide that nearly every string goes through a "largest that fits" chain (<code>printLine</code> / <code>printFit</code> / <code>printWrap</code>, <code>src/ui.lua:373-430</code>), e.g. a morphi's name tries hud, then small (<code>src/ui.lua:1104</code>, <code>1122</code>), and its state tries small, then tiny (<code>src/ui.lua:1109</code>, <code>1159</code>). The same kind of text renders at different sizes on different screens and different morphis, and long strings get cut to "..".</li>
+<li><b>Ten type sizes, then scaled again.</b> Two font sets of five (<code>src/ui.lua:44-47</code>: 10/12/16/26/46 and 12/14/18/28/44), multiplied by a fractional HUD scale clamped 0.6 to 3.0 (<code>src/ui.lua:116-132</code>) and drawn with a linear filter (<code>src/ui.lua:109</code>). A 10px pixel font at 0.93 scale on a 390-wide phone is about 9px of blur. The tiny face carries costs, key numbers and column headers (<code>src/ui.lua:1073-1074</code>, <code>1088-1090</code>, <code>1836-1840</code>).</li>
+<li><b>No size system.</b> Button heights in use: 20, 22, 28, 30, 32, 34, 36, 38, 40, 44, 60, 64, 72 (<code>src/ui.lua:1222</code>, <code>1154</code>, <code>1106</code>, <code>1550</code>, <code>1426</code>, <code>1461</code>, <code>2488</code>, <code>1628</code>, <code>243</code>, <code>159</code>, <code>1685</code>); paddings of 4, 6, 8, 10, 12, 14, 16, 18 mixed in the same panel.</li>
+<li><b>Low contrast.</b> Secondary text is <code>dim {0.6,0.62,0.5}</code> on a 92%-opaque bar or a 65% black wash over the map (<code>src/ui.lua:20-23</code>, <code>991</code>), and it is the tiny face that gets it.</li>
+<li><b>An overstuffed top bar that moves.</b> Up to 10 values and 10 buttons plus PAUSE and DEV in one row (<code>src/ui.lua:137-142</code>, <code>627-676</code>); when they do not fit, the buttons fold under a gear and then the values fold into a dropdown (<code>src/ui.lua:714-799</code>). SPEED, UNITS, LOG and SOUND are two taps on most windows and live in different places on different screens.</li>
+<li><b>Three layouts for one morphi.</b> The picked morphi is drawn as a phone strip (<code>src/ui.lua:1096-1140</code>), a desk panel inside the tool bar (<code>1141-1190</code>) or a one-line strip with 20px buttons (<code>1212-1227</code>).</li>
+<li><b>Sticky tools block picking.</b> Only SELECT picks a morphi or pans (<code>main.lua:1684-1700</code>), and a tool stays out after use, so after setting out a stash you press 1 before you can look at anybody. On a phone, a drag with any other tool out marks instead of panning.</li>
+<li><b>Jobs are a separate modal.</b> 14 buttons, three paragraphs of explanation and CLOSE / UNITS in its own header (<code>src/ui.lua:1621-1729</code>): four to five taps to change one job.</li>
+<li><b>Baby care is two stacked modals.</b> TEND opens a full-screen panel over the meadow (<code>src/ui.lua:1414-1519</code>) and FOOD a second panel over that (<code>src/ui.lua:1524-1573</code>), then MEADOW to get back.</li>
+<li><b>Buildings cannot be looked at.</b> A tap only looks for a morphi (<code>main.lua:1700</code>): there is no way to see what a basket holds.</li>
+<li><b>Every panel has its own size and its own exit word.</b> Centered panels of 520, 620, 760, 900 and 980 wide (<code>src/ui.lua:1420</code>, <code>1542</code>, <code>1634</code>, <code>2485</code>, <code>2503</code>), closed by CLOSE, MEADOW, BACK or DONE.</li>
+<li><b>Voice.</b> The top bar's <code>LOG</code> button (<code>src/ui.lua:141</code>) reads as a banned word, and UNITS / HAUL (<code>src/ui.lua:140</code>, <code>671</code>) are office words. Here they are Diary, Bunch and the pile.</li>
+</ol>
+
+<h3>Clicks for the core actions</h3>
+<table>
+<tr><th>Action</th><th>Before</th><th>After</th><th>How</th></tr>
+<tr><td>Mark clay to dig</td><td class="n">2 +1</td><td class="n good">2</td><td>Dig (or 1), drag. Before, +1 to get SELECT back before you can pick anything.</td></tr>
+<tr><td>Set out a stash / basket / nest</td><td class="n">2 +1</td><td class="n good">2</td><td>Tool (2/3/4), tap grass. The tool puts itself away (Shift keeps it).</td></tr>
+<tr><td>Lay a bridge</td><td class="n">2 +1</td><td class="n good">2</td><td>Bridge (5), drag; the stick cost shows on the drag.</td></tr>
+<tr><td>Change a morphi's main job</td><td class="n">4-5</td><td class="n good">2</td><td>Tap the morphi, tap the job. Before: (SELECT), pick, JOBS, job, CLOSE.</td></tr>
+<tr><td>Main and fallback job</td><td class="n">5-6</td><td class="n good">3</td><td>Tap the morphi, two chips.</td></tr>
+<tr><td>Feed a baby</td><td class="n">5</td><td class="n good">2</td><td>Tap the baby (or its alert's Look), tap a food in the bag. Before: pick, TEND, FOOD, food, MEADOW.</td></tr>
+<tr><td>Wash / play / nap a baby</td><td class="n">4</td><td class="n good">2</td><td>Tap the baby, tap Wash. Before: pick, TEND, CLEAN, MEADOW.</td></tr>
+<tr><td>Speed to 4&times;</td><td class="n">2-3</td><td class="n good">1</td><td>Tap 4&times; (Tab cycles). Before: SPEED twice, plus the gear on a folded bar.</td></tr>
+<tr><td>Pause</td><td class="n">1</td><td class="n good">1</td><td>Pause or Space; always in the same place.</td></tr>
+<tr><td>Menu / sound</td><td class="n">1-2</td><td class="n good">1</td><td>Menu or Esc; sound sliders are in it, not a dropdown off the gear.</td></tr>
+<tr><td>See everyone</td><td class="n">1-2</td><td class="n good">1</td><td>Bunch tab (U). Before: UNITS, often under the gear.</td></tr>
+<tr><td>Look in a basket</td><td class="n">n/a</td><td class="n good">1</td><td>Tap it.</td></tr>
+<tr><td>Export a run</td><td class="n">3</td><td class="n">3</td><td>Menu, Export, Copy. Same count, but DEV no longer takes room on the bar; the tester corner sits in the menu.</td></tr>
+</table>
+
+<h3>Keys (shown on the buttons; hidden on touch)</h3>
+<p>1-5 tools &middot; Esc puts the tool away, closes the page, then opens the menu &middot; Space pause &middot; Tab speed &middot; [ ] previous / next morphi &middot; F follow &middot; B / U / L build, bunch, diary &middot; H hide the sheet &middot; M mute &middot; T tiles &middot; with a baby open, 1-4 toss the foods in the bag &middot; WASD and right-drag pan, wheel zooms.</p>
+
+<h3>Rules this mockup follows</h3>
+<ul>
+<li>A tap on a morphi, a baby or a building always picks it, whatever tool is out. Tools never block looking.</li>
+<li>Nothing covers the meadow on desktop: the sheet sits beside it. On a phone it is a bottom sheet you can pull taller.</li>
+<li>One notice at a time per kind, as chips at the top of the meadow: the tool you are using, Paused, then the one alert that matters.</li>
+<li>Grass and leaves only matter when you build, so they live in the Build page, not the strip.</li>
+<li>For the L&Ouml;VE build: one font (a rounded sans at 14px, rendered at integer scale) instead of the C64 face, and the HUD scale rounded to 1&times; or 2&times; so text is never resampled.</li>
+</ul>`;
+
+/* =====================================================================
+   go
+   ===================================================================== */
+drawMeadow(); drawBuilds(); drawMorphis(); applySpeed(); setVB(); renderAll();
+document.querySelector('[data-state=play]').setAttribute('aria-pressed', true);
+if (window.innerWidth <= 600) { /* real phone: it already fills the screen */ }
+</script>
+</body>
+</html>
