@@ -1,5 +1,5 @@
 name: continuous-integration
-on: [push]
+on: [push, workflow_dispatch]
 env:
   GAME_NAME: morphis
   # unfortunately we need to also hardcode game name here in env since definitions in env can't reference eachother

@@ -1,0 +1,115 @@
+name: epic-deploy
+
+# Deploy an accepted epic. Micah moves the epic's card to "accepted" on the
+# game's project board; the local game-worker tick then starts this workflow:
+#   gh workflow run epic-deploy.yml -f issue=12        (what the tick runs; you can too)
+# Nothing here runs on its own. The run uses only git, gh, an itch page GET and
+# an optional Discord webhook (no AI service, no Jam Hub dashboard):
+#   1. checks the issue was reviewed and its reviewed pull requests are unchanged,
+#   2. merges them (head must still be the reviewed commit, no conflict, checks green),
+#   3. dispatches the publish workflow on the default branch and waits for it,
+#   4. checks the itch page shows the new build,
+#   5. posts the announcement Claude wrote in the issue to Discord, if the
+#      DISCORD_WEBHOOK_URL repo secret exists (skipped with a log line otherwise),
+#   6. comments the outcome on the issue and closes it when deployed.
+# On any failure the issue stays open with an `epic-result` comment, and the
+# tick moves the card back to claude-wip.
+#
+# Generated from game-jam/templates/epic-deploy.yml by epicci.mjs; rerun that to update.
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Number of the accepted epic issue'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+  checks: read
+  statuses: read
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GH_REPO: ${{ github.repository }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+  PUBLISH_WORKFLOW: build.yml
+  ITCH_URL: 'https://multivoxmuse.itch.io/morphi'
+  # 'yourmum' is the shared page token of the not-yet-public itch pages, not a credential.
+  ITCH_PAGE_PASSWORD: ${{ vars.ITCH_PAGE_PASSWORD || 'yourmum' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # One deploy at a time.
+    concurrency:
+      group: epic-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check the reviewed pull requests
+        id: resolve
+        continue-on-error: true
+        run: node tools/epicpr.mjs resolve --base "$DEFAULT_BRANCH" --issue "${{ inputs.issue }}"
+
+      - name: Merge
+        id: merge
+        if: steps.resolve.outcome == 'success'
+        run: |
+          set +e
+          node tools/epicpr.mjs merge --prs "${{ steps.resolve.outputs.prs }}"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish
+        id: publish
+        if: steps.merge.outputs.code == '0'
+        continue-on-error: true
+        run: |
+          git pull --ff-only origin "$DEFAULT_BRANCH"
+          node tools/epicpr.mjs ship --workflow "$PUBLISH_WORKFLOW" --ref "$DEFAULT_BRANCH" --sha "$(git rev-parse HEAD)"
+
+      - name: Verify the itch page
+        id: itch
+        if: steps.publish.outcome == 'success' && env.ITCH_URL != ''
+        continue-on-error: true
+        run: node tools/epicpr.mjs verify-itch --url "$ITCH_URL" --since "${{ steps.resolve.outputs.since }}"
+
+      - name: Announce on Discord
+        id: announce
+        if: steps.itch.outcome == 'success' || (steps.publish.outcome == 'success' && env.ITCH_URL == '')
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node tools/epicpr.mjs announce --issue "${{ inputs.issue }}"
+
+      - name: Report on the epic issue
+        if: always()
+        env:
+          RESOLVE: ${{ steps.resolve.outcome }}
+          MERGE_CODE: ${{ steps.merge.outputs.code }}
+          PUBLISH: ${{ steps.publish.outcome }}
+          ITCH: ${{ steps.itch.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          detail=""
+          if [ "$RESOLVE" != success ]; then outcome=refused; detail="The epic is not in a deployable state; see the run log."
+          elif [ "$MERGE_CODE" = 3 ]; then outcome=conflict
+          elif [ "$MERGE_CODE" = 4 ]; then outcome=stale
+          elif [ "$MERGE_CODE" = 5 ]; then outcome=checks-failed
+          elif [ "$MERGE_CODE" != 0 ]; then outcome=ship-failed; detail="The merge failed; see the run log."
+          elif [ "$PUBLISH" != success ]; then outcome=ship-failed; detail="The publish run failed."
+          elif [ "$ITCH" = skipped ] || [ "$ITCH" = success ]; then outcome=deployed
+          else outcome=deploy-unverified; detail="The publish run succeeded but the itch page has not shown the new build yet."
+          fi
+          node tools/epicpr.mjs finish --issue "${{ inputs.issue }}" --outcome "$outcome" --sha "$(git rev-parse HEAD)" --url "$RUN_URL" --detail "$detail"
