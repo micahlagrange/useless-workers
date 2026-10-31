@@ -1,0 +1,44 @@
+# Vended by game-jam/scripts/jamci.mjs; the steps live in micahlagrange/jam-ci.
+# The epic flow is git only: Micah approves an epic pull request on GitHub and
+# epic-merge merges it (reviewed commit, no conflict, checks green). The merge
+# push on the default branch runs publish.yml. When the pull request closes as
+# merged, epic-finish waits for that publish run, checks the itch page, posts
+# the announcement to Discord and comments the outcome on the epic issue.
+# A pull request Micah merges by hand gets the same finish.
+name: epic
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  checks: read
+  statuses: read
+
+concurrency:
+  group: epic-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved' && github.event.review.user.login == github.repository_owner
+    uses: micahlagrange/jam-ci/.github/workflows/epic-merge.yml@main
+    with:
+      pr: ${{ github.event.pull_request.number }}
+      sha: ${{ github.event.review.commit_id }}
+    secrets: inherit
+
+  finish:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    uses: micahlagrange/jam-ci/.github/workflows/epic-finish.yml@main
+    with:
+      pr: ${{ github.event.pull_request.number }}
+      sha: ${{ github.event.pull_request.merge_commit_sha }}
+      itch_url: 'https://multivoxmuse.itch.io/morphi'
+    secrets: inherit
