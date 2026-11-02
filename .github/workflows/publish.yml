@@ -19,5 +19,6 @@ jobs:
       game_name: 'morphis'
       test: 'pip install lupa && python3 tst/run.py'
       makelove: 'git+https://github.com/pfirsich/makelove'
+      pre_build: 'python3 tools/stamp_version.py'
       post_build: 'python3 tools/patch_lovejs.py makelove-build/lovejs/morphis-lovejs.zip'
     secrets: inherit
