@@ -7,7 +7,7 @@ A LÖVE 11 game (Lua 5.1), played on desktop and in the browser through love.js.
 - `main` is the main line. Only an approved epic pull request is merged into it (see below); epic work goes on `epic/<slug>`. CI is the standard jam CI: `.github/workflows/publish.yml` and `epic.yml` are two small stubs that call the reusable workflows in https://github.com/micahlagrange/jam-ci. Every push builds and tests; a push to `main` also publishes the web build (`default_targets` in `makelove.toml`, web only) to https://multivoxmuse.itch.io/morphi. itch can sit in "processing" and refuse new pushes for a while; it clears up by itself.
 - Never hand-edit the two stubs or add workflows: they are vended from the skills repo (`game-jam/scripts/jamci.mjs`). Change the test command or makelove inputs there and re-vend.
 - `src/version.lua` holds the build number shown on the title screen. Never edit it: `python3 tools/stamp_version.py` writes it from the commit count before every build (CI runs it through the stub's `pre_build` input; run it yourself before a local build, and `git checkout src/version.lua` afterwards). The committed value is 0.
-- Commit as Micah Turner <turner.micah@gmail.com>.
+- Commit as the Jam Hub bot (`BOT_GIT` in `~/.claude/skills/game-jam/scripts/appauth.mjs`), so Micah can approve the pull request. Micah's own commits stay his.
 - Tests: `./test.sh` (luajit when installed, else `python3 tst/run.py`, which needs `pip install lupa`). Keep code Lua 5.1 compatible. `tst/arcade_test.lua` plays every arcade level's solutions with the real AI.
 
 ## The backlog and how it ships
