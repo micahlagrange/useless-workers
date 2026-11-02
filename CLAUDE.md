@@ -18,7 +18,7 @@ Morphis is a standard jam game. Its backlog is GitHub issues in this repo with c
 - Build it in a fresh worktree from `origin` on `epic/<slug>`, merging `origin/main` in first. Fix `### Open review comments` first, then the stories, each proven with unit tests and a fast headless run (game speed up, `Worker:update` stepped in a loop, or a test that plays the level) rather than real time. Push the epic branch only, never `main`.
 - Hand over with a test artifact built from the exact pushed commit (see Seeing it run), then fill the issue's `### Playtest`, `### How to test`, `### Test results`, `### Pull requests` and `### Announcement` sections and run `hub.mjs move --to review`. The review gate lists every gap.
 - Micah plays it. To send it back he comments and moves the card to `claude-wip`. To ship it he approves the pull request on GitHub: Actions merges that commit, the merge push publishes to itch, then it verifies the page, announces on Discord and closes the issue. You do none of that.
-- Never tick a story Micah has not seen built, never edit his text, never merge or approve, never move a card to `accepted`.
+- Never tick a story Micah has not seen built, never edit his text, never merge or approve.
 - Ambiguity is not a reason to stop: make a reasonable call and say so in a comment on the issue. Only a real decision for Micah goes under `### For Micah`.
 - No itch devlogs: the skill rule is that none are written, draft or otherwise.
 
