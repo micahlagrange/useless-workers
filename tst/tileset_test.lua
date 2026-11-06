@@ -48,6 +48,8 @@ end
 function TestTileset:testCycleIsRemembered()
     lu.assertEquals(Tileset.cycle(), 'rogue')
     lu.assertEquals(disk[Tileset.FILE], 'rogue')
+    lu.assertEquals(Tileset.cycle(), 'pixel')
+    lu.assertEquals(Tileset.cycle(), 'soft')
     lu.assertEquals(Tileset.cycle(), 'classic')
     lu.assertEquals(disk[Tileset.FILE], 'classic')
     -- what the disk says wins at load, odd line endings and all
@@ -86,6 +88,10 @@ function TestTileset:testTKeySwapsTheRendererInPlay()
         for _, g in ipairs(glyphs) do ground = ground + (rogue[g] or 0) end
     end
     lu.assertTrue(ground >= game.world.w * game.world.h, 'ground glyphs: ' .. ground)
+    love.keypressed('t')
+    lu.assertEquals(game.tileset, 'pixel')
+    love.keypressed('t')
+    lu.assertEquals(game.tileset, 'soft')
     love.keypressed('t')
     lu.assertEquals(getmetatable(game.view), View)
     lu.assertEquals(game.tileset, 'classic')
@@ -137,6 +143,46 @@ function TestTileset:testRogueDrawsEveryKindOfThing()
     end
     -- the font the HUD had is the font it gets back
     lu.assertEquals(love.graphics.getFont(), hud)
+end
+
+-- Both Kenney sets draw every kind of thing, and every picture they name is on disk.
+function TestTileset:testKenneyDrawsEveryKindOfThing()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    step(5)
+    local game = H.game()
+    local world = game.world
+    local KenneyView = require('src.view_kenney')
+    for _, name in ipairs({ 'pixel', 'soft' }) do
+        Tileset.set(name)
+        local view = Tileset.newView(world)
+        lu.assertEquals(getmetatable(view), KenneyView)
+        for _, set in pairs(KenneyView.SKINS[name].ground) do
+            for _, n in ipairs(set) do lu.assertNotNil(view.img[n], name .. ' ground ' .. n) end
+        end
+        for key in pairs(MORPHI_SHEET_NAMES) do lu.assertNotNil(view.img[key], name .. ' species ' .. key) end
+        for _, n in ipairs({ 'wall', 'door', 'bed', 'bin', 'stash', 'floor', 'tree', 'stump', 'bush', 'plank' }) do
+            lu.assertNotNil(view.img[n], name .. ' ' .. n)
+        end
+        if name == 'pixel' then
+            for _, f in ipairs(FOOD_KINDS) do lu.assertNotNil(view.img[f], 'food ' .. f) end
+        end
+        for i, kind in ipairs({ SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BED, SITE_WALL, SITE_DOOR, SITE_BRIDGE }) do
+            world.sites[#world.sites + 1] = { kind = kind, x = 2 + i * 2, y = 2 }
+        end
+        view:rebuildCanvas()
+        view:drawWorld()
+        view:drawBreakroom()
+        view:drawStorage()
+        view:drawFloors()
+        view:drawBeds()
+        view:drawNodes(1)
+        view:drawItems(1)
+        view:drawSites(1)
+        view:drawGhost(SITE_BIN, 3, 3, true)
+        view:drawWorkers(game.workers, 1, game.workers[1])
+    end
+    Tileset.set('classic')
 end
 
 os.exit(lu.LuaUnit.run())
