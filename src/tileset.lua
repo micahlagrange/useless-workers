@@ -8,7 +8,9 @@ Tileset.SETS = { 'classic', 'rogue', 'pixel', 'soft' }
 Tileset.LABELS = { classic = 'CLASSIC', rogue = 'ROGUE', pixel = 'PIXEL', soft = 'SOFT' }
 Tileset.FILE = 'tileset.txt'
 
-local current = Tileset.SETS[1]
+-- A new player starts in the Kenney pixel look; what they pick later is remembered.
+Tileset.DEFAULT = 'pixel'
+local current = Tileset.DEFAULT
 
 local function known(name)
     for _, s in ipairs(Tileset.SETS) do if s == name then return true end end

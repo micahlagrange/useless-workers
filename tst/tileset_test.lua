@@ -45,6 +45,16 @@ function TestTileset:testDefaultAndUnknownNames()
     lu.assertEquals(Tileset.label(), 'CLASSIC')
 end
 
+function TestTileset:testNewPlayersStartInThePixelLook()
+    lu.assertEquals(Tileset.DEFAULT, 'pixel')
+    lu.assertTrue(Tileset.set('neon') == false)
+    -- nothing on disk: load keeps whatever the game started with
+    disk = {}
+    Tileset.set(Tileset.DEFAULT)
+    Tileset.load()
+    lu.assertEquals(Tileset.current(), 'pixel')
+end
+
 function TestTileset:testCycleIsRemembered()
     lu.assertEquals(Tileset.cycle(), 'rogue')
     lu.assertEquals(disk[Tileset.FILE], 'rogue')
