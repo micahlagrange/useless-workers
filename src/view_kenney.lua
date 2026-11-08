@@ -6,7 +6,7 @@
 --            with linear filtering. The ground is baked at twice the
 --            world's resolution so it stays crisp when the camera zooms.
 -- Same calls as src/view.lua; only what things look like differs. Pictures
--- Kenney has none for (water and snow in the pixel set, the gold, the bits
+-- Kenney has none for (water in the pixel set, the gold, the bits
 -- of the soft set) keep the painted look. Files: assets/images/kenney/<skin>/.
 require('src.constants')
 local View = require('src.view')
@@ -23,9 +23,12 @@ Kenney.SKINS = {
             grass = { 'grass1', 'grass2', 'grass3', 'grass1', 'grass1' },
             dirt = { 'dirt1', 'dirt2', 'dirt3', 'dirt4' },
             breakroom = { 'dirt1' },
-            stone = { 'stone1', 'stone2', 'stone3' },
+            -- clay: Tiny Dungeon's sandy floor, tinted terracotta below
+            stone = { 'clay1', 'clay2', 'clay1', 'clay3' },
+            -- hard dirt: Tiny Dungeon's dark earth, pebbles and holes
+            snow = { 'hard1', 'hard1', 'hard2', 'hard3' },
         },
-        snowTint = { 1.7, 1.75, 1.85 },
+        tint = { stone = { 0.86, 0.6, 0.5 } },
         woof = 16,
     },
     soft = {
@@ -36,8 +39,10 @@ Kenney.SKINS = {
             breakroom = { 'dirt1' },
             stone = { 'stone1', 'stone2' },
             water = { 'water1', 'water2' },
-            snow = { 'floor' },
+            -- hard dirt: the dirt picture, dark (the floor picture is for built floors)
+            snow = { 'dirt1', 'dirt2' },
         },
+        tint = { snow = { 0.55, 0.42, 0.34 } },
         woof = 64,
     },
 }
@@ -124,12 +129,6 @@ end
 function Kenney:drawGround(t, px, py)
     local f = altitudeFactor(self, t)
     local set = self.skin.ground[t.type]
-    if t.type == TILE_SNOW and self.skin.snowTint then
-        local c = self.skin.snowTint
-        love.graphics.setColor(math.min(1, c[1] * 0.6), math.min(1, c[2] * 0.6), math.min(1, c[3] * 0.62))
-        self:sprite('stone1', px, py, 1, math.min(1, c[1] * 0.6), math.min(1, c[2] * 0.6), math.min(1, c[3] * 0.62))
-        return
-    end
     if t.type == TILE_WATER and not set then
         -- the pixel packs have no water: flat blue with little ripples
         local wf = f
@@ -153,7 +152,36 @@ function Kenney:drawGround(t, px, py)
     end
     set = set or self.skin.ground.grass
     local name = self:pick(set, t.colorSeed)
-    self:sprite(name, px, py, 1, f, f, f)
+    local c = self.skin.tint and self.skin.tint[t.type] or { 1, 1, 1 }
+    self:sprite(name, px, py, 1, c[1] * f, c[2] * f, c[3] * f)
+end
+
+local function diggable(t)
+    return t and (t.type == TILE_STONE or t.type == TILE_SNOW)
+end
+
+-- Clay and hard dirt stand up out of the meadow: a lit top edge and a
+-- shadowed foot wherever the neighbour is different ground (also between
+-- the two kinds), so each patch reads as one raised bank, not a grid.
+function Kenney:drawBankEdges(t, x, y, px, py)
+    if not diggable(t) then return end
+    local w = self.world
+    local function differs(dx, dy)
+        local n = w:get(x + dx, y + dy)
+        return n ~= nil and n.type ~= t.type
+    end
+    local T = TILE_SIZE
+    if differs(0, -1) then
+        love.graphics.setColor(1, 1, 1, 0.28)
+        love.graphics.rectangle('fill', px, py, T, 1)
+    end
+    if differs(0, 1) then
+        love.graphics.setColor(0, 0, 0, 0.38)
+        love.graphics.rectangle('fill', px, py + T - 2, T, 2)
+    end
+    love.graphics.setColor(0, 0, 0, 0.2)
+    if differs(-1, 0) then love.graphics.rectangle('fill', px, py, 1, T) end
+    if differs(1, 0) then love.graphics.rectangle('fill', px + T - 1, py, 1, T) end
 end
 
 function Kenney:rebuildCanvas()
@@ -169,6 +197,7 @@ function Kenney:rebuildCanvas()
             local t = self.world.tiles[x][y]
             local px, py = (x - 1) * TILE_SIZE, (y - 1) * TILE_SIZE
             self:drawGround(t, px, py)
+            self:drawBankEdges(t, x, y, px, py)
             if t.type == TILE_WALL then
                 self:drawWallTile(px, py, 1)
             elseif t.type == TILE_DOOR then

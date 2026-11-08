@@ -195,4 +195,72 @@ function TestTileset:testKenneyDrawsEveryKindOfThing()
     Tileset.set('classic')
 end
 
+-- Clay (stone), hard dirt (snow) and dug dirt never look alike in either
+-- Kenney set: different pictures, or the same picture in a clearly different
+-- colour. And where clay meets hard dirt a bank edge is drawn.
+function TestTileset:testKenneyGroundKindsLookDifferent()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    step(2)
+    local world = H.game().world
+    local KenneyView = require('src.view_kenney')
+    local g = love.graphics
+    local realDraw, realColor, realRect = g.draw, g.setColor, g.rectangle
+    for _, name in ipairs({ 'pixel', 'soft' }) do
+        Tileset.set(name)
+        local view = Tileset.newView(world)
+        local nameOf = {}
+        for n, img in pairs(view.img) do nameOf[img] = n end
+        local color, looks = { 1, 1, 1 }, {}
+        g.setColor = function(r, gg, b) color = { r, gg, b } end
+        g.draw = function(img) looks[#looks + 1] = { pic = nameOf[img], c = color } end
+        local function look(kind)
+            local pics, c = {}, nil
+            for i = 0, 9 do
+                looks = {}
+                view:drawGround({ type = kind, colorSeed = i / 10, altitude = world.bands.grass }, 0, 0)
+                lu.assertEquals(#looks, 1, name .. ' ' .. kind .. ' draws one picture')
+                pics[looks[1].pic] = true
+                c = looks[1].c
+            end
+            return { pics = pics, c = c }
+        end
+        local kinds = { TILE_STONE, TILE_SNOW, TILE_DIRT }
+        local seen = {}
+        for _, k in ipairs(kinds) do seen[k] = look(k) end
+        for i = 1, #kinds do
+            for j = i + 1, #kinds do
+                local a, b = seen[kinds[i]], seen[kinds[j]]
+                local shared = false
+                for p in pairs(a.pics) do if b.pics[p] then shared = true end end
+                local apart = 0
+                for ch = 1, 3 do apart = math.max(apart, math.abs(a.c[ch] - b.c[ch])) end
+                lu.assertTrue(not shared or apart > 0.25,
+                    name .. ': ' .. kinds[i] .. ' and ' .. kinds[j] .. ' look the same')
+            end
+        end
+        -- a clay tile with hard dirt below it gets a shadowed foot
+        local rects = 0
+        g.rectangle = function() rects = rects + 1 end
+        local x, y = 3, 3
+        local saved = { world.tiles[x][y].type, world.tiles[x][y + 1].type, world.tiles[x][y - 1].type,
+            world.tiles[x - 1][y].type, world.tiles[x + 1][y].type }
+        world.tiles[x][y].type = TILE_STONE
+        world.tiles[x][y - 1].type = TILE_STONE
+        world.tiles[x - 1][y].type = TILE_STONE
+        world.tiles[x + 1][y].type = TILE_STONE
+        world.tiles[x][y + 1].type = TILE_SNOW
+        view:drawBankEdges(world.tiles[x][y], x, y, 0, 0)
+        lu.assertEquals(rects, 1, name .. ': clay over hard dirt draws its foot')
+        rects = 0
+        world.tiles[x][y + 1].type = TILE_STONE
+        view:drawBankEdges(world.tiles[x][y], x, y, 0, 0)
+        lu.assertEquals(rects, 0, name .. ': inside a clay patch there are no seams')
+        world.tiles[x][y].type, world.tiles[x][y + 1].type, world.tiles[x][y - 1].type,
+            world.tiles[x - 1][y].type, world.tiles[x + 1][y].type = (table.unpack or unpack)(saved)
+        g.draw, g.setColor, g.rectangle = realDraw, realColor, realRect
+    end
+    Tileset.set('classic')
+end
+
 os.exit(lu.LuaUnit.run())
