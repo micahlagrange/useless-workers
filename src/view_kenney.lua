@@ -37,12 +37,13 @@ Kenney.SKINS = {
             grass = { 'grass1', 'grass2', 'grass1' },
             dirt = { 'dirt1', 'dirt2' },
             breakroom = { 'dirt1' },
-            stone = { 'stone1', 'stone2' },
             water = { 'water1', 'water2' },
-            -- hard dirt: the dirt picture, dark (the floor picture is for built floors)
+            -- clay and hard dirt: the dirt picture in terracotta and in dark
+            -- earth (the stone pictures read as walls, the floor as a floor)
+            stone = { 'dirt2', 'dirt1' },
             snow = { 'dirt1', 'dirt2' },
         },
-        tint = { snow = { 0.55, 0.42, 0.34 } },
+        tint = { stone = { 1, 0.66, 0.5 }, snow = { 0.5, 0.38, 0.3 } },
         woof = 64,
     },
 }
