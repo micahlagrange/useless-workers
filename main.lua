@@ -12,6 +12,7 @@ local Highscore = require('src.highscore')
 local Campaign = require('src.campaign')
 local Camera = require('src.camera')
 local Tileset = require('src.tileset')
+local Seeds = require('src.seeds')
 local UI = require('src.ui')
 local Ring = require('src.ring')
 local Hud = require('src.hud')
@@ -623,6 +624,7 @@ function love.load()
     hud = Hud.new(ui)
     Audio.loadVolumes()
     Tileset.load()
+    title.seed = Seeds.upcoming()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
     -- start on the furthest unlocked arcade level
@@ -1007,8 +1009,13 @@ local function startFromTitle()
     end
     startMusic()
     title.editingSeed = false
-    if title.seed == '' then title.seed = DEFAULT_SEED end
+    if title.seed == '' then title.seed = Seeds.upcoming() end
     newGame(title.seed, title.difficultyIndex)
+    -- one of the morphi seeds: the next run gets the next one
+    if Seeds.isOurs(title.seed) then
+        Seeds.played(title.seed)
+        title.seed = Seeds.upcoming()
+    end
 end
 
 function closeUnits()
@@ -1784,7 +1791,7 @@ local function pointerPressed(x, y, button, istouch)
                 title.seed = title.seed:sub(1, -2)
             elseif k == 'OK' then
                 title.editingSeed = false
-                if title.seed == '' then title.seed = DEFAULT_SEED end
+                if title.seed == '' then title.seed = Seeds.upcoming() end
             elseif #title.seed < 12 then
                 title.seed = title.seed .. k
             end
@@ -2431,6 +2438,7 @@ if TEST_HOOKS then
         closeQuarter = closeQuarter,
         closeGoal = closeGoal,
         goToTitle = goToTitle,
+        startFromTitle = startFromTitle,
         buildTitleOptions = buildTitleOptions,
         announce = announce,
         lookAt = lookAt,

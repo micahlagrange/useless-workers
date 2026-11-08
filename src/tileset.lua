@@ -1,13 +1,16 @@
 -- Which skin the world is drawn in. 'classic' is the painted tiles and
--- sprites; 'rogue' is a Dwarf Fortress look, one glyph per tile. The choice
+-- sprites; 'rogue' is a Dwarf Fortress look, one glyph per tile; 'pixel' and
+-- 'soft' are drawn from Kenney's CC0 art (src/view_kenney.lua). The choice
 -- is remembered in the save directory, like the volumes.
 local Tileset = {}
 
-Tileset.SETS = { 'classic', 'rogue' }
-Tileset.LABELS = { classic = 'CLASSIC', rogue = 'ROGUE' }
+Tileset.SETS = { 'classic', 'rogue', 'pixel', 'soft' }
+Tileset.LABELS = { classic = 'CLASSIC', rogue = 'ROGUE', pixel = 'PIXEL', soft = 'SOFT' }
 Tileset.FILE = 'tileset.txt'
 
-local current = Tileset.SETS[1]
+-- A new player starts in the Kenney pixel look; what they pick later is remembered.
+Tileset.DEFAULT = 'pixel'
+local current = Tileset.DEFAULT
 
 local function known(name)
     for _, s in ipairs(Tileset.SETS) do if s == name then return true end end
@@ -51,6 +54,9 @@ end
 function Tileset.newView(world)
     if current == 'rogue' then
         return require('src.view_rogue').new(world)
+    end
+    if current == 'pixel' or current == 'soft' then
+        return require('src.view_kenney').new(world, current)
     end
     return require('src.view').new(world)
 end
