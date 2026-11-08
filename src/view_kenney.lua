@@ -7,9 +7,12 @@
 --            world's resolution so it stays crisp when the camera zooms.
 -- Same calls as src/view.lua; only what things look like differs. Pictures
 -- Kenney has none for (water in the pixel set, the gold, the bits
--- of the soft set) keep the painted look. Files: assets/images/kenney/<skin>/.
+-- of the soft set) keep the painted look. Each skin is one tileset,
+-- assets/images/kenney/<skin>.png; src/kenney_atlas.lua says where each
+-- picture sits in it.
 require('src.constants')
 local View = require('src.view')
+local ATLAS = require('src.kenney_atlas')
 
 local Kenney = setmetatable({}, { __index = View })
 Kenney.__index = Kenney
@@ -48,18 +51,6 @@ Kenney.SKINS = {
     },
 }
 
--- Names to load for each skin: everything that appears in SKINS' ground
--- tables, plus the things drawn on top.
-local THINGS = {
-    'plank', 'wall', 'door', 'bed', 'bin', 'stash', 'floor', 'tree', 'stump', 'bush', 'grass_tall',
-    'grass_cropped', 'leaves', 'critter',
-    'pupper', 'woofoof', 'twins', 'cwab', 'blue', 'ribbit',
-}
-local PIXEL_ONLY = {
-    'gold', 'sign', 'steak', 'fish', 'cheese', 'chili', 'candy', 'grapes',
-    'home_tl', 'home_t', 'home_tr', 'home_l', 'home_c', 'home_r', 'home_bl', 'home_b', 'home_br',
-}
-
 function Kenney.new(world, skinName)
     local self = View.new(world)
     setmetatable(self, Kenney)
@@ -67,17 +58,13 @@ function Kenney.new(world, skinName)
     self.skin = skin
     self.skinName = skinName
     self.bake = skin.bake
+    self.atlas = love.graphics.newImage(DIR .. skinName .. '.png')
+    self.atlas:setFilter(skin.filter, skin.filter)
+    local aw, ah = self.atlas:getDimensions()
     self.img = {}
-    local function load(name)
-        if self.img[name] then return end
-        local path = DIR .. skinName .. '/' .. name .. '.png'
-        local img = love.graphics.newImage(path)
-        img:setFilter(skin.filter, skin.filter)
-        self.img[name] = img
+    for name, r in pairs(ATLAS[skinName]) do
+        self.img[name] = { quad = love.graphics.newQuad(r[1], r[2], r[3], r[4], aw, ah), w = r[3], h = r[4] }
     end
-    for _, set in pairs(skin.ground) do for _, n in ipairs(set) do load(n) end end
-    for _, n in ipairs(THINGS) do load(n) end
-    if skinName == 'pixel' then for _, n in ipairs(PIXEL_ONLY) do load(n) end end
     if self.bake ~= 1 then
         self.canvas = love.graphics.newCanvas(world.w * TILE_SIZE * self.bake, world.h * TILE_SIZE * self.bake)
         self.canvas:setFilter(skin.filter, skin.filter)
@@ -91,21 +78,21 @@ end
 -- A picture scaled to `tiles` tiles wide, its left edge at px and its
 -- bottom on the tile's floor.
 function Kenney:sprite(name, px, py, tiles, r, g, b, a)
-    local img = self.img[name]
-    if not img then return false end
+    local spr = self.img[name]
+    if not spr then return false end
     love.graphics.setColor(r or 1, g or 1, b or 1, a or 1)
-    local sc = TILE_SIZE * (tiles or 1) / img:getWidth()
-    love.graphics.draw(img, px, py + TILE_SIZE - img:getHeight() * sc, 0, sc, sc)
+    local sc = TILE_SIZE * (tiles or 1) / spr.w
+    love.graphics.draw(self.atlas, spr.quad, px, py + TILE_SIZE - spr.h * sc, 0, sc, sc)
     return true
 end
 
 -- A picture centred on cx, cy and `size` world pixels wide.
 function Kenney:centred(name, cx, cy, size, a)
-    local img = self.img[name]
-    if not img then return false end
-    local sc = size / img:getWidth()
+    local spr = self.img[name]
+    if not spr then return false end
+    local sc = size / spr.w
     love.graphics.setColor(1, 1, 1, a or 1)
-    love.graphics.draw(img, cx, cy, 0, sc, sc, img:getWidth() / 2, img:getHeight() / 2)
+    love.graphics.draw(self.atlas, spr.quad, cx, cy, 0, sc, sc, spr.w / 2, spr.h / 2)
     return true
 end
 
@@ -355,7 +342,7 @@ function Kenney:drawWorkerBody(w, clock, sx, feetY)
         return
     end
     local name = self.img[w.sheet] and w.sheet or 'pupper'
-    local img = self.img[name]
+    local spr = self.img[name]
     if w.state == 'quitting' then
         love.graphics.setColor(0.6, 0.6, 0.6, 1)
     else
@@ -370,8 +357,8 @@ function Kenney:drawWorkerBody(w, clock, sx, feetY)
         sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7)
     end
     local face = self.skin.woof == 16 and 16 or 14
-    local sc = face / img:getWidth() * size
-    love.graphics.draw(img, w.x, feetY - hop, 0, sx * (2 - sy) * sc, sy * sc, img:getWidth() / 2, img:getHeight())
+    local sc = face / spr.w * size
+    love.graphics.draw(self.atlas, spr.quad, w.x, feetY - hop, 0, sx * (2 - sy) * sc, sy * sc, spr.w / 2, spr.h)
     local tool = w:toolInHand()
     if tool then
         local swing = 0

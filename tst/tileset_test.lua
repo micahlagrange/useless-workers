@@ -210,10 +210,10 @@ function TestTileset:testKenneyGroundKindsLookDifferent()
         Tileset.set(name)
         local view = Tileset.newView(world)
         local nameOf = {}
-        for n, img in pairs(view.img) do nameOf[img] = n end
+        for n, spr in pairs(view.img) do nameOf[spr.quad] = n end
         local color, looks = { 1, 1, 1 }, {}
         g.setColor = function(r, gg, b) color = { r, gg, b } end
-        g.draw = function(img) looks[#looks + 1] = { pic = nameOf[img], c = color } end
+        g.draw = function(_, quad) looks[#looks + 1] = { pic = nameOf[quad], c = color } end
         local function look(kind)
             local pics, c = {}, nil
             for i = 0, 9 do
