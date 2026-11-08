@@ -63,6 +63,20 @@ PANEL = """
   </div>
 </div></div>
 <script>
+// The canvas can change size without the window doing so (a viewer settling
+// its safe-area padding). Tell the game, or it keeps drawing at the old size
+// and the browser stretches the picture.
+(function () {
+  var c = document.getElementById('canvas'), last = '';
+  function check() {
+    var r = c.getBoundingClientRect(), k = Math.round(r.width) + 'x' + Math.round(r.height);
+    if (k !== last) { last = k; window.dispatchEvent(new Event('resize')); }
+  }
+  if (window.ResizeObserver) new ResizeObserver(check).observe(c);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', check);
+  window.addEventListener('orientationchange', function () { setTimeout(check, 300); });
+  setInterval(check, 1000);
+})();
 (function () {
   var box = document.getElementById('mx'), ta = document.getElementById('mx-text'), status = document.getElementById('mx-status');
   var current = null;

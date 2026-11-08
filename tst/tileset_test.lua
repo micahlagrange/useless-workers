@@ -45,9 +45,21 @@ function TestTileset:testDefaultAndUnknownNames()
     lu.assertEquals(Tileset.label(), 'CLASSIC')
 end
 
+function TestTileset:testNewPlayersStartInThePixelLook()
+    lu.assertEquals(Tileset.DEFAULT, 'pixel')
+    lu.assertTrue(Tileset.set('neon') == false)
+    -- nothing on disk: load keeps whatever the game started with
+    disk = {}
+    Tileset.set(Tileset.DEFAULT)
+    Tileset.load()
+    lu.assertEquals(Tileset.current(), 'pixel')
+end
+
 function TestTileset:testCycleIsRemembered()
     lu.assertEquals(Tileset.cycle(), 'rogue')
     lu.assertEquals(disk[Tileset.FILE], 'rogue')
+    lu.assertEquals(Tileset.cycle(), 'pixel')
+    lu.assertEquals(Tileset.cycle(), 'soft')
     lu.assertEquals(Tileset.cycle(), 'classic')
     lu.assertEquals(disk[Tileset.FILE], 'classic')
     -- what the disk says wins at load, odd line endings and all
@@ -86,6 +98,10 @@ function TestTileset:testTKeySwapsTheRendererInPlay()
         for _, g in ipairs(glyphs) do ground = ground + (rogue[g] or 0) end
     end
     lu.assertTrue(ground >= game.world.w * game.world.h, 'ground glyphs: ' .. ground)
+    love.keypressed('t')
+    lu.assertEquals(game.tileset, 'pixel')
+    love.keypressed('t')
+    lu.assertEquals(game.tileset, 'soft')
     love.keypressed('t')
     lu.assertEquals(getmetatable(game.view), View)
     lu.assertEquals(game.tileset, 'classic')
@@ -137,6 +153,114 @@ function TestTileset:testRogueDrawsEveryKindOfThing()
     end
     -- the font the HUD had is the font it gets back
     lu.assertEquals(love.graphics.getFont(), hud)
+end
+
+-- Both Kenney sets draw every kind of thing, and every picture they name is on disk.
+function TestTileset:testKenneyDrawsEveryKindOfThing()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    step(5)
+    local game = H.game()
+    local world = game.world
+    local KenneyView = require('src.view_kenney')
+    for _, name in ipairs({ 'pixel', 'soft' }) do
+        Tileset.set(name)
+        local view = Tileset.newView(world)
+        lu.assertEquals(getmetatable(view), KenneyView)
+        for _, set in pairs(KenneyView.SKINS[name].ground) do
+            for _, n in ipairs(set) do lu.assertNotNil(view.img[n], name .. ' ground ' .. n) end
+        end
+        for key in pairs(MORPHI_SHEET_NAMES) do lu.assertNotNil(view.img[key], name .. ' species ' .. key) end
+        for _, n in ipairs({ 'wall', 'door', 'bed', 'bin', 'stash', 'floor', 'tree', 'stump', 'bush', 'plank' }) do
+            lu.assertNotNil(view.img[n], name .. ' ' .. n)
+        end
+        if name == 'pixel' then
+            for _, f in ipairs(FOOD_KINDS) do lu.assertNotNil(view.img[f], 'food ' .. f) end
+        end
+        for i, kind in ipairs({ SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BED, SITE_WALL, SITE_DOOR, SITE_BRIDGE }) do
+            world.sites[#world.sites + 1] = { kind = kind, x = 2 + i * 2, y = 2 }
+        end
+        view:rebuildCanvas()
+        view:drawWorld()
+        view:drawBreakroom()
+        view:drawStorage()
+        view:drawFloors()
+        view:drawBeds()
+        view:drawNodes(1)
+        view:drawItems(1)
+        view:drawSites(1)
+        view:drawGhost(SITE_BIN, 3, 3, true)
+        view:drawWorkers(game.workers, 1, game.workers[1])
+    end
+    Tileset.set('classic')
+end
+
+-- Clay (stone), hard dirt (snow) and dug dirt never look alike in either
+-- Kenney set: different pictures, or the same picture in a clearly different
+-- colour. And where clay meets hard dirt a bank edge is drawn.
+function TestTileset:testKenneyGroundKindsLookDifferent()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    step(2)
+    local world = H.game().world
+    local KenneyView = require('src.view_kenney')
+    local g = love.graphics
+    local realDraw, realColor, realRect = g.draw, g.setColor, g.rectangle
+    for _, name in ipairs({ 'pixel', 'soft' }) do
+        Tileset.set(name)
+        local view = Tileset.newView(world)
+        local nameOf = {}
+        for n, spr in pairs(view.img) do nameOf[spr.quad] = n end
+        local color, looks = { 1, 1, 1 }, {}
+        g.setColor = function(r, gg, b) color = { r, gg, b } end
+        g.draw = function(_, quad) looks[#looks + 1] = { pic = nameOf[quad], c = color } end
+        local function look(kind)
+            local pics, c = {}, nil
+            for i = 0, 9 do
+                looks = {}
+                view:drawGround({ type = kind, colorSeed = i / 10, altitude = world.bands.grass }, 0, 0)
+                lu.assertEquals(#looks, 1, name .. ' ' .. kind .. ' draws one picture')
+                pics[looks[1].pic] = true
+                c = looks[1].c
+            end
+            return { pics = pics, c = c }
+        end
+        local kinds = { TILE_STONE, TILE_SNOW, TILE_DIRT }
+        local seen = {}
+        for _, k in ipairs(kinds) do seen[k] = look(k) end
+        for i = 1, #kinds do
+            for j = i + 1, #kinds do
+                local a, b = seen[kinds[i]], seen[kinds[j]]
+                local shared = false
+                for p in pairs(a.pics) do if b.pics[p] then shared = true end end
+                local apart = 0
+                for ch = 1, 3 do apart = math.max(apart, math.abs(a.c[ch] - b.c[ch])) end
+                lu.assertTrue(not shared or apart > 0.25,
+                    name .. ': ' .. kinds[i] .. ' and ' .. kinds[j] .. ' look the same')
+            end
+        end
+        -- a clay tile with hard dirt below it gets a shadowed foot
+        local rects = 0
+        g.rectangle = function() rects = rects + 1 end
+        local x, y = 3, 3
+        local saved = { world.tiles[x][y].type, world.tiles[x][y + 1].type, world.tiles[x][y - 1].type,
+            world.tiles[x - 1][y].type, world.tiles[x + 1][y].type }
+        world.tiles[x][y].type = TILE_STONE
+        world.tiles[x][y - 1].type = TILE_STONE
+        world.tiles[x - 1][y].type = TILE_STONE
+        world.tiles[x + 1][y].type = TILE_STONE
+        world.tiles[x][y + 1].type = TILE_SNOW
+        view:drawBankEdges(world.tiles[x][y], x, y, 0, 0)
+        lu.assertEquals(rects, 1, name .. ': clay over hard dirt draws its foot')
+        rects = 0
+        world.tiles[x][y + 1].type = TILE_STONE
+        view:drawBankEdges(world.tiles[x][y], x, y, 0, 0)
+        lu.assertEquals(rects, 0, name .. ': inside a clay patch there are no seams')
+        world.tiles[x][y].type, world.tiles[x][y + 1].type, world.tiles[x][y - 1].type,
+            world.tiles[x - 1][y].type, world.tiles[x + 1][y].type = (table.unpack or unpack)(saved)
+        g.draw, g.setColor, g.rectangle = realDraw, realColor, realRect
+    end
+    Tileset.set('classic')
 end
 
 os.exit(lu.LuaUnit.run())

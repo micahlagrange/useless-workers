@@ -147,11 +147,22 @@ local function pressTopButton(id)
     return false
 end
 
-function TestStats:test_dev_opens_the_tester_tools_from_play_and_back_returns_there()
+function TestStats:test_the_menu_s_tester_corner_exports_and_comes_back_to_the_menu()
     H.newGame('PUPPER', 1)
     H.closeGoal()
-    lu.assertTrue(pressTopButton('dev'))
-    lu.assertEquals(H.state(), 'tools')
+    lu.assertTrue(pressTopButton('menu'))
+    lu.assertEquals(H.state(), 'menu')
+    local ui = H.ui()
+    love.draw()
+    local found
+    for _, b in ipairs(ui.panelButtons) do if b.id == 'export' then found = b end end
+    lu.assertNotNil(found, 'Export in the tester corner')
+    local x, y = (found.x + found.w / 2) * ui.scale, (found.y + found.h / 2) * ui.scale
+    love.mousepressed(x, y, 1, false, 1)
+    love.mousereleased(x, y, 1, false, 1)
+    lu.assertEquals(H.state(), 'export')
+    love.keypressed('escape')
+    lu.assertEquals(H.state(), 'menu')
     love.keypressed('escape')
     lu.assertEquals(H.state(), 'playing')
 end

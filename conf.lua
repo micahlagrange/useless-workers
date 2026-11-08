@@ -7,6 +7,14 @@ CLICK_DEBUG = false
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 800
 
+-- tools/shot.lua: desktop screenshots for development (lovec . --shot steps.lua [outdir])
+for i, a in ipairs(arg or {}) do
+    if a == '--shot' then
+        SHOT_SCRIPT, SHOT_OUT = arg[i + 1], arg[i + 2]
+        TEST_HOOKS = TEST_HOOKS or {}
+    end
+end
+
 function love.conf(t)
     t.title = "Morphis"
     t.identity = "morphis" -- the save folder; on itch every love.js game shares one IndexedDB
@@ -16,6 +24,8 @@ function love.conf(t)
     t.window.height = WINDOW_HEIGHT
     t.window.vsync = 1
     t.window.resizable = true
-    t.window.minwidth = 480
+    -- draw at the screen's real density (a phone is 2x or 3x), not stretched
+    t.window.highdpi = true
+    t.window.minwidth = 320 -- a phone held upright is 360 to 430 wide: a bigger floor squeezes the picture
     t.window.minheight = 320
 end
