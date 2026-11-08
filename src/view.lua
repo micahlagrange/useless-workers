@@ -396,10 +396,19 @@ function View:drawSites(clock)
     for _, site in ipairs(self.world.sites) do
         local px, py = (site.x - 1) * TILE_SIZE, (site.y - 1) * TILE_SIZE
         if site.kind == SITE_MINE then
-            love.graphics.setColor(1, 0.6, 0.2, site.claimedBy and 0.9 or pulse)
-            love.graphics.rectangle('line', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
-            love.graphics.line(px + 4, py + 4, px + 12, py + 12)
-            love.graphics.line(px + 12, py + 4, px + 4, py + 12)
+            -- marked for digging: a cream mark with a pick on it
+            love.graphics.setColor(1, 0.965, 0.89, site.claimedBy and 0.7 or 0.55)
+            love.graphics.rectangle('fill', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3, 2.5, 2.5)
+            love.graphics.setColor(0.227, 0.149, 0.094, 0.9)
+            love.graphics.rectangle('line', px + 1.5, py + 1.5, TILE_SIZE - 3, TILE_SIZE - 3, 2.5, 2.5)
+            love.graphics.setLineWidth(1.4)
+            love.graphics.line(px + 5, py + 11.5, px + 10, py + 6.5)
+            love.graphics.setColor(0.725, 0.765, 0.788, 1)
+            love.graphics.polygon('fill', px + 7.5, py + 4.5, px + 11.5, py + 5, px + 12.5, py + 9)
+            love.graphics.setColor(0.227, 0.149, 0.094, 0.9)
+            love.graphics.setLineWidth(0.8)
+            love.graphics.polygon('line', px + 7.5, py + 4.5, px + 11.5, py + 5, px + 12.5, py + 9)
+            love.graphics.setLineWidth(1)
         else
             local a = site.claimedBy and 0.7 or (0.3 + 0.15 * pulse)
             if site.kind == SITE_STORAGE then
@@ -410,10 +419,36 @@ function View:drawSites(clock)
             elseif site.kind == SITE_DOOR then self:drawDoorTile(px, py, a)
             elseif site.kind == SITE_BRIDGE then self:drawBridgePlanks(px, py, a)
             end
+            -- not built yet: a dashed outline, and a bar that fills while a
+            -- builder works on it
+            local w = site.kind == SITE_BIN and TILE_SIZE * 2 or TILE_SIZE
+            love.graphics.setColor(0.227, 0.149, 0.094, 0.85)
+            love.graphics.setLineWidth(0.8)
+            for d = 0, w - 2, 4 do
+                love.graphics.line(px + 1 + d, py + 1, px + 1 + math.min(d + 2, w - 2), py + 1)
+                love.graphics.line(px + 1 + d, py + TILE_SIZE - 1, px + 1 + math.min(d + 2, w - 2), py + TILE_SIZE - 1)
+            end
+            for d = 0, TILE_SIZE - 2, 4 do
+                love.graphics.line(px + 1, py + 1 + d, px + 1, py + 1 + math.min(d + 2, TILE_SIZE - 2))
+                love.graphics.line(px + w - 1, py + 1 + d, px + w - 1, py + 1 + math.min(d + 2, TILE_SIZE - 2))
+            end
+            local p = View.siteProgress(site)
+            love.graphics.setColor(1, 0.965, 0.89, 1)
+            love.graphics.rectangle('fill', px + 2, py + TILE_SIZE - 4.5, w - 4, 3, 1.5, 1.5)
+            if p > 0 then
+                love.graphics.setColor(1, 0.831, 0.361, 1)
+                love.graphics.rectangle('fill', px + 2, py + TILE_SIZE - 4.5, (w - 4) * p, 3, 1.5, 1.5)
+            end
+            love.graphics.setColor(0.227, 0.149, 0.094, 0.9)
+            love.graphics.setLineWidth(0.6)
+            love.graphics.rectangle('line', px + 2, py + TILE_SIZE - 4.5, w - 4, 3, 1.5, 1.5)
+            love.graphics.setLineWidth(1)
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
+
+View.siteProgress = function(site) return require('src.ring').siteProgress(site) end
 
 -- Quadrant offsets inside a bin, in the order items were stored.
 local BIN_SLOTS = { { 6, 8 }, { 12, 8 }, { 20, 8 }, { 26, 8 } }
