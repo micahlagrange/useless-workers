@@ -294,6 +294,11 @@ local function playingScreens(tag)
     frame(tag .. ' chatter open, selected')
     love.keypressed('c')
     frame(tag .. ' lately')
+    if UI.RADIAL and game.workers[1].alive and not game.workers[1]:isBaby() then
+        H.openWorkerRing(game.workers[1])
+        frame(tag .. ' ring with lately')
+        H.hud():close()
+    end
     game.selectedWorker = nil
     game.paused = true
     frame(tag .. ' paused')

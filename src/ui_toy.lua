@@ -24,7 +24,7 @@ end
 
 -- Layout ---------------------------------------------------------------------
 
-UI.TOY_BUTTONS = { 'pause', 'speed', 'bunch', 'menu' }
+UI.TOY_BUTTONS = { 'pause', 'speed', 'bunch', 'chat', 'menu' }
 
 function UI:layoutToy()
     self.toyPhone = self.vw < 720
@@ -185,6 +185,10 @@ function UI:drawToyTop(game, menuOpen)
             local s = game.speed or 1
             o.icon, o.on, o.badge = 'speed' .. (s >= 4 and 4 or s >= 2 and 2 or 1), s > 1, s .. 'x'
         elseif b.id == 'bunch' then o.icon = 'bunch'
+        elseif b.id == 'chat' then
+            o.icon, o.on = 'chat', game.chatterOpen
+            o.badge = game.chatter and game.chatter:badge()
+            o.badgeColor = C.berry
         elseif b.id == 'menu' then o.icon, o.on = 'menu', menuOpen end
         Toy.button(b, o)
         self.topButtons[#self.topButtons + 1] = b
@@ -355,6 +359,7 @@ function UI:drawToyHUD(game, menuOpen)
     self:drawToyGoals(game)
     self:drawToyAlerts(game)
     self:drawToyToast()
+    if game.chatterOpen then self:drawChatter(game) end
 end
 
 -- Taps on the HUD: a button id, or nil.

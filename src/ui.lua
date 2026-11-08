@@ -2064,17 +2064,29 @@ end
 -- Where the Chatter panel sits: down the right on a desk, the bottom half
 -- on a phone held upright.
 function UI:chatterRect()
+    local top = self:hudTop()
     if self.portrait then
-        local h = math.floor((self.vh - TOP_BAR_H) * 0.5)
+        local h = math.floor((self.vh - top) * 0.5)
         return { x = 0, y = self.vh - h, w = self.vw, h = h }
     end
     local w = Util.clamp(math.floor(self.vw * 0.36), 280, 400)
-    return { x = self.vw - w, y = TOP_BAR_H, w = w, h = self.vh - TOP_BAR_H - BOTTOM_BAR_H }
+    if UI.RADIAL then
+        -- a plate down the right, under the toy buttons
+        local g = 16
+        return { x = self.vw - w - g, y = top, w = w, h = self.vh - top - g }
+    end
+    return { x = self.vw - w, y = top, w = w, h = self.vh - top - BOTTOM_BAR_H }
+end
+
+-- The first row under the top bar (the toy bar grows on a phone).
+function UI:hudTop()
+    if UI.RADIAL and self.toyTopBottom then return self.toyTopBottom + 12 end
+    return TOP_BAR_H
 end
 
 -- Every morphi's bubble, drawn in HUD space so the words are a readable
 -- size at any zoom, placed clear of the bars, the panel and each other.
-function UI:drawBubbles(game, cam)
+function UI:drawBubbles(game, cam, keepClear)
     if not (game.workers and cam) then return end
     local font = self.fonts.hud
     local lh = font:getHeight()
@@ -2103,7 +2115,9 @@ function UI:drawBubbles(game, cam)
     if #list == 0 then return end
     local blocked = {}
     if game.chatterOpen then blocked[1] = self:chatterRect() end
-    local screen = { x = 4, y = TOP_BAR_H + 4, w = self.vw - 8, h = self.vh - TOP_BAR_H - BOTTOM_BAR_H - 8 }
+    for _, r in ipairs(keepClear or {}) do blocked[#blocked + 1] = r end
+    local top = self:hudTop()
+    local screen = { x = 4, y = top + 4, w = self.vw - 8, h = self.vh - top - BOTTOM_BAR_H - 8 }
     Chatter.place(list, blocked, screen, 20 * k)
     love.graphics.setFont(font)
     love.graphics.setLineWidth(3)
@@ -2195,10 +2209,18 @@ function UI:drawChatter(game)
         love.graphics.circle('fill', r.x + 25, y + 20, 2)
         love.graphics.circle('fill', r.x + 35, y + 20, 2)
         local _, nw = self:printLine(e.name, textX, y + 5, textW * 0.5, 'left', C.good, { small, tiny })
-        self:printLine(e.where .. ', ' .. Chatter.ago(now - e.t), textX + nw + 8, y + 5 + small:getHeight() - tiny:getHeight(),
-            textW - nw - 8, 'left', C.dim, { tiny })
+        -- where and when beside the name, or on a line of its own under it
+        -- when the name leaves no room
+        local meta = e.where .. ', ' .. Chatter.ago(now - e.t)
+        local drop = 0
+        if tiny:getWidth(meta) <= textW - nw - 8 then
+            self:printLine(meta, textX + nw + 8, y + 5 + small:getHeight() - tiny:getHeight(), textW - nw - 8, 'left', C.dim, { tiny })
+        else
+            self:printLine(meta, textX, y + 5 + small:getHeight(), textW, 'left', C.dim, { tiny })
+            drop = tiny:getHeight()
+        end
         for k, l in ipairs(wrapped) do
-            self:printLine(l, textX, y + 9 + k * small:getHeight(), textW, 'left', C.text, { small })
+            self:printLine(l, textX, y + 9 + drop + k * small:getHeight(), textW, 'left', C.text, { small })
         end
     end
 end

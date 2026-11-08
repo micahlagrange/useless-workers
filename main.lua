@@ -913,7 +913,7 @@ local function drawScene()
     drawWorld()
     game.muted = Audio.isMuted()
     ui:beginScaled()
-    ui:drawBubbles(game, game.camera)
+    ui:drawBubbles(game, game.camera, UI.RADIAL and hud:keepClear(game) or nil)
     if UI.RADIAL and state == 'playing' then hud:drawRing(game, love.timer.getTime()) end
     ui:drawHUD(game, state == 'menu')
     if UI.RADIAL and state == 'playing' then hud:drawCaption() end
@@ -1373,7 +1373,7 @@ end
 
 local function workerRing(w)
     local spec = Ring.forWorker(w) or { kind = 'morphi', worker = w, items = {}, center = { id = 'follow', icon = 'follow' } }
-    spec.caption = Hud.workerCaption(w)
+    spec.caption = Hud.workerCaption(w, game.chatter and game.chatter:lately(w, 2))
     if game.follow and game.selectedWorker == w then spec.center.on = true end
     return spec
 end
@@ -1676,6 +1676,12 @@ local function chatterJump(e)
     game.focus = nil
     game.abilities:select(ABILITY_SELECT)
     if not game.follow then game.camera:centerOn(w.x, w.y) end
+    if UI.RADIAL then
+        -- its ring, with its last lines under Lately
+        hud:close()
+        openWorkerRing(w)
+        return
+    end
     ui:toast(w.name)
     Audio.playSFX('click')
 end
@@ -1724,6 +1730,7 @@ local function pressToy(id)
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'menu' then openMenu()
     elseif id == 'resmore' then ui.resOpen = not ui.resOpen
+    elseif id == 'chat' then toggleChatter()
     elseif id == 'bunch' then
         local br = game.world.breakroom
         if br then
@@ -2509,6 +2516,10 @@ if TEST_HOOKS then
         stockUp = function() stockUp() end,
         pressTama = function(a) pressTama(a) end,
         pressJob = function(id) pressJob(id) end,
+        pressToy = function(id) pressToy(id) end,
+        chatterJump = function(e) chatterJump(e) end,
+        openWorkerRing = function(w) openWorkerRing(w) end,
+        drawScene = function() drawScene() end,
     }
 end
 
