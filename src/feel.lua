@@ -17,6 +17,13 @@ Feel.WAVE_TIME = 1.2
 Feel.BLINK_EVERY = 3.7
 Feel.BLINK_TIME = 0.12
 Feel.STEP_TIME = 0.24
+-- A morphi you pick stops this long to look up at you, then gets on with it.
+Feel.LOOK_TIME = 2.5
+
+-- Is it stopped to look at you (picked a moment ago)?
+function Feel.looking(w, clock)
+    return Feel.age(w, 'look', clock or w.clock or 0, Feel.LOOK_TIME) ~= nil
+end
 
 function Feel.setCalm(on)
     Feel.calm = on and true or false
@@ -81,7 +88,7 @@ function Feel.pose(w, clock, selected)
     p.eyesShut = p.sleeping or p.blink
     p.talking = w.bubble ~= nil and not p.sleeping
     p.mouthOpen = p.talking and math.sin(clock * 11 + id) > 0
-    p.lookDown = selected and true or false
+    p.lookDown = (selected or Feel.looking(w, clock)) and true or false
     p.shadow = math.max(0.5, 1 - p.hop / 8)
     return p
 end
@@ -89,20 +96,22 @@ end
 -- Where the eyes are on each frame of a 16 px sheet: the first row from the
 -- top with two lone dark pixels. Returns { [frame] = { {x, y, r, g, b}, ... } }
 -- with the colour of the skin just above each eye, for painting a lid.
-function Feel.findEyes(data, frames, size)
+-- x0, y0: where the first frame sits in a bigger sheet (an atlas).
+function Feel.findEyes(data, frames, size, x0, y0)
     size = size or 16
+    x0, y0 = x0 or 0, y0 or 0
     local eyes = {}
     for f = 1, frames do
-        local ox = (f - 1) * size
+        local ox = x0 + (f - 1) * size
         local function dark(x, y)
-            local r, g, b, a = data:getPixel(ox + x, y)
+            local r, g, b, a = data:getPixel(ox + x, y0 + y)
             return a > 0 and r + g + b < 0.6
         end
         for y = 1, size - 2 do
             local row = {}
             for x = 1, size - 2 do
                 if dark(x, y) and not dark(x - 1, y) and not dark(x + 1, y) then
-                    local r, g, b = data:getPixel(ox + x, y - 1)
+                    local r, g, b = data:getPixel(ox + x, y0 + y - 1)
                     row[#row + 1] = { x = x, y = y, r = r, g = g, b = b }
                 end
             end

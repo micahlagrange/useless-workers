@@ -572,6 +572,13 @@ function View:drawWorker(w, clock, selected)
     w.pose = Feel.pose(w, clock, selected)
     love.graphics.setColor(0, 0, 0, 0.25)
     love.graphics.ellipse('fill', w.x, feetY, 6 * w.pose.shadow, 2.5 * w.pose.shadow)
+    if w.stage ~= 'egg' then
+        -- its species' colour at its feet, the same as its HUD face
+        local c = morphiColor(w.sheet)
+        love.graphics.setColor(c[1], c[2], c[3], 0.85)
+        love.graphics.setLineWidth(1)
+        love.graphics.ellipse('line', w.x, feetY, 5.5, 2.2)
+    end
     if selected then
         love.graphics.setColor(1, 1, 1, 0.9)
         love.graphics.ellipse('line', w.x, feetY, 8, 4)
@@ -659,9 +666,11 @@ end
 -- lids over the eyes for a blink or a nap, arched eyes when happy, eyes a
 -- touch lower when it looks up at you, a mouth that opens and shuts while
 -- it talks.
-function View:drawFace(eyes, pose, grey)
+-- ox, oy: the sprite's origin (its feet), 8, 16 for a 16 px frame.
+function View:drawFace(eyes, pose, grey, ox, oy)
     if not eyes then return end
-    local function px(x, y) love.graphics.rectangle('fill', x - 8, y - 16, 1, 1) end
+    ox, oy = ox or 8, oy or 16
+    local function px(x, y) love.graphics.rectangle('fill', x - ox, y - oy, 1, 1) end
     local ink = grey and 0.3 or 0.12
     for _, e in ipairs(eyes) do
         if pose.eyesShut or pose.happy or pose.lookDown then
@@ -681,7 +690,7 @@ function View:drawFace(eyes, pose, grey)
     if pose.talking and #eyes == 2 then
         local mx = math.floor((eyes[1].x + eyes[2].x) / 2)
         love.graphics.setColor(0.35, 0.12, 0.15, 1)
-        love.graphics.rectangle('fill', mx - 8, eyes[1].y + 2 - 16, 1, pose.mouthOpen and 2 or 1)
+        love.graphics.rectangle('fill', mx - ox, eyes[1].y + 2 - oy, 1, pose.mouthOpen and 2 or 1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end

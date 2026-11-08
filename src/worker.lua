@@ -15,6 +15,7 @@ require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
 local JobSets = require('src.jobsets')
+local Feel = require('src.feel')
 
 local Worker = {}
 Worker.__index = Worker
@@ -1669,6 +1670,8 @@ function Worker:update(dt, clock)
     end
     self:accumulateWork(dt)
     self.moving = false
+    -- just picked: it stands still a moment and looks up at you
+    if self.fx and self.fx.look and Feel.looking(self, self.clock) then return end
     if self.state == 'idle' then
         self.decideTimer = self.decideTimer - dt
         if self.decideTimer <= 0 then

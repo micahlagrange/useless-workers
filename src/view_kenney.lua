@@ -13,6 +13,7 @@
 require('src.constants')
 local View = require('src.view')
 local ATLAS = require('src.kenney_atlas')
+local Feel = require('src.feel')
 
 local Kenney = setmetatable({}, { __index = View })
 Kenney.__index = Kenney
@@ -349,32 +350,68 @@ function Kenney:drawWorkerBody(w, clock, sx, feetY)
         love.graphics.setColor(1, 1, 1, 1)
     end
     local size = w.stage == 'baby' and BABY_SCALE or 1
-    local sy = 1
-    local hop = 0
-    if w.moving then
-        hop = math.abs(math.sin((w.animTime or 0) * 13)) * 1.5
-    else
-        sy = 1 + 0.06 * math.sin((clock or 0) * 4 + w.id * 1.7)
-    end
+    -- hop, squash, breathing and wiggle from src/feel.lua, as the other looks
+    local pose = w.pose or Feel.pose(w, clock)
+    local sy = pose.sy
     local face = self.skin.woof == 16 and 16 or 14
     local sc = face / spr.w * size
-    love.graphics.draw(self.atlas, spr.quad, w.x, feetY - hop, 0, sx * (2 - sy) * sc, sy * sc, spr.w / 2, spr.h)
+    love.graphics.push()
+    love.graphics.translate(w.x, feetY - pose.hop)
+    love.graphics.rotate(pose.rot)
+    love.graphics.scale(sx * (2 - sy) * pose.sx * sc, sy * sc)
+    love.graphics.draw(self.atlas, spr.quad, 0, 0, 0, 1, 1, spr.w / 2, spr.h)
+    local eyes = self:eyesOf(name)
+    self:drawFace(eyes, pose, w.state == 'quitting', spr.w / 2, spr.h)
+    love.graphics.pop()
+    if pose.happy and not eyes then
+        -- no face to squint: a little heart pops up instead
+        love.graphics.setColor(1, 0.55, 0.7, 1)
+        local hx, hy = w.x, feetY - pose.hop - 17
+        love.graphics.circle('fill', hx - 1, hy, 1.2)
+        love.graphics.circle('fill', hx + 1, hy, 1.2)
+        love.graphics.polygon('fill', hx - 2.1, hy + 0.4, hx + 2.1, hy + 0.4, hx, hy + 2.6)
+    end
+    if pose.wave then
+        love.graphics.push()
+        love.graphics.translate(w.x, feetY - pose.hop)
+        love.graphics.scale(sx * size, size)
+        self:drawWaveArm(w, pose.wave, eyes and eyes[1])
+        love.graphics.pop()
+    end
     local tool = w:toolInHand()
     if tool then
         local swing = 0
         if w.state == 'working' then swing = -0.9 + 0.7 * math.sin((clock or 0) * 12 + w.id) end
-        self:drawTool(tool, w.x + 5 * sx, feetY - 6, swing, sx)
+        self:drawTool(tool, w.x + 5 * sx, feetY - 6 - pose.hop, swing, sx)
     end
+end
+
+-- Where a species' eyes sit in the atlas (the pixel set's 16 px animals have
+-- two lone dark pixels; the soft set's smooth art has none, so nil).
+function Kenney:eyesOf(name)
+    self.eyes = self.eyes or {}
+    if self.eyes[name] == nil then
+        self.eyes[name] = false
+        local r = ATLAS[self.skinName][name]
+        if r and r[3] == 16 and love.image and love.image.newImageData then
+            local ok, data = pcall(love.image.newImageData, DIR .. self.skinName .. '.png')
+            if ok and data and data.getPixel then
+                local found = Feel.findEyes(data, 1, 16, r[1], r[2])
+                if found[1] then self.eyes[name] = found[1] end
+            end
+        end
+    end
+    return self.eyes[name] or nil
 end
 
 function Kenney:drawWorkerCargo(w, clock, sx, feetY)
     local cargo = w.slots[SLOT_WORK]
     if cargo and cargo.kind == CARGO_FOOD then
-        local bob = math.sin((clock or 0) * 6 + w.id) * 1
+        local bob = (Feel.calm and 0 or math.sin((clock or 0) * 6 + w.id)) - (w.pose and w.pose.hop or 0)
         self:drawFood(cargo.food, w.x, w.y - 15 + bob, 9)
         cargo = nil
     elseif cargo and cargo.kind == CARGO_GOLD and self.img.gold then
-        local bob = math.sin((clock or 0) * 6 + w.id) * 1
+        local bob = (Feel.calm and 0 or math.sin((clock or 0) * 6 + w.id)) - (w.pose and w.pose.hop or 0)
         self:centred('gold', w.x, w.y - 15 + bob, 9)
         cargo = nil
     end

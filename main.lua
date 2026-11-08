@@ -684,6 +684,12 @@ local function updatePlaying(dt, substep)
             end
         end
     end
+    -- a morphi just picked stops to look up at you (src/feel.lua)
+    local picked = game.selectedWorker
+    if picked ~= game.lastPicked then
+        game.lastPicked = picked
+        if picked and picked.alive then picked:feel('look') end
+    end
     for _, w in ipairs(game.workers) do
         w:update(dt, game.clock)
     end
