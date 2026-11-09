@@ -318,7 +318,7 @@ function Abilities:takeAway(x, y)
             local r = world:get(x + 1, y)
             if r and r.binPart and r.binPart.x == x and r.binPart.y == y then r.binPart = nil end
         end
-        world.version = world.version + 1
+        world:changed(x, y)
         self:effect('unmark', { count = 1, kind = wasBin and SITE_BIN or SITE_STORAGE, taken = true })
         return true
     end
@@ -327,7 +327,7 @@ function Abilities:takeAway(x, y)
         for i = #world.beds, 1, -1 do
             if world.beds[i].x == x and world.beds[i].y == y then table.remove(world.beds, i) end
         end
-        world.version = world.version + 1
+        world:changed(x, y)
         self:effect('unmark', { count = 1, kind = SITE_BED, taken = true })
         return true
     end

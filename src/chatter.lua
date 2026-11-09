@@ -17,6 +17,7 @@ function Chatter.new()
     self.unread = 0
     self.open = false
     self.seq = 0
+    self.scroll = 0 -- lines back from the newest; 0: the newest at the bottom
     return self
 end
 
@@ -38,7 +39,24 @@ function Chatter:add(speaker, text, where, t, quiet)
     self.lines[#self.lines + 1] = e
     while #self.lines > Chatter.KEEP do table.remove(self.lines, 1) end
     if not self.open and not quiet then self.unread = self.unread + 1 end
+    -- scrolled back to read: the rows being read stay put
+    if self.scrollMax then self.scrollMax = self.scrollMax + 1 end
+    if self.scroll > 0 then self:setScroll(self.scroll + 1) end
     return e
+end
+
+-- The panel's scroll, kept between the newest (0) and the oldest line at
+-- the bottom; scrollMax, when set by the panel, is the furthest back that
+-- still fills it.
+function Chatter:setScroll(n)
+    local most = math.max(0, #self.lines - 1)
+    if self.scrollMax then most = math.min(most, self.scrollMax) end
+    self.scroll = math.max(0, math.min(math.floor(n + 0.5), most))
+    return self.scroll
+end
+
+function Chatter:scrollBy(n)
+    return self:setScroll(self.scroll + n)
 end
 
 function Chatter:setOpen(open)

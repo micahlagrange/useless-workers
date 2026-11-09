@@ -66,45 +66,89 @@ end
 
 -- Must run outside the camera transform: the tiles are baked into the canvas
 -- in world pixels, so any active scale or translate would be baked in too.
+-- Only the tiles the world says changed are redrawn (with the ring around
+-- them, whose edges and shading depend on their neighbours); redrawing the
+-- whole map stalled the game for up to a second on a phone every time a
+-- stash was set out or a dig finished.
+View.PATCH_MAX = 48 -- more changed tiles than this at once: redraw everything
+
 function View:rebuildCanvas()
-    if self.canvasVersion == self.world.version then return end
-    self.canvasVersion = self.world.version
+    local world = self.world
+    if self.canvasVersion == world.version then return end
+    local changed = world.changesSince and world:changesSince(self.canvasVersion)
+    if changed and #changed > View.PATCH_MAX then changed = nil end
+    self.canvasVersion = world.version
+    local bake = self.bake or 1
     love.graphics.push()
     love.graphics.origin()
     love.graphics.setCanvas(self.canvas)
-    love.graphics.clear(0, 0, 0, 1)
-    for x = 1, self.world.w do
-        for y = 1, self.world.h do
-            local t = self.world.tiles[x][y]
-            local px, py = (x - 1) * TILE_SIZE, (y - 1) * TILE_SIZE
-            love.graphics.setColor(self:tileColor(t))
-            love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
-            if t.type == TILE_BRIDGE then
-                love.graphics.setColor(0.35, 0.26, 0.14)
-                love.graphics.rectangle('fill', px, py + 3, TILE_SIZE, 1)
-                love.graphics.rectangle('fill', px, py + 8, TILE_SIZE, 1)
-                love.graphics.rectangle('fill', px, py + 13, TILE_SIZE, 1)
-            elseif t.type == TILE_STONE then
-                -- a lit top edge and a shadowed foot, so stone reads as raised rock
-                love.graphics.setColor(1, 1, 1, 0.14)
-                love.graphics.rectangle('fill', px, py, TILE_SIZE, 1)
-                love.graphics.setColor(0, 0, 0, 0.3)
-                love.graphics.rectangle('fill', px, py + TILE_SIZE - 2, TILE_SIZE, 2)
-                love.graphics.setColor(0, 0, 0, 0.22)
-                love.graphics.rectangle('fill', px + 3, py + 4, 5, 2)
-                love.graphics.rectangle('fill', px + 9, py + 10, 4, 2)
-            elseif t.type == TILE_BREAKROOM then
-                -- plain trodden ground; the home nest is drawn over it, so no grid lines
-            elseif t.type == TILE_WALL then
-                self:drawWallTile(px, py, 1)
-            elseif t.type == TILE_DOOR then
-                self:drawDoorTile(px, py, 1)
+    if not changed then
+        love.graphics.clear(0, 0, 0, 1)
+        love.graphics.scale(bake, bake)
+        for x = 1, world.w do
+            for y = 1, world.h do
+                self:bakeTile(world.tiles[x][y], x, y, (x - 1) * TILE_SIZE, (y - 1) * TILE_SIZE)
             end
         end
+    else
+        love.graphics.scale(bake, bake)
+        local done = {}
+        for _, c in ipairs(changed) do
+            local key = c.x * 4096 + c.y
+            if not done[key] then
+                done[key] = true
+                self:bakeAround(c.x, c.y, bake)
+            end
+        end
+        love.graphics.setScissor()
     end
     love.graphics.setCanvas()
     love.graphics.pop()
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- Redraw the 3x3 tiles around (cx, cy), clipped to them; the tiles one
+-- further out are drawn too, so anything of theirs reaching in comes back.
+function View:bakeAround(cx, cy, bake)
+    local world, T = self.world, TILE_SIZE
+    local x0, y0 = math.max(1, cx - 1), math.max(1, cy - 1)
+    local x1, y1 = math.min(world.w, cx + 1), math.min(world.h, cy + 1)
+    if x0 > x1 or y0 > y1 then return end
+    love.graphics.setScissor((x0 - 1) * T * bake, (y0 - 1) * T * bake, (x1 - x0 + 1) * T * bake, (y1 - y0 + 1) * T * bake)
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.rectangle('fill', (x0 - 1) * T, (y0 - 1) * T, (x1 - x0 + 1) * T, (y1 - y0 + 1) * T)
+    for x = math.max(1, x0 - 1), math.min(world.w, x1 + 1) do
+        for y = math.max(1, y0 - 1), math.min(world.h, y1 + 1) do
+            self:bakeTile(world.tiles[x][y], x, y, (x - 1) * T, (y - 1) * T)
+        end
+    end
+end
+
+-- One tile of the baked map, in world pixels.
+function View:bakeTile(t, x, y, px, py)
+    love.graphics.setColor(self:tileColor(t))
+    love.graphics.rectangle('fill', px, py, TILE_SIZE, TILE_SIZE)
+    if t.type == TILE_BRIDGE then
+        love.graphics.setColor(0.35, 0.26, 0.14)
+        love.graphics.rectangle('fill', px, py + 3, TILE_SIZE, 1)
+        love.graphics.rectangle('fill', px, py + 8, TILE_SIZE, 1)
+        love.graphics.rectangle('fill', px, py + 13, TILE_SIZE, 1)
+    elseif t.type == TILE_STONE then
+        -- a lit top edge and a shadowed foot, so stone reads as raised rock
+        love.graphics.setColor(1, 1, 1, 0.14)
+        love.graphics.rectangle('fill', px, py, TILE_SIZE, 1)
+        love.graphics.setColor(0, 0, 0, 0.3)
+        love.graphics.rectangle('fill', px, py + TILE_SIZE - 2, TILE_SIZE, 2)
+        love.graphics.setColor(0, 0, 0, 0.22)
+        love.graphics.rectangle('fill', px + 3, py + 4, 5, 2)
+        love.graphics.rectangle('fill', px + 9, py + 10, 4, 2)
+    elseif t.type == TILE_BREAKROOM then
+        -- plain trodden ground; the home nest is drawn over it, so no grid lines
+    elseif t.type == TILE_WALL then
+        self:drawWallTile(px, py, 1)
+    elseif t.type == TILE_DOOR then
+        self:drawDoorTile(px, py, 1)
+    end
 end
 
 function View:drawWorld()

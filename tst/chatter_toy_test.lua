@@ -115,4 +115,79 @@ function TestChatterToy:testBubblesKeepClearOfTheRingAndBar()
     end
 end
 
+-- Micah: "i can't scroll down in the chatter". A full log scrolls with the
+-- wheel and by dragging the list; a drag never counts as a tap on a row, and
+-- a plain tap on a row still goes to that morphi.
+local function fillLog(game, w)
+    for i = 1, 40 do
+        game.chatter:add(w, 'berry number ' .. i, 'in the meadow', i)
+    end
+end
+
+local function firstRowText(ui)
+    local top
+    for _, row in ipairs(ui.chatterRows) do
+        if not top or row.y < top.y then top = row end
+    end
+    return top.entry.text
+end
+
+function TestChatterToy:testTheWheelScrollsChatterBack()
+    local game = H.game()
+    fillLog(game, aliveWorker(game))
+    H.pressToy('chat')
+    H.drawScene()
+    local ui = H.ui()
+    lu.assertTrue(#ui.chatterRows < #game.chatter.lines, 'everything fits: nothing to scroll')
+    lu.assertNotNil(ui.chatterBar, 'no scroll bar on a full log')
+    local newest = ui.chatterRows[1].entry.text
+    lu.assertEquals(newest, 'berry number 40')
+    local r = ui.chatterPanel
+    local get = love.mouse.getPosition
+    love.mouse.getPosition = function() return (r.x + r.w / 2) * ui.scale, (r.y + r.h / 2) * ui.scale end
+    local zoom = game.camera.scale
+    for _ = 1, 5 do love.wheelmoved(0, 1) end
+    love.mouse.getPosition = get
+    lu.assertEquals(game.chatter.scroll, 5)
+    lu.assertEquals(game.camera.scale, zoom, 'the wheel over Chatter zoomed the map')
+    H.drawScene()
+    lu.assertEquals(ui.chatterRows[1].entry.text, 'berry number 35')
+    -- all the way back: the oldest line shows and it stops there
+    for _ = 1, 80 do game.chatter:scrollBy(1); H.drawScene() end
+    lu.assertEquals(firstRowText(ui), game.chatter.lines[1].text)
+    local most = game.chatter.scroll
+    game.chatter:scrollBy(1)
+    lu.assertEquals(game.chatter.scroll, most)
+    -- closing and opening again starts at the newest
+    H.pressToy('chat'); H.pressToy('chat')
+    lu.assertEquals(game.chatter.scroll, 0)
+end
+
+function TestChatterToy:testDraggingScrollsAndATapStillJumps()
+    local game = H.game()
+    local w = aliveWorker(game)
+    fillLog(game, w)
+    H.pressToy('chat')
+    H.drawScene()
+    local ui = H.ui()
+    local s = ui.scale
+    local row = ui.chatterRows[2]
+    local x, y = (row.x + row.w / 2) * s, (row.y + row.h / 2) * s
+    -- drag down by three rows: older lines come into view, no ring opens
+    love.mousepressed(x, y, 1, false)
+    love.mousemoved(x, y + 3 * 56 * s, 0, 3 * 56 * s, false)
+    love.mousereleased(x, y + 3 * 56 * s, 1, false)
+    lu.assertEquals(game.chatter.scroll, 3)
+    lu.assertFalse(H.hud():isOpen(), 'a drag opened a ring')
+    lu.assertTrue(game.chatterOpen)
+    -- a tap on a row goes to whoever said it
+    H.drawScene()
+    row = ui.chatterRows[1]
+    x, y = (row.x + row.w / 2) * s, (row.y + row.h / 2) * s
+    love.mousepressed(x, y, 1, false)
+    love.mousereleased(x, y, 1, false)
+    lu.assertEquals(game.selectedWorker, w)
+    lu.assertTrue(H.hud():isOpen(), 'a tap on a row opened no ring')
+end
+
 os.exit(lu.LuaUnit.run())

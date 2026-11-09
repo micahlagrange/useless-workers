@@ -1660,6 +1660,9 @@ end
 local function toggleChatter()
     game.chatterOpen = not game.chatterOpen
     chatterLog():setOpen(game.chatterOpen)
+    -- it opens on the newest lines
+    if game.chatterOpen then chatterLog():setScroll(0) end
+    game.chatterPress = nil
     Audio.playSFX('click')
 end
 
@@ -2044,8 +2047,11 @@ local function pointerPressed(x, y, button, istouch)
     if game.chatterOpen then
         local what, e = ui:chatterAt(vx, vy)
         if what == 'close' then toggleChatter() return end
-        if what == 'row' then chatterJump(e) return end
-        if what == 'inside' then return end
+        if what == 'row' or what == 'inside' then
+            -- a drag scrolls the list; a tap on a row (on release) goes there
+            game.chatterPress = { y = y, scroll = chatterLog().scroll, entry = what == 'row' and e or nil, moved = false }
+            return
+        end
     end
     if ui:restartButtonAt(vx, vy) then
         restartGame()
@@ -2127,6 +2133,12 @@ local function pointerReleased(x, y, button)
         if not p.moved and button == 1 then menuTap(ui:toVirtual(x, y)) end
         return
     end
+    if game.chatterPress then
+        local p = game.chatterPress
+        game.chatterPress = nil
+        if button == 1 and not p.moved and p.entry and state == 'playing' then chatterJump(p.entry) end
+        return
+    end
     if state ~= 'playing' then return end
     if button == 1 and hud.press then
         hud:released(ui:toVirtual(x, y))
@@ -2164,6 +2176,16 @@ local function pointerMoved(x, y, dx, dy)
         local p = game.menuPress
         if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
         if p.moved then ui.menuScroll = p.scroll - (y - p.y) / ui.scale end
+        return
+    end
+    if game.chatterPress then
+        -- dragging the Chatter list down brings older lines into view
+        local p = game.chatterPress
+        if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
+        if p.moved then
+            local rowPx = (ui.chatterRowH or 56) * ui.scale
+            chatterLog():setScroll(p.scroll + (y - p.y) / rowPx)
+        end
         return
     end
     if state ~= 'playing' or pinch then return end
@@ -2293,6 +2315,11 @@ function love.wheelmoved(_, y)
     if state == 'menu' then ui.menuScroll = (ui.menuScroll or 0) - y * 40 return end
     if state ~= 'playing' or y == 0 then return end
     local mx, my = pointerPosition()
+    if game.chatterOpen and ui:chatterAt(ui:toVirtual(mx, my)) then
+        -- the wheel over Chatter scrolls it: up for older lines
+        chatterLog():scrollBy(y > 0 and 1 or -1)
+        return
+    end
     game.camera:zoomAt(y > 0 and 1.15 or 1 / 1.15, mx, my)
 end
 

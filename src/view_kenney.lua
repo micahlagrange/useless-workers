@@ -172,30 +172,16 @@ function Kenney:drawBankEdges(t, x, y, px, py)
     if differs(1, 0) then love.graphics.rectangle('fill', px + T - 1, py, 1, T) end
 end
 
-function Kenney:rebuildCanvas()
-    if self.canvasVersion == self.world.version then return end
-    self.canvasVersion = self.world.version
-    love.graphics.push()
-    love.graphics.origin()
-    love.graphics.setCanvas(self.canvas)
-    love.graphics.clear(0, 0, 0, 1)
-    love.graphics.scale(self.bake, self.bake)
-    for x = 1, self.world.w do
-        for y = 1, self.world.h do
-            local t = self.world.tiles[x][y]
-            local px, py = (x - 1) * TILE_SIZE, (y - 1) * TILE_SIZE
-            self:drawGround(t, px, py)
-            self:drawBankEdges(t, x, y, px, py)
-            if t.type == TILE_WALL then
-                self:drawWallTile(px, py, 1)
-            elseif t.type == TILE_DOOR then
-                self:drawDoorTile(px, py, 1)
-            end
-        end
+-- One tile of the baked map (View:rebuildCanvas redraws only what changed,
+-- at the skin's bake scale).
+function Kenney:bakeTile(t, x, y, px, py)
+    self:drawGround(t, px, py)
+    self:drawBankEdges(t, x, y, px, py)
+    if t.type == TILE_WALL then
+        self:drawWallTile(px, py, 1)
+    elseif t.type == TILE_DOOR then
+        self:drawDoorTile(px, py, 1)
     end
-    love.graphics.setCanvas()
-    love.graphics.pop()
-    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Kenney:drawWorld()

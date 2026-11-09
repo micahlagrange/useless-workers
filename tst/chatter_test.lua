@@ -120,4 +120,27 @@ function TestChatter:testBubbleAtTheTopGoesBelow()
     lu.assertTrue(b.y > b.sy)
 end
 
+-- Scrolling back: clamped to the log, and new lines do not move the rows
+-- being read.
+function TestChatter:testScrollIsClampedAndHoldsItsPlace()
+    local c = Chatter.new()
+    local who = { name = 'Dave' }
+    for i = 1, 10 do c:add(who, 'line ' .. i, 'in the meadow', i) end
+    lu.assertEquals(c.scroll, 0)
+    lu.assertEquals(c:scrollBy(-3), 0)
+    lu.assertEquals(c:scrollBy(4), 4)
+    lu.assertEquals(c:setScroll(99), 9)
+    c:setScroll(4)
+    local reading = c.lines[#c.lines - c.scroll].text
+    c:add(who, 'line 11', 'in the meadow', 11)
+    lu.assertEquals(c.lines[#c.lines - c.scroll].text, reading)
+    -- the panel says how far back still fills it
+    c.scrollMax = 6
+    lu.assertEquals(c:setScroll(20), 6)
+    -- the newest stays at the bottom when not scrolled
+    c:setScroll(0)
+    c:add(who, 'line 12', 'in the meadow', 12)
+    lu.assertEquals(c.scroll, 0)
+end
+
 os.exit(lu.LuaUnit.run())

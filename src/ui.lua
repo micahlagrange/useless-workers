@@ -2188,16 +2188,23 @@ function UI:drawChatter(game)
         self:printLine('Nobody has said a thing yet.', r.x + 14, top + 6, r.w - 28, 'left', C.dim, { small, tiny })
         return
     end
-    local textX, textW = r.x + 14 + 40, r.w - 28 - 40
+    local textX, textW = r.x + 14 + 40, r.w - 28 - 52
     local y = r.y + r.h - 8
     local now = game.clock or 0
-    for i = #chat.lines, 1, -1 do
+    -- scrolled back: start that many lines before the newest
+    chat.scrollMax = nil
+    local scroll = chat:setScroll(chat.scroll or 0)
+    local newest = #chat.lines - scroll
+    local oldestShown = newest + 1
+    self.chatterRowH = 56
+    for i = newest, 1, -1 do
         local e = chat.lines[i]
         local wrapped = Chatter.wrap(e.text, textW, function(t) return small:getWidth(t) end, 2)
         local nLines = #wrapped
         local rowH = math.max(56, small:getHeight() + tiny:getHeight() + nLines * small:getHeight() + 14)
         if y - rowH < top then break end
         y = y - rowH
+        oldestShown = i
         local row = { x = r.x + 6, y = y, w = r.w - 12, h = rowH - 4, entry = e }
         self.chatterRows[#self.chatterRows + 1] = row
         love.graphics.setColor(1, 1, 1, 0.04)
@@ -2222,6 +2229,22 @@ function UI:drawChatter(game)
         for k, l in ipairs(wrapped) do
             self:printLine(l, textX, y + 9 + drop + k * small:getHeight(), textW, 'left', C.text, { small })
         end
+    end
+    -- the oldest line is in view: no further back than this
+    if oldestShown <= 1 then chat.scrollMax = scroll end
+    -- a scroll bar when not everything fits: drag the list or use the wheel
+    local total = #chat.lines
+    local shown = newest - oldestShown + 1
+    self.chatterBar = nil
+    if shown < total then
+        local tx, ty, th = r.x + r.w - 12, top + 2, r.y + r.h - 10 - top
+        love.graphics.setColor(C.accent[1], C.accent[2], C.accent[3], 0.25)
+        love.graphics.rectangle('fill', tx, ty, 5, th, 2, 2)
+        local bh = math.max(18, th * shown / total)
+        local by = ty + (th - bh) * (oldestShown - 1) / math.max(1, total - shown)
+        setColor(C.accent)
+        love.graphics.rectangle('fill', tx, by, 5, bh, 2, 2)
+        self.chatterBar = { x = tx, y = by, w = 5, h = bh }
     end
 end
 
