@@ -15,6 +15,7 @@ require('src.constants')
 local Util = require('src.util')
 local Pathfinder = require('src.pathfinder')
 local JobSets = require('src.jobsets')
+local Feel = require('src.feel')
 
 local Worker = {}
 Worker.__index = Worker
@@ -137,7 +138,7 @@ function Worker:mealOf(food)
     local taste = self:taste(food)
     self.hunger = math.min(HUNGER_MAX, self.hunger + (self.wilds and FOOD_VALUE[taste] or FRUIT_HUNGER_VALUE))
     if self.wilds and self.morale then
-        if taste == 'loved' then self.morale = math.min(MORALE_MAX, self.morale + MORALE_LOVED_MEAL)
+        if taste == 'loved' then self.morale = math.min(MORALE_MAX, self.morale + MORALE_LOVED_MEAL); self:feel('happy')
         elseif taste == 'hated' then self.morale = math.max(0, self.morale - MORALE_HATED_MEAL); self:say('yuck', 1.2) end
     end
 end
@@ -189,6 +190,7 @@ function Worker:hatch()
     self.needs = { fun = 100, clean = 100, sleep = 100 }
     self.careSum, self.careTime = 0, 0
     self.hunger = HUNGER_MAX
+    self:feel('bump')
     self:emit('hatched')
 end
 
@@ -412,6 +414,7 @@ function Worker:tend(action, world)
         world.stock.grass = world.stock.grass - 1
         n.clean = math.min(100, n.clean + TAMA_CLEAN)
         self:say('squeaky', 1.5)
+        self:feel('happy')
         return string.format('A wash with a tuft of grass: clean %d -> %d. %d grass left.', math.floor(before + 0.5), math.floor(n.clean + 0.5), world.stock.grass)
     elseif action == 'play' then
         local f = n.fun
@@ -419,6 +422,8 @@ function Worker:tend(action, world)
         n.clean = math.max(0, n.clean - TAMA_PLAY_COST)
         n.sleep = math.max(0, n.sleep - TAMA_PLAY_COST)
         self:say('hee hee', 1.5)
+        self:feel('bump')
+        self:feel('happy')
         return string.format('Played together: fun %d -> %d, a little grubbier and sleepier.', math.floor(f + 0.5), math.floor(n.fun + 0.5))
     end
     return nil
@@ -533,6 +538,12 @@ end
 
 function Worker:emit(name, data)
     if self.onEvent then self.onEvent(self, name, data) end
+end
+
+-- Start a little body effect ('bump', 'happy', 'wave'), see src/feel.lua.
+function Worker:feel(kind)
+    self.fx = self.fx or {}
+    self.fx[kind] = self.clock or 0
 end
 
 function Worker:say(text, ttl)
@@ -750,6 +761,8 @@ function Worker:joinTrade()
         w.idleSince = nil
     end
     self:say('swap!', 2)
+    self:feel('bump')
+    tr.a:feel('bump')
     return true
 end
 
@@ -847,6 +860,7 @@ function Worker:endTrade(deal)
             if deal then
                 w.morale = math.min(MORALE_MAX, w.morale + lift)
                 w:say('yay!', 2.5)
+                w:feel('happy')
             elseif tr.b and wasIn then
                 w:say('oh. bye', 1.5)
             end
@@ -1855,6 +1869,7 @@ function Worker:finishAction()
         self.wantsBreak = false
         self.breaksTaken = self.breaksTaken + 1
         self.morale = math.min(MORALE_MAX, self.morale + (inBed and MORALE_BED_BONUS or MORALE_BREAK_BONUS))
+        self:feel('bump')
         self.world:releaseRestSpot(self)
         self.restSpot = nil
         -- rested, and due a trade: join one or offer one at the swap spot
@@ -2040,6 +2055,8 @@ function Worker:update(dt, clock)
     end
     self:accumulateWork(dt)
     self.moving = false
+    -- just picked: it stands still a moment and looks up at you
+    if self.fx and self.fx.look and Feel.looking(self, self.clock) then return end
     if self.state == 'idle' then
         self.decideTimer = self.decideTimer - dt
         if self.decideTimer <= 0 then

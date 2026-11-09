@@ -133,6 +133,13 @@ MORPHI_ROLE = { pupper = 'forager', woofoof = 'forager', twins = 'lumberjack', c
 FOOD_CHAR   = { k = 'steak', f = 'fish', c = 'cheese', h = 'chili', y = 'candy', g = 'grapes' }
 -- Ribbit the frog is the sixth: a second builder in arcade, a lumberjack in the wilds.
 MORPHI_SHEET_NAMES = { pupper = 'Pupper', woofoof = 'Woofoof', twins = 'Twins', cwab = 'Cwab', blue = 'Blob', ribbit = 'Ribbit' }
+-- Each species' own colour: its face on a HUD button and the ring at its
+-- feet in the meadow, so the bunch reads by colour even small on a phone.
+MORPHI_COLOR = { pupper = 'F2C27B', woofoof = '8FD3F0', twins = 'F59AC0', cwab = 'EF6B5B', blue = 'C7A6F2', ribbit = '8FD16A' }
+function morphiColor(sheet)
+    local h = MORPHI_COLOR[sheet] or MORPHI_COLOR.pupper
+    return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255, 1 }
+end
 
 -- Workers (section 5)
 HUNGER_MAX             = 100
