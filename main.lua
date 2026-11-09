@@ -1374,7 +1374,8 @@ local ringAct
 local function workerAtScreen(sx, sy)
     local wp = game.camera:toWorld(sx, sy)
     local wx, wy = wp.x, wp.y
-    local reach = math.max(10, 26 / game.camera.scale)
+    -- a finger covers more than a little blob: reach further on a touch screen
+    local reach = math.max(12, (ui.touch and 44 or 34) / game.camera.scale)
     local best, bestD = nil, reach
     for _, w in ipairs(game.workers) do
         if w.alive and w.state ~= 'quitting' then
@@ -1794,6 +1795,24 @@ local function pressTopButton(id, x, b)
     Audio.playSFX('click')
 end
 
+-- The next morphi: go to it, open its ring and follow it from here on.
+local function nextUnit()
+    local band, at = {}, 0
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.state ~= 'quitting' and not w:isEgg() then
+            band[#band + 1] = w
+            if w == game.selectedWorker then at = #band end
+        end
+    end
+    if #band == 0 then ui:toast('Nobody is around') return end
+    local w = band[at % #band + 1]
+    hud:close()
+    game.focus = nil
+    openWorkerRing(w)
+    game.follow = true
+    game.camera:centerOn(w.x, w.y)
+end
+
 -- The Toybox top bar's buttons.
 local function pressToy(id)
     Audio.playSFX('click')
@@ -1802,6 +1821,7 @@ local function pressToy(id)
     elseif id == 'menu' then openMenu()
     elseif id == 'resmore' then ui.resOpen = not ui.resOpen
     elseif id == 'chat' then toggleChatter()
+    elseif id == 'nextunit' then nextUnit()
     elseif id == 'bunch' then
         local br = game.world.breakroom
         if br then
