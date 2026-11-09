@@ -11,10 +11,12 @@ love.load()
 love.resize(1280, 720)
 
 -- Plays free play for a while with no player at all.
-local function play(seconds)
+local function play(seconds, due)
     H.newGame('PUPPER', 1)
     H.closeGoal()
     local game = H.game()
+    -- due: everybody is due for some fun at once, instead of at random
+    if due then for _, w in ipairs(game.workers) do w.funAt = 0 end end
     local dt = 1 / 15
     for _ = 1, math.floor(seconds / dt) do
         love.update(dt)
@@ -66,6 +68,25 @@ function TestStats:test_departures_and_arrivals_are_counted()
     lu.assertEquals(s.counts.arrived, 1)
     lu.assertEquals(s.counts.starved, 1)
     lu.assertEquals(s.events[2].day, DAYS_PER_SEASON + 3)
+end
+
+-- Fun together: who played with whom, when, and what kind of play, so the
+-- run export shows it.
+function TestStats:test_play_is_recorded_with_who_and_what_kind()
+    local game = play(QUARTER_SECONDS - 5, true)
+    local s = game.stats
+    local plays = {}
+    for _, e in ipairs(s.events) do if e.kind == 'play' then plays[#plays + 1] = e end end
+    lu.assertTrue(#plays >= 1, 'nobody played all spring')
+    lu.assertEquals(s.counts.play, #plays)
+    for _, e in ipairs(plays) do
+        lu.assertStrContains(e.who, ' and ')
+        lu.assertNotNil(e.text:match('^philosophize: ') or e.text:match('^socialize: ') or e.text:match('^dance: '), e.text)
+        lu.assertNotNil(e.day)
+        lu.assertNotNil(e.x)
+    end
+    lu.assertStrContains(s:export('fun'), '"kind":"play"')
+    lu.assertNotNil(s.days[#s.days].plays)
 end
 
 function TestStats:test_milestones_wait_their_gap_and_the_biggest_wins()

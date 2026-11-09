@@ -402,6 +402,12 @@ function UI:drawToyMenu(game, confirm, fingerDebug)
     local secH = Toy.height(Toy.S, true) + 18
     local level = game.mode == 'arcade' or game.mode == 'level'
     local tools = UI.TESTER_TOOLS
+    if game.mode == 'free' then
+        -- free play: pick two morphis and a kind of fun for them to have now
+        tools = {}
+        for i, t in ipairs(UI.TESTER_TOOLS) do tools[i] = t end
+        tools[#tools + 1] = { 'funtest', 'chat', 'Fun test' }
+    end
     local perRow = math.max(1, math.floor((colW + 6) / (72 + 6)))
     local toolRowH = TAP + 8 + Toy.height(Toy.S, true) + 10
     local toolRows = math.ceil(#tools / perRow)

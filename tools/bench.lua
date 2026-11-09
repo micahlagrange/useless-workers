@@ -69,6 +69,7 @@ function Bench.runOne(seed, strategy, years, difficulty)
         row.starved = (c.starved or 0) + (c.died or 0) - (counts.starved or 0) - (counts.died or 0)
         row.left = (c.left or 0) - (counts.left or 0)
         row.trades = (c.trade or 0) - (counts.trade or 0)
+        row.fun = 2 * ((c.play or 0) - (counts.play or 0)) -- two morphis have each play
         row.hardships = (c.hardship or 0) - (counts.hardship or 0)
         for k, v in pairs(c) do counts[k] = v end
         for i = seenEvents + 1, #game.stats.events do
@@ -396,7 +397,7 @@ function Bench.report(runs, years, meta)
             p('%4d %5s  %-4s %-4s %4s %4s  %6s %4s %4s %5s %4s %5s %5s %5s %5s %5s %3s %6s  %s/%s/%s',
                 y, fmt(a.alive, 0, a.alive.n) .. '/' .. a.alive.n, fmt(a.band, 1), range(a.band), fmt(a.lost), fmt(a.migrants),
                 fmt(a.morale, 0), fmt(a.above80, 0, 100), fmt(a.below30, 0, 100), fmt(a.idle, 0, 100), fmt(a.work, 0, 100),
-                fmt(a.food), fmt(a.logs), fmt(a.gold), fmt(a.beds), fmt(a.trades, 2), fmt(a.fun, 0), fmt(a.hardships),
+                fmt(a.food), fmt(a.logs), fmt(a.gold), fmt(a.beds), fmt(a.trades, 2), fmt(a.fun, 2), fmt(a.hardships),
                 fmt(a.stockLogs, 0), fmt(a.stockGold, 0), fmt(a.storedFood, 0))
         end
     end
