@@ -80,7 +80,7 @@ function Stats.new(meta)
     self.events = {}
     self.milestones = {}
     self.fired = {}
-    self.counts = { arrived = 0, starved = 0, left = 0, trade = 0, hardship = 0 }
+    self.counts = { arrived = 0, starved = 0, left = 0, trade = 0, hardship = 0, play = 0 }
     self.lastRows = nil
     self.lastMilestoneDay = -math.huge
     return self
@@ -119,7 +119,10 @@ local function bucket(w)
     local s, g = w.state, w.goal
     if s == 'working' or (s == 'walking' and (g == 'work' or g == 'deliver')) then return 'work' end
     if s == 'eating' or (s == 'walking' and (g == 'eat' or g == 'fetch')) then return 'food' end
-    if s == 'breaking' or s == 'trading' or (s == 'walking' and g == 'break') then return 'rest' end
+    -- playing together is a break of the fun kind, not standing about; but
+    -- waiting at the nest for somebody to play with is
+    if s == 'playing' and w.play and not w.play.b then return 'idle' end
+    if s == 'breaking' or s == 'trading' or s == 'playing' or (s == 'walking' and (g == 'break' or g == 'play')) then return 'rest' end
     if s == 'sulking' then return 'sulk' end
     return 'idle'
 end
@@ -152,7 +155,7 @@ function Stats:row(game, day)
         arrived = self.counts.arrived, starved = self.counts.starved, left = self.counts.left,
         laid = self.counts.laid, hatched = self.counts.hatched, grewUp = self.counts.grewUp, died = self.counts.died,
         eggs = 0, babies = 0, little = {},  -- format 3: the eggs and babies, as {name, stage, x, y, hunger, care}
-        trades = self.counts.trade, hardships = self.counts.hardship,
+        trades = self.counts.trade, plays = self.counts.play, hardships = self.counts.hardship,
         drain = round(scoring.drain, 2),
         ripeBushes = world:readyNodeCount(NODE_BUSH), trees = world:readyNodeCount(NODE_TREE), ore = world:readyNodeCount(NODE_ORE),
     }

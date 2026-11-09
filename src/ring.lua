@@ -199,6 +199,8 @@ function Ring.forWorker(w)
         elseif job == js.disliked then item.off, item.badge, item.badgeColor = true, '!', 'berry' end
         spec.items[#spec.items + 1] = item
     end
+    -- DETAILS: what it is doing right now, in full (a talk word for word)
+    spec.items[#spec.items + 1] = { id = 'details', icon = 'chat', label = 'Details' }
     spec.center = { id = 'follow', icon = 'follow' }
     return spec
 end
