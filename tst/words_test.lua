@@ -84,6 +84,9 @@ function TestWords:test_a_season_of_free_play_reads_in_meadow_words()
         if st == 'report' then
             love.draw()
             love.keypressed('return')
+        elseif st == 'huntpick' then
+            love.draw() -- the hunters are asked for; the meadow stays home
+            love.keypressed('escape')
         elseif st ~= 'playing' then
             break
         end

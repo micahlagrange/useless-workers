@@ -6,6 +6,7 @@ local Toy = require('src.toy')
 local Util = require('src.util')
 local Audio = require('src.audio')
 local Campaign = require('src.campaign')
+local Hunt = require('src.hunt')
 
 return function(UI)
 local C = Toy.C
@@ -50,6 +51,7 @@ function UI:toyStock(game)
     local time = Util.formatTime(arcade and game.clock or sc.quarterTimer)
     local label = sc:seasonLabel()
     if game.mode == 'level' or arcade then label = 'Level ' .. game.level.index end
+    if game.mode == 'hunt' then label = 'Hunt' end
     local blink = not arcade and sc.quarterTimer <= 15 and math.floor(sc.quarterTimer * 2) % 2 == 0
     add({ key = 'season', icon = 'sun', text = label .. ' ' .. time, warn = blink, season = true })
     if arcade then
@@ -60,6 +62,7 @@ function UI:toyStock(game)
     else
         local stored, cap = game.world:storedCount(ITEM_FOOD), game.world:storageCapacity()
         add({ key = 'food', icon = 'food', text = stored .. '/' .. cap, warn = cap == 0 })
+        if game.mode == 'hunt' then add({ key = 'critters', icon = 'food', text = Hunt.crittersLeft(game.world) .. ' critters left' }) end
     end
     add({ key = 'sticks', icon = 'stick', text = tostring(game.world.stock.logs), warn = game.world.stock.logs == 0 })
     if not arcade then
