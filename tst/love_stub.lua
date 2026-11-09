@@ -3,6 +3,7 @@
 -- (tst/c64_metrics.lua) and every print is recorded with its box, so a test
 -- can check what spilled where. Not loaded by the game.
 local METRICS = dofile('tst/c64_metrics.lua')
+local FREDOKA = dofile('tst/fredoka_metrics.lua')
 
 -- ctx: whatever the test wants stamped on each text (layer, panel, button)
 local Stub = { width = 1280, height = 720, texts = {}, ctx = {}, fingers = {} }
@@ -61,6 +62,10 @@ end
 local function newFont(a, b)
     local size = type(a) == 'number' and a or b or 12
     local m = METRICS[size]
+    if type(a) == 'string' and a:find('Fredoka') then
+        m = (a:find('SemiBold') and FREDOKA.semibold or FREDOKA.medium)[size]
+        assert(m, 'no Fredoka metrics for size ' .. tostring(size) .. ': add it to tools/font_metrics and regenerate')
+    end
     assert(m, 'no C64 metrics for size ' .. tostring(size) .. ': add it to tools/font_metrics and regenerate')
     local font = blank({ size = size })
     function font:getWidth(text)
@@ -161,7 +166,7 @@ function Stub.install()
         keyboard = blank({ isDown = function() return false end }),
         touch = blank({ getTouches = function() return Stub.fingers end }),
         system = blank({ getOS = function() return 'Windows' end }),
-        timer = blank({ getTime = function() return 0 end }),
+        timer = blank({ getTime = function() return Stub.now or 0 end }),
         math = blank({ random = math.random }),
         filesystem = blank({ getInfo = function() return nil end, read = function() return nil end }),
         audio = blank({ newSource = function() return blank({ isPlaying = function() return false end, clone = function(s) return s end }) end }),
