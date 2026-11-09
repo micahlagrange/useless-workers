@@ -45,6 +45,11 @@ function TestHuntFlow:test_a_party_hunts_and_brings_meat_home()
     local h = H.game()
     lu.assertEquals(h.mode, 'hunt')
     lu.assertTrue(#h.workers >= 1)
+    local stock = H.ui():toyStock(h)
+    lu.assertEquals(stock[1].text:sub(1, 4), 'Hunt')
+    local critters = false
+    for _, it in ipairs(stock) do if it.key == 'critters' then critters = true end end
+    lu.assertTrue(critters)
     love.draw()
     for _ = 1, 4000 do
         love.update(0.1)
