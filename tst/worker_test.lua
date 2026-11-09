@@ -704,55 +704,162 @@ function TestWilds:testBushesWearOutInTheWilds()
     lu.assertNil(self.world:get(2, 2).node, 'withered after its last picking')
 end
 
-function TestWilds:testTradeAtCamp()
+-- Trading: a fun task at a swap spot the player builds. Any mood, always a
+-- deal, a shiny each, about a minute, meals and gifts make it sweeter.
+local function tradePair(self, sheetA, sheetB)
+    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, sheetA or 'pupper'))
+    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER, sheetB or 'cwab'))
+    a.hunger, b.hunger = 90, 90
+    a.tradeAt, b.tradeAt = 0, 0 -- both want to trade
+    return a, b
+end
+
+-- Run until the trade is over (or limit seconds); returns the seconds the
+-- talk itself took (from both standing there to the deal).
+local function runTrade(a, b, world, jobs, limit)
+    local dt, clock, startedAt = 0.05, 0, nil
+    local tr = a.trade
+    while clock < (limit or 200) and (a.trade or b.trade) do
+        clock = clock + dt
+        jobs:update(dt)
+        for _, w in ipairs({ a, b }) do w:update(dt, clock) end
+        if tr and tr.started and not startedAt then startedAt = clock end
+    end
+    return startedAt and (clock - startedAt) or nil, clock
+end
+
+function TestWilds:testTradeAtTheSwapSpotAtFullMoraleWithGifts()
+    self.world:markTradeSpot(5, 2)
     -- a steak and a chili in storage: each partner's loved food, so two gifts
     self.world:storeItem(ITEM_FOOD, 4, 4, 'steak')
     self.world:storeItem(ITEM_FOOD, 7, 4, 'chili')
     self.world.stock.gold = 1
-    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
-    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER, 'cwab'))
-    a.hunger, b.hunger, a.morale, b.morale = 60, 60, 30, 40
-    -- a finishes a rest feeling low and offers a trade
+    local a, b = tradePair(self)
+    a.morale, b.morale = MORALE_MAX - 30, MORALE_MAX - 35
+    a.idleSince, b.idleSince = -100, -100
+    -- a finishes a rest in high spirits and still wants to trade
     a.state = 'breaking'
     a:finishAction()
-    lu.assertEquals(a.state, 'trading')
-    lu.assertNotNil(self.world.openTrade)
-    -- b, standing about at camp, takes it up: the gold is staked
-    run({ a, b }, self.world, self.jobs, 1)
-    lu.assertEquals(b.state, 'trading')
-    lu.assertEquals(self.world.stock.gold, 0)
+    lu.assertNotNil(self.world.openTrade, 'any mood trades')
+    lu.assertEquals(a.trade.spot.x, 5)
+    lu.assertEquals(Stats.bucket(a), 'rest', 'off to trade is fun time, not idle')
+    lu.assertNil(a.idleSince)
+    lu.assertTrue(b:joinTrade())
+    lu.assertEquals(self.world.stock.gold, 0, 'the shiny is spent')
     lu.assertEquals(a.trade.gifts, 2)
-    -- hunger is on hold while they talk; they eat together halfway
-    run({ a, b }, self.world, self.jobs, TRADE_SECONDS / 2 - 3)
-    lu.assertEquals(a.hunger, 60)
-    lu.assertEquals(#self.world.items, 2)
-    run({ a, b }, self.world, self.jobs, 6)
-    lu.assertEquals(#self.world.items, 0)
-    lu.assertEquals(a.hunger, math.min(HUNGER_MAX, 60 + FOOD_VALUE.loved))
-    -- and close the deal: happy thoughts, more for the gifts
-    run({ a, b }, self.world, self.jobs, TRADE_SECONDS / 2)
-    lu.assertEquals(a.state ~= 'trading', true)
-    -- (a fed morphi also cheers up a little in the seconds around the trade)
-    lu.assertTrue(a.morale >= math.min(MORALE_MAX, 30 + MORALE_BREAK_BONUS + MORALE_LOVED_MEAL + MORALE_TRADE_BASE + 2 * MORALE_GIFT))
-    lu.assertTrue(b.morale >= math.min(MORALE_MAX, 40 + MORALE_LOVED_MEAL + MORALE_TRADE_BASE + 2 * MORALE_GIFT))
+    lu.assertEquals(Stats.bucket(b), 'rest')
+    local aBefore, bBefore = a.morale, b.morale
+    local talk = runTrade(a, b, self.world, self.jobs)
+    lu.assertNil(a.trade)
+    lu.assertNil(b.trade)
+    lu.assertNotNil(talk)
+    lu.assertTrue(math.abs(talk - TRADE_SECONDS) < 1, 'about a minute of chat, got ' .. tostring(talk))
+    lu.assertEquals(#self.world.items, 0, 'they ate their gifts halfway')
+    lu.assertEquals(a:tile().x, 5)
+    lu.assertEquals(a:tile().y, 2, 'the trade was at the swap spot')
+    local lift = MORALE_TRADE_BASE + 2 * MORALE_GIFT
+    lu.assertTrue(a.morale >= math.min(MORALE_MAX, aBefore + lift + MORALE_LOVED_MEAL - 1))
+    lu.assertTrue(b.morale >= math.min(MORALE_MAX, bBefore + lift + MORALE_LOVED_MEAL - 1))
 end
 
-function TestWilds:testNoTradeWithoutFood()
+function TestWilds:testEveryTradeSucceedsEvenWithNoFood()
+    self.world:markTradeSpot(5, 2)
+    self.world.stock.gold = 3
+    local a, b = tradePair(self)
+    a.morale, b.morale = 40, 40
+    lu.assertTrue(a:offerTrade())
+    lu.assertTrue(b:joinTrade(), 'no meal needed')
+    lu.assertEquals(self.world.stock.gold, 2, 'one shiny a trade')
+    local events = {}
+    a.onEvent = function(_, ev, data) events[#events + 1] = { ev = ev, data = data } end
+    runTrade(a, b, self.world, self.jobs)
+    lu.assertAlmostEquals(a.morale, 40 + MORALE_TRADE_BASE, 2) -- (fed, it cheers a little on the walk)
+    lu.assertAlmostEquals(b.morale, 40 + MORALE_TRADE_BASE, 2)
+    local traded = false
+    for _, e in ipairs(events) do if e.ev == 'trade' then traded = true end end
+    lu.assertTrue(traded, 'a deal, every time')
+    lu.assertEquals(self.world.stock.gold, 2)
+end
+
+function TestWilds:testMealsAndGiftsMakeItSweeter()
+    local plain = Worker.tradeLift({ mealsEaten = 0, giftsEaten = 0 })
+    local meal = Worker.tradeLift({ mealsEaten = 2, giftsEaten = 0 })
+    local gift = Worker.tradeLift({ mealsEaten = 0, giftsEaten = 2 })
+    lu.assertTrue(meal > plain)
+    lu.assertTrue(gift > meal)
+    -- a real one with a fine meal each (fish for the pupper, cheese for the cwab)
+    self.world:markTradeSpot(5, 2)
+    self.world:storeItem(ITEM_FOOD, 4, 4, 'fish')
+    self.world:storeItem(ITEM_FOOD, 7, 4, 'cheese')
     self.world.stock.gold = 1
-    local a = Worker.new(self.world, self.jobs, self.scoring, Rng.new(1), self.opts(ROLE_FORAGER, 'pupper'))
-    local b = Worker.new(self.world, self.jobs, self.scoring, Rng.new(2), self.opts(ROLE_MINER, 'cwab'))
-    a.morale, b.morale = 30, 40
+    local a, b = tradePair(self)
+    a.morale, b.morale = 30, 30
+    lu.assertTrue(a:offerTrade())
+    lu.assertTrue(b:joinTrade())
+    lu.assertEquals(a.trade.gifts, 0)
+    runTrade(a, b, self.world, self.jobs)
+    lu.assertAlmostEquals(a.morale, 30 + MORALE_TRADE_BASE + 2 * MORALE_TRADE_MEAL, 2)
+end
+
+function TestWilds:testNoSwapSpotNoTrade()
+    self.world.stock.gold = 5
+    local a, b = tradePair(self)
     a.state = 'breaking'
     a:finishAction()
-    run({ a, b }, self.world, self.jobs, 2)
-    lu.assertNotEquals(b.state, 'trading')
-    lu.assertEquals(self.world.stock.gold, 1, 'nothing staked without a meal for both')
-    run({ a, b }, self.world, self.jobs, TRADE_WAIT_SECONDS)
-    lu.assertNil(self.world.openTrade, 'the offer lapses')
-    lu.assertNotEquals(a.state, 'trading')
+    lu.assertNil(self.world.openTrade, 'no swap spot, no trade')
+    lu.assertFalse(a:offerTrade())
+    run({ a, b }, self.world, self.jobs, 30)
+    lu.assertNil(a.trade)
+    lu.assertNil(b.trade)
+    lu.assertEquals(self.world.stock.gold, 5)
+    -- and no shiny, no trade either
+    self.world:markTradeSpot(5, 2)
+    self.world.stock.gold = 0
+    lu.assertFalse(a:offerTrade())
 end
 
+function TestWilds:testTradeUrgeComesAtRandomAndAnOfferLapses()
+    self.world:markTradeSpot(5, 2)
+    self.world.stock.gold = 2
+    local a, b = tradePair(self)
+    b.tradeAt = 1e9 -- not due for ages
+    lu.assertTrue(a:offerTrade())
+    lu.assertFalse(b:joinTrade(), 'not due')
+    run({ a, b }, self.world, self.jobs, TRADE_WAIT_SECONDS + 15)
+    lu.assertNil(a.trade, 'nobody came: the offer lapses')
+    lu.assertNil(self.world.openTrade)
+    lu.assertEquals(self.world.stock.gold, 2, 'no shiny spent')
+    lu.assertTrue(a:hasTradeChance(), 'and the urge is kept')
+    -- the gap is a half to one and a half TRADE_MEAN_SECONDS
+    local lo, hi = math.huge, 0
+    for i = 1, 200 do
+        a.rng = Rng.new(i * 7919)
+        local gap = a:nextTradeGap()
+        lo, hi = math.min(lo, gap), math.max(hi, gap)
+    end
+    lu.assertTrue(lo >= TRADE_MEAN_SECONDS * 0.5 and hi <= TRADE_MEAN_SECONDS * 1.5)
+end
 
+function TestWilds:testSwapSpotIsBuiltAndTakenAway()
+    local Abilities = require('src.abilities')
+    self.world.wilds = true
+    self.world.stock.logs, self.world.stock.leaves = 1, 1
+    local ab = Abilities.new(self.world, self.jobs)
+    ab:select(ABILITY_TRADE)
+    lu.assertTrue(ab:canAfford(ABILITY_TRADE))
+    lu.assertTrue(ab:use(5, 2))
+    lu.assertEquals(self.world.stock.logs, 0)
+    lu.assertEquals(self.world.stock.leaves, 0)
+    local site = self.world:get(5, 2).site
+    lu.assertEquals(site.kind, SITE_TRADE)
+    lu.assertFalse(ab:canAfford(ABILITY_TRADE))
+    self.world:completeSite(site)
+    lu.assertTrue(self.world:get(5, 2).tradeSpot)
+    lu.assertEquals(#self.world.tradeSpots, 1)
+    lu.assertFalse(self.world:canSite(SITE_BED, 5, 2), 'nothing else goes on it')
+    lu.assertTrue(ab:takeAway(5, 2))
+    lu.assertEquals(#self.world.tradeSpots, 0)
+end
 
 
 
@@ -962,10 +1069,11 @@ function TestPlay:testTradeAndPlayKeepTheirOwnOffers()
     local a, b, c = self.make('Pip', 5, 4, 'pupper'), self.make('Dave', 6, 4, 'cwab'), self.make('Gus', 5, 5)
     lu.assertTrue(c:offerPlay())
     lu.assertNil(self.world.openTrade)
-    a.morale = 30
+    self.world:markTradeSpot(5, 2)
+    a.tradeAt, b.tradeAt = 0, 0
     a.state = 'breaking'
     a:finishAction()
-    lu.assertEquals(a.state, 'trading', 'feeling low with gold about: a trade, as before')
+    lu.assertNotNil(a.trade, 'due a trade, with a swap spot and a shiny: a trade first')
     lu.assertEquals(self.world.openTrade, a.trade)
     lu.assertEquals(self.world.openPlay, c.play)
     lu.assertTrue(b:joinTrade())

@@ -283,6 +283,11 @@ function Kenney:drawBed(px, py, a)
     self:sprite('bed', px, py, 1, 1, 1, 1, a)
 end
 
+function Kenney:drawTradeSpot(px, py, a)
+    if not self:sprite('stash', px, py, 1, 0.75, 1, 0.7, a) then return View.drawTradeSpot(self, px, py, a) end
+    self:drawSwapShiny(px, py, a)
+end
+
 function Kenney:drawWallTile(px, py, a)
     self:sprite('wall', px, py, 1, 1, 1, 1, a)
 end

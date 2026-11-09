@@ -28,6 +28,7 @@ function World.new(w, h, rng)
     self.nextAreaId = 1
     self.storageList = {}
     self.beds = {}
+    self.tradeSpots = {}
     self.floors = {}        -- arcade: living space, one tile each
     self.arcade = false     -- arcade rules: floors are living space, not storage
     self.arcadeNeeds = {}   -- what must be true before an arcade morphi eats, see ARCADE_NEED_ORDER
@@ -465,7 +466,7 @@ function World:randomNearbyPassable(rng, x, y, radius)
         local ny = y + rng:int(-radius, radius)
         if (nx ~= x or ny ~= y) and self:inBounds(nx, ny) and reach[nx][ny] then
             local t = self.tiles[nx][ny]
-            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and t.type ~= TILE_BREAKROOM then
+            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and not t.tradeSpot and t.type ~= TILE_BREAKROOM then
                 return { x = nx, y = ny }
             end
             fallback = fallback or { x = nx, y = ny }
@@ -480,7 +481,7 @@ function World:freeNeighbour(x, y)
     for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 }, { x + 1, y + 1 }, { x - 1, y - 1 }, { x + 1, y - 1 }, { x - 1, y + 1 } }) do
         if self:inBounds(c[1], c[2]) and reach[c[1]][c[2]] then
             local t = self.tiles[c[1]][c[2]]
-            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
+            if #t.items == 0 and t.storage == 0 and not t.binPart and not t.bed and not t.tradeSpot and t.restingBy == nil and t.type ~= TILE_BREAKROOM then return { x = c[1], y = c[2] } end
         end
     end
     return nil
@@ -925,6 +926,42 @@ function World:markBed(x, y)
     return true
 end
 
+-- Swap spots: where trades happen (free play). A built spot is a tile flag
+-- and an entry in tradeSpots.
+function World:markTradeSpot(x, y)
+    local t = self:get(x, y)
+    if not t or t.tradeSpot then return false end
+    t.tradeSpot = true
+    self.tradeSpots[#self.tradeSpots + 1] = { x = x, y = y }
+    self.version = (self.version or 0) + 1
+    return true
+end
+
+function World:unmarkTradeSpot(x, y)
+    local t = self:get(x, y)
+    if not t or not t.tradeSpot then return false end
+    t.tradeSpot = nil
+    for i = #self.tradeSpots, 1, -1 do
+        if self.tradeSpots[i].x == x and self.tradeSpots[i].y == y then table.remove(self.tradeSpots, i) end
+    end
+    self.version = (self.version or 0) + 1
+    return true
+end
+
+-- The nearest swap spot anyone can walk to from the home nest, or nil.
+function World:nearestTradeSpot(fromX, fromY)
+    if #self.tradeSpots == 0 then return nil end
+    local reach = self:reachableFromBreakroom()
+    local best, bestD = nil, math.huge
+    for _, s in ipairs(self.tradeSpots) do
+        if reach[s.x] and reach[s.x][s.y] then
+            local d = Util.manhattan(fromX, fromY, s.x, s.y)
+            if d < bestD then best, bestD = s, d end
+        end
+    end
+    return best
+end
+
 -- Claim somewhere to rest: a free bed first, then a free break room tile,
 -- then a free tile next to the break room. Returns {x, y, bed}.
 function World:claimRestSpot(worker, fromX, fromY)
@@ -1143,12 +1180,12 @@ function World:canSiteTile(kind, x, y)
     if t.site then return false, 'already marked' end
     if kind == SITE_MINE then
         if t.type ~= TILE_STONE and t.type ~= TILE_SNOW then return nil, 'only stone and snow can be mined' end
-    elseif kind == SITE_STORAGE or kind == SITE_BIN or kind == SITE_BED then
-        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.floor then return false, 'needs open ground' end
+    elseif kind == SITE_STORAGE or kind == SITE_BIN or kind == SITE_BED or kind == SITE_TRADE then
+        if not t.passable or t.type == TILE_BREAKROOM or #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.tradeSpot or t.floor then return false, 'needs open ground' end
         if self.arcade and kind == SITE_STORAGE and t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return false, 'goes on the ground' end
     elseif kind == SITE_WALL or kind == SITE_DOOR then
         if t.type ~= TILE_GRASS and t.type ~= TILE_DIRT then return false, 'goes on open ground' end
-        if #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.floor then return false, 'needs open ground' end
+        if #t.items > 0 or t.node or t.storage > 0 or t.binPart or t.bed or t.tradeSpot or t.floor then return false, 'needs open ground' end
     elseif kind == SITE_BRIDGE then
         if t.type ~= TILE_WATER then return false, 'bridges go over water' end
     end
@@ -1233,6 +1270,8 @@ function World:completeSite(site)
         self:markBin(site.x, site.y)
     elseif site.kind == SITE_BED then
         self:markBed(site.x, site.y)
+    elseif site.kind == SITE_TRADE then
+        self:markTradeSpot(site.x, site.y)
     elseif site.kind == SITE_BRIDGE then
         self:setType(site.x, site.y, TILE_BRIDGE)
     end

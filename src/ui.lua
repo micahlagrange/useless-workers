@@ -612,6 +612,16 @@ function UI:iconBed(x, y, s)
     love.graphics.line(x + s * 0.68, y + s * 0.82, x + s * 0.9, y + s * 0.62)
 end
 
+-- SWAP: a leaf mat with a shiny on it.
+function UI:iconSwap(x, y, s)
+    love.graphics.setColor(0.42, 0.66, 0.33)
+    love.graphics.ellipse('fill', x + s * 0.5, y + s * 0.62, s * 0.44, s * 0.28)
+    love.graphics.setColor(0.98, 0.82, 0.3)
+    love.graphics.polygon('fill', x + s * 0.5, y + s * 0.22, x + s * 0.7, y + s * 0.5, x + s * 0.5, y + s * 0.78, x + s * 0.3, y + s * 0.5)
+    love.graphics.setColor(1, 0.97, 0.8)
+    love.graphics.polygon('fill', x + s * 0.5, y + s * 0.32, x + s * 0.58, y + s * 0.44, x + s * 0.5, y + s * 0.52, x + s * 0.42, y + s * 0.44)
+end
+
 -- DIG: a little round spade in a pile of dirt.
 function UI:iconSpade(x, y, s)
     love.graphics.setColor(0.72, 0.55, 0.36)
@@ -1074,6 +1084,7 @@ function UI:drawToolIcon(tool, x, y, size, affordable)
     elseif tool == ABILITY_STORAGE then self:iconFloor(x, y, size)
     elseif tool == ABILITY_BIN then self:iconBin(x, y, size)
     elseif tool == ABILITY_BED then self:iconBed(x, y, size)
+    elseif tool == ABILITY_TRADE then self:iconSwap(x, y, size)
     elseif tool == ABILITY_WALL then self:iconWall(x, y, size)
     elseif tool == ABILITY_DOOR then self:iconDoor(x, y, size)
     elseif tool == ABILITY_BRIDGE then self:iconBridge(x, y, size)

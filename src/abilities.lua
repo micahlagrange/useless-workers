@@ -27,6 +27,7 @@ function Abilities:costText(tool)
     local w = self.world
     if tool == ABILITY_BIN then return costWords(costOf(w, 'bin')) .. ', 4 items' end
     if tool == ABILITY_BED then return costWords(costOf(w, 'bed')) end
+    if tool == ABILITY_TRADE then return costWords(costOf(w, 'trade')) end
     if tool == ABILITY_WALL then return costWords(costOf(w, 'wall')) end
     if tool == ABILITY_DOOR then return costWords(costOf(w, 'door')) end
     if tool == ABILITY_BRIDGE then return costWords(costOf(w, 'bridge')) .. '/tile' end
@@ -38,6 +39,7 @@ function Abilities:canAfford(tool)
     if tool == ABILITY_STORAGE then return self.world:canAfford(costOf(self.world, 'storage')) end
     if tool == ABILITY_BIN then return self.world:canAfford(costOf(self.world, 'bin')) end
     if tool == ABILITY_BED then return self.world:canAfford(costOf(self.world, 'bed')) end
+    if tool == ABILITY_TRADE then return self.world:canAfford(costOf(self.world, 'trade')) end
     if tool == ABILITY_WALL then return self.world:canAfford(costOf(self.world, 'wall')) end
     if tool == ABILITY_DOOR then return self.world:canAfford(costOf(self.world, 'door')) end
     if tool == ABILITY_BRIDGE then return self.world:canAfford(costOf(self.world, 'bridge')) end
@@ -48,7 +50,7 @@ local function stoneOrSnow(t)
     return t and (t.type == TILE_STONE or t.type == TILE_SNOW)
 end
 
-local BUILD_KINDS = { [SITE_STORAGE] = true, [SITE_BIN] = true, [SITE_BED] = true, [SITE_BRIDGE] = true, [SITE_WALL] = true, [SITE_DOOR] = true }
+local BUILD_KINDS = { [SITE_STORAGE] = true, [SITE_BIN] = true, [SITE_BED] = true, [SITE_TRADE] = true, [SITE_BRIDGE] = true, [SITE_WALL] = true, [SITE_DOOR] = true }
 
 -- Take a designation back. Logs come back unless someone has started on it.
 function Abilities:cancelSite(site)
@@ -299,7 +301,7 @@ function Abilities:bridgeTiles(tiles)
     return laid
 end
 
--- Take away a finished stash, basket or nest at (x, y) (a basket's left
+-- Take away a finished stash, basket, nest or swap spot at (x, y) (a basket's left
 -- tile). Nothing comes back. Refused while it holds food or someone naps there.
 function Abilities:takeAway(x, y)
     local world = self.world
@@ -329,6 +331,14 @@ function Abilities:takeAway(x, y)
         end
         world.version = world.version + 1
         self:effect('unmark', { count = 1, kind = SITE_BED, taken = true })
+        return true
+    end
+    if t.tradeSpot then
+        if world.openTrade and world.openTrade.spot and world.openTrade.spot.x == x and world.openTrade.spot.y == y then
+            return false, 'Someone is waiting there to swap'
+        end
+        world:unmarkTradeSpot(x, y)
+        self:effect('unmark', { count = 1, kind = SITE_TRADE, taken = true })
         return true
     end
     return false

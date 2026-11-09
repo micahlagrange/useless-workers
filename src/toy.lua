@@ -312,6 +312,13 @@ I.shiny = function()
     line(1.6, 5, 12, 27, 12) line(1.6, 11, 12, 16, 29, 21, 12, 16, 3)
 end
 I.gold = I.shiny
+-- a swap spot: a leaf mat with a shiny on it
+I.swap = function()
+    ell('6DBE4B', 16, 22, 13, 7, 2.5)
+    poly('9EE3F5', { 16, 4, 24, 12, 16, 24, 8, 12 })
+    line(1.6, 8, 12, 24, 12)
+end
+I.trade = I.swap
 I.food = function()
     circ('E2557A', 11, 19, 7, 2.3) circ('E2557A', 21, 20, 7, 2.3)
     line(2.3, 16, 12, 18, 7, 22, 4)

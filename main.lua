@@ -211,8 +211,9 @@ local function onWorkerEvent(worker, name, data)
         local t = worker:tile()
         Audio.playSFX('hire')
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
-        announce(worker.name .. ' and ' .. data.partner.name .. ' swapped snacks at the home nest'
-            .. (data.gifts > 0 and (', ' .. data.gifts .. ' favourite treat' .. (data.gifts == 1 and '' or 's') .. ' sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' traded a shiny at the swap spot'
+            .. ((data.gifts or 0) > 0 and (', ' .. data.gifts .. ' favourite treat' .. (data.gifts == 1 and '' or 's') .. ' sweetening it')
+                or ((data.meals or 0) > 0 and ' over a snack' or '')) .. '.', { x = t.x, y = t.y }, 'news')
     elseif name == 'play' and game.mode == 'free' then
         -- fun together: a talk or a dance had at the nest, both cheered up
         local t = worker:tile()
