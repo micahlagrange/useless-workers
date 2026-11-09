@@ -69,7 +69,8 @@ function Bench.runOne(seed, strategy, years, difficulty)
         row.starved = (c.starved or 0) + (c.died or 0) - (counts.starved or 0) - (counts.died or 0)
         row.left = (c.left or 0) - (counts.left or 0)
         row.trades = (c.trade or 0) - (counts.trade or 0)
-        row.fun = 2 * ((c.play or 0) - (counts.play or 0)) -- two morphis have each play
+        -- two morphis have each play, and each trade (a trade is fun too)
+        row.fun = 2 * ((c.play or 0) - (counts.play or 0) + (c.trade or 0) - (counts.trade or 0))
         row.hardships = (c.hardship or 0) - (counts.hardship or 0)
         for k, v in pairs(c) do counts[k] = v end
         for i = seenEvents + 1, #game.stats.events do

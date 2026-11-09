@@ -58,6 +58,14 @@ function Player.placeNests(game)
 end
 Player.placeBeds = Player.placeNests
 
+-- One swap spot by the home nest, once there is a shiny to trade.
+function Player.placeSwapSpot(game)
+    local w = game.world
+    if #(w.tradeSpots or {}) + #w:sitesOfKind(SITE_TRADE) > 0 or (w.stock.gold or 0) < 1 then return 0 end
+    if not w:canAfford(costOf(w, 'trade')) then return 0 end
+    return placeNearCamp(game, ABILITY_TRADE, SITE_TRADE, 1)
+end
+
 -- Job management, the way a person would do it from the job screen (free
 -- play only; arcade morphis have one fixed job). Each look: work waiting on
 -- the queue that somebody could reach is counted by job; a job with work
@@ -202,6 +210,7 @@ Player.act = {
         Player.clearRoutes(game, 4)
         Player.digForShinies(game)
         Player.placeBeds(game)
+        Player.placeSwapSpot(game)
         if Player.freeStorage(game) < 4 then Player.placeStorage(game, 3) end
         if game.world:canAfford(costOf(game.world, 'bin')) and (game.world.stock.grass or 0) >= 4 then Player.placeStorage(game, 1, true) end
     end,

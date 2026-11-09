@@ -284,6 +284,7 @@ function View:drawGhost(kind, tx, ty, ok)
     local a = ok and 0.65 or 0.35
     if kind == SITE_BIN then self:drawBin(px, py, a)
     elseif kind == SITE_BED then self:drawBed(px, py, a)
+    elseif kind == SITE_TRADE then self:drawTradeSpot(px, py, a)
     elseif kind == SITE_DOOR then self:drawDoorTile(px, py, a)
     elseif kind == SITE_WALL then self:drawWallTile(px, py, a)
     elseif kind == SITE_STORAGE then self:drawFloorSpot(px, py, a)
@@ -311,6 +312,28 @@ function View:drawBed(px, py, a)
     love.graphics.circle('fill', px + 8, py + 8, 4.3)
     love.graphics.setColor(0.99, 0.95, 0.8, a)
     love.graphics.circle('fill', px + 8.6, py + 8.6, 2.8)
+end
+
+-- A swap spot from above: a round leaf mat with a shiny in the middle.
+function View:drawTradeSpot(px, py, a)
+    love.graphics.setColor(0, 0, 0, 0.15 * a)
+    love.graphics.circle('fill', px + 8.5, py + 8.8, 7)
+    love.graphics.setColor(0.42, 0.66, 0.33, a)
+    love.graphics.circle('fill', px + 8, py + 8, 7)
+    love.graphics.setColor(0.55, 0.78, 0.42, a)
+    for i = 0, 5 do
+        local t = i / 6 * math.pi * 2
+        love.graphics.ellipse('fill', px + 8 + math.cos(t) * 4, py + 8 + math.sin(t) * 4, 2.2, 1.4)
+    end
+    self:drawSwapShiny(px, py, a)
+end
+
+-- The shiny on a swap spot (every look draws it the same).
+function View:drawSwapShiny(px, py, a)
+    love.graphics.setColor(0.98, 0.82, 0.3, a)
+    love.graphics.polygon('fill', px + 8, py + 4.5, px + 11, py + 8, px + 8, py + 11.5, px + 5, py + 8)
+    love.graphics.setColor(1, 0.97, 0.8, a)
+    love.graphics.polygon('fill', px + 8, py + 5.8, px + 9.3, py + 7.5, px + 8, py + 8.2, px + 6.8, py + 7.5)
 end
 
 -- A wall from above: dark timber courses with the mortar showing, lit
@@ -385,6 +408,9 @@ function View:drawBeds()
     for _, b in ipairs(self.world.beds) do
         self:drawBed((b.x - 1) * TILE_SIZE, (b.y - 1) * TILE_SIZE, 1)
     end
+    for _, s in ipairs(self.world.tradeSpots or {}) do
+        self:drawTradeSpot((s.x - 1) * TILE_SIZE, (s.y - 1) * TILE_SIZE, 1)
+    end
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -415,6 +441,7 @@ function View:drawSites(clock)
                 if self.world.arcade then self:drawFloorTile(px, py, a) else self:drawFloorSpot(px, py, a) end
             elseif site.kind == SITE_BIN then self:drawBin(px, py, a)
             elseif site.kind == SITE_BED then self:drawBed(px, py, a)
+            elseif site.kind == SITE_TRADE then self:drawTradeSpot(px, py, a)
             elseif site.kind == SITE_WALL then self:drawWallTile(px, py, a)
             elseif site.kind == SITE_DOOR then self:drawDoorTile(px, py, a)
             elseif site.kind == SITE_BRIDGE then self:drawBridgePlanks(px, py, a)

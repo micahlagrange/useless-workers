@@ -35,7 +35,7 @@ Rogue.GROUND_GAIN = { water = 1.35, grass = 1.15, dirt = 1.2, stone = 1.05, snow
 Rogue.GLYPH = {
     bush = '"', tree = '\226\153\163', stump = '\226\136\153',  -- U+2663 club, U+2219 bullet operator
     ore = '$', food = '%', logs = '=', gold = '$', grass = 'w', cropped = ',', leaves = '&', critter = 'r',
-    floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', wall = 'O', door = '+', floor = '.', bridge = '=',
+    floorSpot = '_', binLeft = '[', binRight = ']', bed = 'B', swap = 'x', wall = 'O', door = '+', floor = '.', bridge = '=',
     morphi = '@', fire = '*',
     axe = '/', pickaxe = '\\', saw = '-', log = '=',
 }
@@ -185,6 +185,10 @@ end
 
 function Rogue:drawBed(px, py, a)
     self:glyph(self.GLYPH.bed, px, py, 0.93, 0.9, 0.8, a)
+end
+
+function Rogue:drawTradeSpot(px, py, a)
+    self:glyph(self.GLYPH.swap, px, py, 0.98, 0.82, 0.3, a)
 end
 
 function Rogue:drawWallTile(px, py, a)

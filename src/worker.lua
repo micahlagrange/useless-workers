@@ -618,7 +618,26 @@ function Worker:dropJob()
     self.goal = nil
 end
 
+-- A tile next to (x, y) to stand on and talk: a free one if there is one
+-- (not the pantry, a bed or somebody's rest spot), else any open one.
+local function besideSpot(world, x, y)
+    local spot = world:freeNeighbour(x, y)
+    if spot then return spot end
+    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
+        if world:isPassable(c[1], c[2]) then return { x = c[1], y = c[2] } end
+    end
+    return nil
+end
+
 -- Trades ------------------------------------------------------------------
+-- A fun task, free play only: about every TRADE_MEAN_SECONDS a morphi wants
+-- to trade, whatever its mood. At a natural break, with a swap spot it can
+-- reach and a shiny in the stockpile, it walks to the spot and waits; the
+-- next free morphi that wants to (or soon will) walks over and joins. The
+-- shiny is spent then and the trade always goes through, unless one of them
+-- leaves the meadow. A minute of chat, a meal halfway if one is stored, and
+-- happy thoughts for both: more for a meal, more again for a gift. The one
+-- who offered (trade.a) runs it.
 
 function Worker:atCamp()
     local br = self.world.breakroom
@@ -627,67 +646,151 @@ function Worker:atCamp()
     return math.abs(t.x - br.x) <= 3 and math.abs(t.y - br.y) <= 3
 end
 
--- Offer a trade and wait at camp for somebody to take it up.
+function Worker:nextTradeGap()
+    local r = self.rng and self.rng:random() or 0.5
+    return TRADE_MEAN_SECONDS * (0.5 + r)
+end
+
+-- Wants to trade (early: seconds ahead of its time it may still say yes).
+function Worker:hasTradeChance(early)
+    if not self.wilds then return false end
+    if not self.tradeAt then self.tradeAt = self.clock + self:nextTradeGap() end
+    return self.clock >= self.tradeAt - (early or 0)
+end
+
+-- Free to trade: here, fed enough to last the walk, hands empty, and not
+-- busy with another trade or a play.
+function Worker:freeToTrade()
+    return self.wilds and self:isWorking() and self.trade == nil and self.play == nil
+        and self.hunger >= PLAY_MIN_HUNGER and not self:carrying()
+end
+
+function Worker:isTrading()
+    return self.trade ~= nil and (self.state == 'trading' or (self.state == 'walking' and self.goal == 'trade'))
+end
+
+-- Walk to (x, y) for the trade, or stand there already.
+local function goTrade(w, x, y)
+    local t = w:tile()
+    w.moving = false
+    if t.x == x and t.y == y then
+        w.state = 'trading'
+        return true
+    end
+    local path = w:pathTo(x, y)
+    if not path then return false end
+    w:setPath(path, 'trade')
+    return true
+end
+
+-- Offer a trade: go to the nearest swap spot and wait there for somebody.
 function Worker:offerTrade()
-    if self.world.openTrade or self.world.stock.gold < 1 then return false end
-    self.trade = { a = self, timer = TRADE_WAIT_SECONDS }
-    self.world.openTrade = self.trade
-    self.state = 'trading'
+    local world = self.world
+    if world.openTrade or (world.stock.gold or 0) < 1 then return false end
+    if not (self:hasTradeChance() and self:freeToTrade()) then return false end
+    if self.tradeRetryAt and self.clock < self.tradeRetryAt then return false end
+    local t = self:tile()
+    local spot = world:nearestTradeSpot(t.x, t.y)
+    if not spot then return false end
+    if self.targetSite and self.targetSite.claimedBy == self then self.targetSite.working = nil end
+    self:dropJob()
+    local tr = { a = self, spot = spot, wait = TRADE_WAIT_SECONDS }
+    self.trade = tr
+    if not goTrade(self, spot.x, spot.y) then
+        self.trade = nil
+        self.state = 'idle'
+        self.tradeRetryAt = self.clock + TRADE_RETRY_SECONDS
+        return false
+    end
+    world.openTrade = tr
+    self.idleSince = nil
     self:say('swap?', 3)
     return true
 end
 
 -- A stored meal for this morphi, claimed: its loved food if there is any (a
--- gift, as far as the trade goes), else anything it will eat.
-local function claimMeal(world, w)
-    local br = world.breakroom
-    local item = world:nearestStoredItem(ITEM_FOOD, br.x, br.y, w.diet)
+-- gift, as far as the trade goes), else anything it will eat, else none.
+local function claimMeal(world, w, spot)
+    local item = world:nearestStoredItem(ITEM_FOOD, spot.x, spot.y, w.diet)
     local gift = item ~= nil
-    item = item or world:nearestStoredItem(ITEM_FOOD, br.x, br.y, function(food) return w:willEat(food) end)
+    item = item or world:nearestStoredItem(ITEM_FOOD, spot.x, spot.y, function(food) return w:willEat(food) end)
     if item then item.claimedBy = w end
-    return item, gift
+    return item, gift and item ~= nil
 end
 
--- Take up the trade waiting at camp: only with the gold to stake and a meal
--- for each of them in storage.
+-- Take up the trade waiting at the swap spot: the shiny is spent now.
 function Worker:joinTrade()
-    local tr = self.world.openTrade
-    if not tr or tr.a == self or not tr.a.alive or tr.b or self.world.stock.gold < 1 then return false end
-    local mealA, giftA = claimMeal(self.world, tr.a)
-    local mealB, giftB = claimMeal(self.world, self)
-    if not (mealA and mealB) then
-        if mealA then mealA.claimedBy = nil end
-        if mealB then mealB.claimedBy = nil end
+    local world = self.world
+    local tr = world.openTrade
+    if not tr or tr.a == self or tr.b or not tr.a:isWorking() or (world.stock.gold or 0) < 1 then return false end
+    if not (self:hasTradeChance(TRADE_JOIN_EARLY_SECONDS) and self:freeToTrade()) then return false end
+    local here = self:tile()
+    if Util.manhattan(tr.spot.x, tr.spot.y, here.x, here.y) > TRADE_JOIN_TILES then return false end
+    local spot = besideSpot(world, tr.spot.x, tr.spot.y)
+    if not spot then return false end
+    if self.targetSite and self.targetSite.claimedBy == self then self.targetSite.working = nil end
+    self:dropJob()
+    self.trade = tr
+    if not goTrade(self, spot.x, spot.y) then
+        self.trade = nil
+        self.state = 'idle'
         return false
     end
-    self.world.openTrade = nil
-    self.world.stock.gold = self.world.stock.gold - 1
-    self:dropJob()
-    tr.b, tr.timer, tr.chat = self, TRADE_SECONDS, 0
+    world.openTrade = nil
+    world.stock.gold = world.stock.gold - 1
+    local mealA, giftA = claimMeal(world, tr.a, tr.spot)
+    local mealB, giftB = claimMeal(world, self, tr.spot)
+    tr.b, tr.timer, tr.chat, tr.lines = self, TRADE_SECONDS, 0, 0
+    tr.walk = TRADE_WALK_SECONDS
     tr.meals = { [tr.a] = mealA, [self] = mealB }
     tr.gifts = (giftA and 1 or 0) + (giftB and 1 or 0)
-    tr.lines = 0
-    self.trade = tr
-    self.state = 'trading'
-    self.moving = false
-    -- turn to face each other
-    self:face(tr.a.x - self.x, 0)
-    tr.a:face(self.x - tr.a.x, 0)
+    tr.mealsEaten, tr.giftsEaten = 0, 0
+    for _, w in ipairs({ tr.a, self }) do
+        w.tradeAt = w.clock + w:nextTradeGap()
+        w.idleSince = nil
+    end
     self:say('swap!', 2)
     return true
 end
 
--- Run the trade (called on the one who offered it): wait for a taker, then
--- chat, eat together halfway, and close the deal.
+-- Still in it: here, and trading (or walking over to).
+local function stillTrading(w, tr)
+    return w.alive and w.state ~= 'quitting' and w.trade == tr
+        and (w.state == 'trading' or (w.state == 'walking' and w.goal == 'trade'))
+end
+
+-- Both there (or the walk took too long): face each other and begin.
+local function startTrade(tr)
+    tr.started = true
+    for _, w in ipairs({ tr.a, tr.b }) do
+        if w.state == 'walking' then
+            w.path, w.goal, w.moving = nil, nil, false
+            w.state = 'trading'
+        end
+    end
+    tr.b:face(tr.a.x - tr.b.x, 0)
+    tr.a:face(tr.b.x - tr.a.x, 0)
+end
+
+-- Run the trade (called on the one who offered it): wait for a taker, wait
+-- for both to get there, then chat, eat halfway, and close the deal.
 function Worker:updateTrade(dt)
     local tr = self.trade
-    tr.timer = tr.timer - dt
-    if not tr.b then
-        if tr.timer <= 0 then self:endTrade(false) end
+    local a, b = tr.a, tr.b
+    if not stillTrading(a, tr) then self:endTrade(false) return end
+    if not b then
+        if a.state == 'trading' then
+            tr.wait = tr.wait - dt
+            if tr.wait <= 0 then self:endTrade(false) end
+        end
         return
     end
-    local a, b = tr.a, tr.b
-    if not (a.alive and b.alive) then self:endTrade(false) return end
+    if not stillTrading(b, tr) then self:endTrade(false) return end
+    if not tr.started then
+        tr.walk = tr.walk - dt
+        if (a.state == 'trading' and b.state == 'trading') or tr.walk <= 0 then startTrade(tr) else return end
+    end
+    tr.timer = tr.timer - dt
     local elapsed = TRADE_SECONDS - tr.timer
     -- a line every few seconds, turn about, for anyone watching
     tr.chat = tr.chat - dt
@@ -696,26 +799,37 @@ function Worker:updateTrade(dt)
         local speaker = (tr.lines % 2 == 1) and a or b
         local i = ((tr.lines - 1) + (a.id or 0)) % #TRADE_CHAT + 1
         speaker:say(TRADE_CHAT[i], 2.6)
-        tr.chat = 3.4
+        tr.chat = tr.chat + TRADE_LINE_SECONDS
     end
-    -- halfway: they eat together
+    -- halfway: they eat together, if a meal was there for them
     if not tr.ate and elapsed >= TRADE_SECONDS / 2 then
         tr.ate = true
+        local any = false
         for _, w in ipairs({ a, b }) do
             local item = tr.meals[w]
             if item and self.world:tileHasItem(item.x, item.y, item) then
                 self.world:takeItem(item.x, item.y, item)
                 w:mealOf(item.food)
+                any = true
+                if item.food == w.diet then tr.giftsEaten = tr.giftsEaten + 1 else tr.mealsEaten = tr.mealsEaten + 1 end
             end
         end
-        a:say(tr.gifts > 0 and 'brought your fave!' or 'snack time', 2.4)
-        tr.chat = 3
+        if any then
+            a:say(tr.giftsEaten > 0 and 'brought your fave!' or 'snack time', 2.4)
+            tr.chat = math.max(tr.chat, 3)
+        end
     end
     if tr.timer <= 0 then self:endTrade(true) end
 end
 
--- A deal: happy thoughts for both, more for every gift. Otherwise the gold
--- goes back and the meals are let go.
+-- What a deal is worth to each of them.
+function Worker.tradeLift(tr)
+    return MORALE_TRADE_BASE + MORALE_TRADE_MEAL * (tr.mealsEaten or 0) + MORALE_GIFT * (tr.giftsEaten or 0)
+end
+
+-- A deal: happy thoughts for both, more for every meal and more for every
+-- gift. Otherwise (somebody left, or nobody came) the shiny goes back and
+-- the meals are let go.
 function Worker:endTrade(deal)
     local tr = self.trade
     if not tr then return end
@@ -726,15 +840,26 @@ function Worker:endTrade(deal)
     end
     local who = { tr.a }
     if tr.b then who[2] = tr.b end
+    local lift = Worker.tradeLift(tr)
     for _, w in ipairs(who) do
-        if deal then
-            w.morale = math.min(MORALE_MAX, w.morale + MORALE_TRADE_BASE + MORALE_GIFT * tr.gifts)
-            w:say('yay!', 2.5)
+        if w.trade == tr then
+            local wasIn = stillTrading(w, tr)
+            if deal then
+                w.morale = math.min(MORALE_MAX, w.morale + lift)
+                w:say('yay!', 2.5)
+            elseif tr.b and wasIn then
+                w:say('oh. bye', 1.5)
+            end
+            w.trade = nil
+            w.idleSince = nil
+            if w.state == 'trading' or (w.state == 'walking' and w.goal == 'trade') then
+                w.state, w.goal, w.path, w.moving = 'idle', nil, nil, false
+                w.decideTimer = 0
+            end
         end
-        w.trade = nil
-        if w.state == 'trading' then w.state = 'idle'; w.decideTimer = 0 end
     end
-    if tr.b and deal then tr.a:emit('trade', { partner = tr.b, gifts = tr.gifts }) end
+    if not tr.b then tr.a.tradeRetryAt = tr.a.clock + TRADE_RETRY_SECONDS end
+    if tr.b and deal then tr.a:emit('trade', { partner = tr.b, gifts = tr.giftsEaten, meals = tr.mealsEaten }) end
 end
 
 -- Play --------------------------------------------------------------------
@@ -797,16 +922,6 @@ function Worker:joinPlay()
     return true
 end
 
--- A tile next to (x, y) to stand on and talk: a free one if there is one
--- (not the pantry, a bed or somebody's rest spot), else any open one.
-local function besideSpot(world, x, y)
-    local spot = world:freeNeighbour(x, y)
-    if spot then return spot end
-    for _, c in ipairs({ { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } }) do
-        if world:isPassable(c[1], c[2]) then return { x = c[1], y = c[2] } end
-    end
-    return nil
-end
 
 -- a and b play. Spends this season's chance for both, unless dev (the
 -- tester's PLAY NOW) says otherwise. A talk is picked with the game's rng,
@@ -969,7 +1084,7 @@ end
 -- rock or otherwise cut off: dig to it), 'taken' (what there is, others
 -- are already doing) or 'none' (no work of that kind
 -- anywhere: nothing ripe, nothing marked). at is the work out of reach.
-local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'nestwork' }
+local SITE_JOB = { mine = 'mine', storage = 'build', bin = 'build', bridge = 'build', wall = 'build', door = 'build', bed = 'nestwork', trade = 'build' }
 local NODE_JOB = { bush = 'forage', tree = 'gather', ore = 'mine', grass = 'gather', leaves = 'gather', critter = 'hunt' }
 
 function Worker:whyNoWork(job, slot)
@@ -1338,8 +1453,8 @@ end
 
 function Worker:decide()
     if self.stage == 'baby' then return self:decideBaby() end
-    -- 0. Somebody at camp wants to trade and I could use cheering up
-    if self.wilds and self.morale < MORALE_MAX - 10 and self.world.openTrade and self:atCamp() and self:joinTrade() then return end
+    -- 0. Somebody waits at the swap spot, and I would like a trade too
+    if self.wilds and self.world.openTrade and self:joinTrade() then return end
     -- 1. Survival beats output. In arcade: the one meal, once the level's
     --    needs are met.
     if self.hunger < HUNGER_EAT_THRESHOLD or (self:wantsMeal() and self.world:arcadeReady()) then
@@ -1359,6 +1474,10 @@ function Worker:decide()
         end
         self.decideTimer = DECIDE_INTERVAL * 4
         return
+    end
+    -- 3a. Due a trade, between tasks: join one, or go to the swap spot
+    if self.wilds and self:hasTradeChance() and self:freeToTrade() then
+        if self:joinTrade() or self:offerTrade() then return end
     end
     -- 3b. Due for some fun, between tasks and fed: play with whoever waits at
     --     the home nest, or go there and offer.
@@ -1648,7 +1767,8 @@ function Worker:deliverHere()
     self.state = 'idle'
     self.decideTimer = 0
     if self.targetArea and self:continueArea() then return end
-    -- a natural break: play, if somebody is waiting or I am at the nest and due
+    -- a natural break: a trade or a play, if somebody waits or I am due
+    if self.wilds and (self:joinTrade() or self:offerTrade()) then return end
     if self.wilds and (self:joinPlay() or self:offerPlay()) then return end
     if cargo.kind == CARGO_FOOD then self:stepOff() end
 end
@@ -1705,6 +1825,11 @@ function Worker:arrive()
         end
     elseif self.goal == 'deliver' then
         self:deliverHere()
+    elseif self.goal == 'trade' then
+        -- at the swap spot (or beside it): wait, or begin
+        self.goal = nil
+        self.state = self.trade and 'trading' or 'idle'
+        if not self.trade then self.decideTimer = 0 end
     elseif self.goal == 'play' then
         -- walked over to play: the talk starts
         self.goal = nil
@@ -1732,8 +1857,8 @@ function Worker:finishAction()
         self.morale = math.min(MORALE_MAX, self.morale + (inBed and MORALE_BED_BONUS or MORALE_BREAK_BONUS))
         self.world:releaseRestSpot(self)
         self.restSpot = nil
-        -- feeling low with gold in the pile: talk somebody into a trade
-        if self.wilds and self.morale < TRADE_BELOW and (self:joinTrade() or self:offerTrade()) then
+        -- rested, and due a trade: join one or offer one at the swap spot
+        if self.wilds and (self:joinTrade() or self:offerTrade()) then
             self:emit('break', inBed and 'bed' or 'floor')
             return
         end
@@ -1929,17 +2054,16 @@ function Worker:update(dt, clock)
     elseif self.state == 'eating' or self.state == 'working' or self.state == 'breaking' then
         self.stateTimer = self.stateTimer - dt
         if self.stateTimer <= 0 then self:finishAction() end
-    elseif self.state == 'trading' then
-        -- the one who offered runs the trade for both
-        if self.trade and self.trade.a == self then self:updateTrade(dt) end
     end
+    -- the one who offered a trade runs it for both, walking there or not
+    if self.trade and self.trade.a == self then self:updateTrade(dt) end
     -- the one who offered a play runs it for both, whatever it is doing
     if self.play and self.play.a == self then self:updatePlay(dt) end
 end
 
 -- What things are called on screen (the keys stay as they were).
 local CARGO_WORDS = { food = 'food', logs = 'sticks', gold = 'a shiny', grass = 'grass', leaves = 'leaves' }
-local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
+local SITE_WORDS = { storage = 'a stash', bin = 'a basket', bed = 'a nest', trade = 'a swap spot', bridge = 'a bridge', wall = 'a wall', door = 'a door' }
 local function siteWord(kind) return SITE_WORDS[kind] or kind end
 
 -- What the DETAILS screen shows for this morphi right now: a table with
@@ -1963,7 +2087,7 @@ function Worker:details()
         for _, l in ipairs(pl.said) do add(l.text, l.who) end
     elseif self.trade and self.trade.b then
         local tr = self.trade
-        add('Swapping snacks with ' .. (tr.a == self and tr.b or tr.a).name .. ((tr.gifts or 0) > 0 and (' (' .. tr.gifts .. ' favourite)') or ''))
+        add('Trading at the swap spot with ' .. (tr.a == self and tr.b or tr.a).name .. ((tr.gifts or 0) > 0 and (' (' .. tr.gifts .. ' favourite)') or ''))
     end
     if #lines == 0 then add('Nothing more to tell: ' .. self:describeState():lower() .. '.') end
     return { title = self.name, state = self:describeState(), lines = lines }
@@ -1973,10 +2097,12 @@ function Worker:describeState()
     if self.state == 'quitting' then return 'Toddling off' end
     if self.arcade and self.state == 'idle' and self:wantsMeal() and not self.world:arcadeReady() then return 'Waiting to eat' end
     if self.state == 'sulking' then return 'Grumbling' end
-    if self.state == 'trading' and self.trade then
+    if self:isTrading() then
         local tr = self.trade
-        if not tr.b then return 'Waiting at the home nest to swap' end
-        return 'Swapping snacks with ' .. (tr.a == self and tr.b or tr.a).name
+        if not tr.b then return self.state == 'walking' and 'Off to the swap spot' or 'Waiting at the swap spot' end
+        local other = (tr.a == self and tr.b or tr.a).name
+        if self.state == 'walking' then return 'Going over to trade with ' .. other end
+        return 'Trading with ' .. other
     end
     if self.play and self:isPlaying() then
         local pl = self.play

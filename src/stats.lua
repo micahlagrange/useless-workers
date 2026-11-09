@@ -20,7 +20,7 @@ Stats.NODE_CHARS = { bush = 'b', tree = 't', ore = 'g', grass = 'v', leaves = 'l
 Stats.LEGEND = {
     ['~'] = 'water', ['.'] = 'grass', [','] = 'dirt', ['#'] = 'clay', ['*'] = 'hard dirt',
     ['='] = 'bridge', C = 'camp', W = 'wall', D = 'door', b = 'bush (ripe B)',
-    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', r = 'critter', s = 'storage', n = 'bin', z = 'bed', ['+'] = 'site being built',
+    t = 'tree (shaken bare T)', g = 'shiny', v = 'grass (cropped V)', l = 'leaf pile', r = 'critter', s = 'storage', n = 'bin', z = 'bed', x = 'swap spot', ['+'] = 'site being built',
 }
 
 local function tileChar(t)
@@ -33,6 +33,7 @@ local function tileChar(t)
     end
     if t.site and not t.site.done then return '+' end
     if t.bed then return 'z' end
+    if t.tradeSpot then return 'x' end
     if (t.storage or 0) > 1 then return 'n' end
     if (t.storage or 0) > 0 then return 's' end
     return Stats.TILE_CHARS[t.type] or '?'
@@ -64,7 +65,7 @@ Stats.MILESTONES = {
     { id = 'logs100', weight = 5, text = 'A hundred sticks gathered.', test = function(s, r) return r.logs >= 100 end },
     { id = 'food200', weight = 5, text = 'Two hundred snacks gathered.', test = function(s, r) return r.food >= 200 end },
     { id = 'food1000', weight = 8, text = 'A thousand snacks gathered. Nobody counted the crumbs.', test = function(s, r) return r.food >= 1000 end },
-    { id = 'trades10', weight = 4, text = 'Ten snack swaps at the home nest.', test = function(s, r) return s.counts.trade >= 10 end },
+    { id = 'trades10', weight = 4, text = 'Ten trades at the swap spot.', test = function(s, r) return s.counts.trade >= 10 end },
     { id = 'arrivals10', weight = 4, text = 'Ten little blobs wandered in to join the bunch.', test = function(s, r) return s.counts.arrived >= 10 end },
 }
 
@@ -122,7 +123,8 @@ local function bucket(w)
     -- playing together is a break of the fun kind, not standing about; but
     -- waiting at the nest for somebody to play with is
     if s == 'playing' and w.play and not w.play.b then return 'idle' end
-    if s == 'breaking' or s == 'trading' or s == 'playing' or (s == 'walking' and (g == 'break' or g == 'play')) then return 'rest' end
+    -- a trade is fun from the walk to the spot to the last line
+    if s == 'breaking' or s == 'trading' or s == 'playing' or (s == 'walking' and (g == 'break' or g == 'play' or g == 'trade')) then return 'rest' end
     if s == 'sulking' then return 'sulk' end
     return 'idle'
 end
