@@ -141,6 +141,7 @@ local function seasonChange()
     g.scoring.quarterTimer = 0.05
     for _ = 1, 5 do
         love.update(0.1)
+        if H.state() == 'huntpick' then love.keypressed('escape') end
         if H.state() == 'report' then break end
     end
     lu.assertEquals(H.state(), 'report')

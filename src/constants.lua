@@ -215,13 +215,14 @@ ABILITY_BED     = 'bed'       -- place a bed site; a bed is a quicker, better br
 ABILITY_BRIDGE  = 'bridge'    -- drag a line over water, any idle morphi builds it tile by tile
 ABILITY_WALL    = 'wall'      -- place a wall site (costs a log); built, it blocks the way
 ABILITY_DOOR    = 'door'      -- place a door site (costs a log); walkable, counts as wall for enclosure
+ABILITY_TRADE   = 'trade'     -- place a swap spot (free play); trades happen only there
 -- each mode has its own tool bar; main sets ABILITY_ORDER when a game starts
-TOOLS_SURVIVAL  = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_BRIDGE }
+TOOLS_SURVIVAL  = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_TRADE, ABILITY_BRIDGE }
 TOOLS_ARCADE    = { ABILITY_SELECT, ABILITY_MINE, ABILITY_STORAGE, ABILITY_BIN, ABILITY_WALL, ABILITY_DOOR, ABILITY_BRIDGE }
 ABILITY_ORDER   = TOOLS_ARCADE
 -- the words on the tool buttons (the little-blob meadow voice: a STASH is a
 -- leaf mat for one thing, a BASKET holds four, a NEST is where they nap)
-ABILITY_LABEL   = { select = 'SELECT', mine = 'DIG', storage = 'STASH', bin = 'BASKET', bed = 'NEST', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
+ABILITY_LABEL   = { select = 'SELECT', mine = 'DIG', storage = 'STASH', bin = 'BASKET', bed = 'NEST', trade = 'SWAP', wall = 'WALL', door = 'DOOR', bridge = 'BRIDGE' }
 -- Storage: a floor spot is free and holds one item. A bin costs logs and
 -- holds four, shown in the order they came in, quadrant by quadrant.
 STORAGE_FLOOR_CAPACITY = 1
@@ -233,6 +234,7 @@ COSTS = {
     wall    = { logs = 1 },
     door    = { logs = 1 },
     bed     = { logs = 2 },
+    trade   = { logs = 1 },
     bridge  = { logs = 1 },   -- per water tile
 }
 -- Free play builds nests, not furniture: a NEST is woven from sticks, grass
@@ -242,6 +244,7 @@ FREE_COSTS = {
     storage = {},
     bin     = { grass = 1 },
     bed     = { logs = 2, grass = 2, leaves = 1 },
+    trade   = { logs = 1, leaves = 1 },
     bridge  = { logs = 1 },   -- per water tile
     wall    = { logs = 1 },
     door    = { logs = 1 },
@@ -271,8 +274,8 @@ MINE_MAX_TILES  = 60          -- per drag, keeps a wild rectangle from posting h
 MINE_TILES_PER_TRIP = 6       -- a miner lets go of an area after this many tiles and reconsiders
 
 SITE_MINE, SITE_STORAGE, SITE_BIN, SITE_BRIDGE, SITE_BED = 'mine', 'storage', 'bin', 'bridge', 'bed'
-SITE_WALL, SITE_DOOR = 'wall', 'door'
-SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED, wall = SITE_WALL, door = SITE_DOOR }
+SITE_WALL, SITE_DOOR, SITE_TRADE = 'wall', 'door', 'trade'
+SITE_FOR_TOOL = { storage = SITE_STORAGE, bin = SITE_BIN, bed = SITE_BED, trade = SITE_TRADE, wall = SITE_WALL, door = SITE_DOOR }
 SITE_CAPACITY = { storage = STORAGE_FLOOR_CAPACITY, bin = STORAGE_BIN_CAPACITY }
 -- Arcade: no hunger, no morale, no breaks. Every morphi eats once and the
 -- level is won when they all have. A level lists what has to be true before
@@ -361,22 +364,34 @@ MORALE_BORED_HIT  = 18
 -- Free play: a bush gives this many pickings, then withers. New ones grow
 -- mostly where nobody can get at them yet.
 BUSH_PICKINGS     = 8
--- Gold buys happy thoughts, through a trade. A morphi finishing a rest at
--- camp with morale under TRADE_BELOW offers one and waits there up to
--- TRADE_WAIT_SECONDS; the next to rest or stand about at camp takes it up.
--- It only starts with a gold piece in the stockpile and a stored meal for
--- each: the other's loved food if there is any (a gift), else anything
--- they will eat. They chat at camp for TRADE_SECONDS, hunger on hold, and
--- eat together halfway. A deal is happy thoughts for both, more per gift.
-TRADE_BELOW         = 70
-TRADE_WAIT_SECONDS  = 20
-TRADE_SECONDS       = 40
+-- Trading is a fun task (free play only): a shiny buys happy thoughts for
+-- two. A morphi gets the urge about every TRADE_MEAN_SECONDS (a gap of half
+-- to one and a half of it, drawn with the game's rng), whatever its mood,
+-- and takes it at its next natural break when there is a swap spot it can
+-- reach and a shiny in the stockpile. It walks to the spot and waits there
+-- up to TRADE_WAIT_SECONDS; the next free morphi with the urge (or due
+-- within TRADE_JOIN_EARLY_SECONDS) walks over and joins. The shiny is spent
+-- then, and the trade always goes through unless one of them leaves the
+-- meadow. They chat for TRADE_SECONDS, hunger on hold, and eat halfway if
+-- a stored meal is there for them: a meal adds MORALE_TRADE_MEAL, the
+-- other's loved food (a gift) MORALE_GIFT instead. Waiting, walking over and
+-- the talk are fun time, never idle.
+TRADE_WAIT_SECONDS  = 30
+TRADE_SECONDS       = 60
+TRADE_MEAN_SECONDS  = QUARTER_SECONDS * 2.2
+TRADE_JOIN_EARLY_SECONDS = 300
+TRADE_RETRY_SECONDS = 30
+TRADE_JOIN_TILES    = 16
+TRADE_LINE_SECONDS  = 3.4
+TRADE_WALK_SECONDS  = 12    -- longer than this walking over, and they trade from where they are
 MORALE_TRADE_BASE   = 20
+MORALE_TRADE_MEAL   = 6
 MORALE_GIFT         = 15
 -- What two morphis say over a trade, a line every few seconds, turn about.
 TRADE_CHAT = {
     'nice day', 'lovely pebble', 'hmm...', 'how much?', 'too much!', 'meet me halfway',
     'deal?', 'not yet', 'shiny...', 'go on then', 'and a hug', 'fine, fine',
+    'so sparkly', 'is it real?', 'smell it', 'mm, shiny', 'one more hug', 'pleasure!',
 }
 -- Fun together (free play only). Once a season every morphi gets one chance
 -- to play with another; a chance not used by the end of its season is lost.
@@ -407,7 +422,7 @@ PLAY_DOING = { philosophize = 'Philosophizing with ', socialize = 'Having a drin
 PLAY_KIND_NAMES = { philosophize = 'PHILOSOPHIZE', socialize = 'DRINKS', dance = 'DANCE' }
 -- the news for a finished talk: '<A> and <B> ' .. this, by title, else by kind
 PLAY_NEWS = {
-    ['What Gold Is For']     = 'talked about what gold is for',
+    ['What Shinies Are For'] = 'talked about what shinies are for',
     ['Do Bushes Know']       = 'wondered whether bushes know they get eaten',
     ['The Tree, This Big']   = 'shared a drink and a tall tale about a very big tree',
     ['Psst, the Lumberjack'] = 'gossiped about the lumberjack over a drink',
@@ -423,7 +438,7 @@ PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a d
 -- 8) than the widest line the game says now, 'brought your fave!' (123 px).
 --
 --   PLAY_CHAT.philosophize  -- philosophizing
---     1  What Gold Is For      deadpan riddle at the stockpile
+--     1  What Shinies Are For  deadpan riddle at the stockpile
 --     2  Do Bushes Know        earnest and tender, a thank-you to a bush
 --   PLAY_CHAT.socialize     -- drinking and socializing
 --     1  The Tree, This Big    a tall tale over berry cider and root beer
@@ -434,19 +449,19 @@ PLAY_NEWS_KIND = { philosophize = 'philosophized together', socialize = 'had a d
 PLAY_CHAT = {
     philosophize = {
         {
-            title = 'What Gold Is For',
-            'what is gold for?',
+            title = 'What Shinies Are For',
+            'shinies: for what?',
             'for trading',
             'trading for what?',
             'happy thoughts',
-            'so gold is a mood',
+            'shinies are moods?',
             'a heavy mood',
             'so why dig it up?',
             'it was lonely',
             '...in the dark?',
             'now it has us',
             'and a nice pile',
-            'lucky gold',
+            'lucky shinies',
         },
         {
             title = 'Do Bushes Know',
