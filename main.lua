@@ -707,6 +707,7 @@ local function finishHunt(won)
     setTools(TOOLS_SURVIVAL)
     Effects.clear()
     ui:clear()
+    game.scoring.quarterTimer = Hunt.returnTimer(game.scoring.quarterTimer)
     if won then
         local weeks = Hunt.weeksAway()
         local meat, inPouches = Hunt.meatHome(#m.party, weeks, game.world:binCount())
@@ -2702,6 +2703,7 @@ if TEST_HOOKS then
         ui = function() return ui end,
         hud = function() return hud end,
         game = function() return game end,
+        huntPick = function() return huntPick end,
         state = function() return state end,
         setState = function(s) state = s end,
         title = title,

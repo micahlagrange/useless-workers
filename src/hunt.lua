@@ -114,6 +114,13 @@ function Hunt.seasonDay(quarterTimer)
     return math.min(DAYS_PER_SEASON, math.floor(elapsed / DAY_SECONDS) + 1)
 end
 
+-- The season clock when the party is home: they come back for the last
+-- stretch of the season (its last day), so a clock still before that
+-- jumps forward to it. A later clock is left as it is.
+function Hunt.returnTimer(quarterTimer)
+    return math.min(quarterTimer, DAY_SECONDS)
+end
+
 -- Puts `meat` pieces of steak into the meadow's storage, bins first
 -- (storageList is already ordered that way). Returns how many fit.
 function Hunt.deliver(world, meat)
