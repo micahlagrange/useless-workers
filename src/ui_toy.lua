@@ -25,7 +25,7 @@ end
 
 -- Layout ---------------------------------------------------------------------
 
-UI.TOY_BUTTONS = { 'pause', 'speed', 'bunch', 'menu' }
+UI.TOY_BUTTONS = { 'pause', 'speed', 'bunch', 'nextunit', 'chat', 'menu' }
 
 function UI:layoutToy()
     self.toyPhone = self.vw < 720
@@ -188,6 +188,11 @@ function UI:drawToyTop(game, menuOpen)
             local s = game.speed or 1
             o.icon, o.on, o.badge = 'speed' .. (s >= 4 and 4 or s >= 2 and 2 or 1), s > 1, s .. 'x'
         elseif b.id == 'bunch' then o.icon = 'bunch'
+        elseif b.id == 'nextunit' then o.icon = 'nextunit'
+        elseif b.id == 'chat' then
+            o.icon, o.on = 'chat', game.chatterOpen
+            o.badge = game.chatter and game.chatter:badge()
+            o.badgeColor = C.berry
         elseif b.id == 'menu' then o.icon, o.on = 'menu', menuOpen end
         Toy.button(b, o)
         self.topButtons[#self.topButtons + 1] = b
@@ -201,24 +206,21 @@ end
 
 -- Under the bar ---------------------------------------------------------------
 
--- Paused: a plate under the bar. The world is stopped; the ring still works.
+-- Paused: a small pill under the bar, tap it to carry on. The world is
+-- stopped; the ring still works, and nothing else is in its way.
 function UI:drawToyPause(game)
     if not game.paused then return end
-    local line = 'The bunch is having a little rest. You can still mark and set things out.'
-    local btnW = Toy.width('Carry on', Toy.M, true) + 16 + Toy.ICON + 12 + 16
+    local label = 'Paused'
+    local w = 16 + Toy.ICON + 8 + Toy.width(label, Toy.M, true) + 16
+    local h = 36
     local room = self.toyStackR - self.toyStackL
-    local w = math.min(room, 640)
-    local textW = w - 16 - btnW - 24
-    local lh = #Toy.wrap(line, textW, Toy.S) * (Toy.height(Toy.S) + 2)
-    local h = math.max(TAP + 16, Toy.height(Toy.M, true) + lh + 20)
     local x, y = math.floor(self.toyStackL + (room - w) / 2), self.toyStackY
-    Toy.plate(x, y, w, h)
-    Toy.text('Paused', x + 16, y + 10, Toy.M, C.ink, true)
-    Toy.para(line, x + 16, y + 12 + Toy.height(Toy.M, true), textW, Toy.S, C.inkSoft)
-    local b = { id = 'carryon', x = x + w - 8 - btnW, y = y + (h - TAP) / 2, w = btnW, h = TAP }
-    self:toyRow(b, 'Carry on', 'play', true)
+    local b = { id = 'carryon', x = x, y = y, w = w, h = h }
+    Toy.button(b, { on = true })
+    Toy.icon('play', x + 12, y + (h - Toy.ICON) / 2, Toy.ICON)
+    Toy.text(label, x + 12 + Toy.ICON + 8, y + (h - Toy.height(Toy.M, true)) / 2, Toy.M, C.ink, true)
     self.topButtons[#self.topButtons + 1] = b
-    self.toyStackY = y + h + 12
+    self.toyStackY = y + h + 8
 end
 
 -- When an arcade level is stuck: start it over.
@@ -358,6 +360,7 @@ function UI:drawToyHUD(game, menuOpen)
     self:drawToyGoals(game)
     self:drawToyAlerts(game)
     self:drawToyToast()
+    if game.chatterOpen then self:drawChatter(game) end
 end
 
 -- Taps on the HUD: a button id, or nil.
@@ -373,7 +376,7 @@ end
 
 -- A Toybox sheet: a cream plate in the middle over a dimmed meadow. Returns x, y, w, h.
 function UI:sheet(w, h)
-    love.graphics.setColor(40 / 255, 28 / 255, 18 / 255, 0.45)
+    love.graphics.setColor(40 / 255, 28 / 255, 18 / 255, 0.2)
     love.graphics.rectangle('fill', 0, 0, self.vw, self.vh)
     w, h = math.min(w, self.vw - 2 * GUT), math.min(h, self.vh - 2 * GUT)
     local x, y = math.floor((self.vw - w) / 2), math.floor((self.vh - h) / 2)

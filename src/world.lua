@@ -97,7 +97,7 @@ function World.generate(seedNumber, rng, w, h)
     self:carveRivers(rng)
     self:placeBreakroom()
     self:hideShinies(seedNumber)
-    self.version = self.version + 1
+    self:changed()
     return self
 end
 
@@ -195,7 +195,7 @@ function World.fromGrid(rows, rng)
     end
     for _, bt in ipairs(bedTiles) do self:markBed(bt.x, bt.y) end
     for _, ft in ipairs(floorTiles) do self:markFloor(ft.x, ft.y) end
-    self.version = self.version + 1
+    self:changed()
     return self
 end
 
@@ -213,13 +213,44 @@ function World:isPassable(x, y)
     return t ~= nil and t.passable == true
 end
 
+-- Every change to the map goes through here: it bumps version (the caches
+-- and the views' baked maps watch it) and logs which tile changed, so a view
+-- redraws only that corner of its baked map. No x: the whole map changed.
+World.CHANGE_LOG = 256
+
+function World:changed(x, y)
+    self.version = self.version + 1
+    local log = self.changes
+    if not log then log = {}; self.changes = log end
+    log[#log + 1] = { v = self.version, x = x, y = y }
+    if #log > World.CHANGE_LOG then table.remove(log, 1) end
+end
+
+-- The tiles changed after version v, as a list of {x, y}, or nil when that
+-- is not known tile by tile (the whole map changed, or the log no longer
+-- reaches back to v): then the whole map has to be redrawn.
+function World:changesSince(v)
+    if not v or v < 0 then return nil end
+    if v == self.version then return {} end
+    local log = self.changes or {}
+    if #log == 0 or log[1].v > v + 1 then return nil end
+    local out = {}
+    for i = #log, 1, -1 do
+        local c = log[i]
+        if c.v <= v then break end
+        if not c.x then return nil end
+        out[#out + 1] = { x = c.x, y = c.y }
+    end
+    return out
+end
+
 function World:setType(x, y, kind)
     local t = self:get(x, y)
     if not t then return false end
     t.type = kind
     t.passable = PASSABLE[kind] or false
     if self.rng then t.colorSeed = self.rng:random() end
-    self.version = self.version + 1
+    self:changed(x, y)
     self.reachCache = nil
     if self.onTileChanged then self.onTileChanged(x, y, kind) end
     return true
@@ -419,7 +450,7 @@ function World:setBreakroom(x, y)
             table.insert(self.breakroom.tiles, { x = x + dx, y = y + dy })
         end
     end
-    self.version = self.version + 1
+    self:changed()
     self.reachCache = nil
 end
 
@@ -703,7 +734,7 @@ function World:harvestNode(node)
         if self.wilds and node.pickings >= BUSH_PICKINGS then
             node.timer = math.huge
             self:removeNode(node)
-            self.version = self.version + 1
+            self:changed(node.x, node.y)
         end
         return CARGO_FOOD
     elseif node.kind == NODE_TREE then
@@ -780,7 +811,7 @@ function World:markStorage(x, y, capacity)
     local t = self:get(x, y)
     if not t or t.storage > 0 then return false end
     t.storage = capacity or STORAGE_FLOOR_CAPACITY
-    self.version = self.version + 1
+    self:changed(x, y)
     local d = 0
     if self.breakroom then
         d = (x - (self.breakroom.x + 0.5)) ^ 2 + (y - (self.breakroom.y + 0.5)) ^ 2
@@ -802,7 +833,7 @@ function World:markBinPart(x, y, ax, ay)
     local t = self:get(x, y)
     if not t then return false end
     t.binPart = { x = ax, y = ay }
-    self.version = self.version + 1
+    self:changed(x, y)
     return true
 end
 
@@ -828,7 +859,7 @@ function World:markFloor(x, y)
     if not t or t.floor then return false end
     t.floor = true
     self.floors[#self.floors + 1] = { x = x, y = y }
-    self.version = self.version + 1
+    self:changed(x, y)
     return true
 end
 

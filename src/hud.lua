@@ -119,6 +119,22 @@ function Hud:fitShift(game, top)
     return dx * self.ui.scale, dy * self.ui.scale
 end
 
+-- What a speech bubble must not cover: the open ring (all its buttons) and
+-- the caption plate under it.
+function Hud:keepClear(game)
+    local out = {}
+    if self.ring then
+        local x0, y0, x1, y1
+        for _, b in ipairs(self:layout(game)) do
+            x0, y0 = math.min(x0 or b.x, b.x), math.min(y0 or b.y, b.y)
+            x1, y1 = math.max(x1 or b.x + b.w, b.x + b.w), math.max(y1 or b.y + b.h, b.y + b.h)
+        end
+        if x0 then out[#out + 1] = { x = x0 - 8, y = y0 - 8, w = x1 - x0 + 16, h = y1 - y0 + 16 } end
+    end
+    if self.captionRect then out[#out + 1] = self.captionRect end
+    return out
+end
+
 function Hud:buttonAt(vx, vy)
     if not self.ring then return nil end
     for i = #(self.buttons or {}), 1, -1 do
@@ -253,7 +269,7 @@ end
 -- The caption plate at the bottom: what was tapped.
 function Hud:drawCaption()
     local c = self.caption
-    if not c then self.captionH = 0 return end
+    if not c then self.captionH, self.captionRect = 0, nil return end
     local ui = self.ui
     local w = math.min(580, ui.vw - 2 * Toy.GUTTER)
     local pad = 16
@@ -267,6 +283,7 @@ function Hud:drawCaption()
     h = h + (lineH > 0 and lineH + 2 or 0) + (saidH > 0 and saidH + 4 or 0) + (hintH > 0 and hintH + 4 or 0) + pad - 2
     local x, y = math.floor((ui.vw - w) / 2), ui.vh - Toy.GUTTER - h
     self.captionH = h + Toy.GUTTER
+    self.captionRect = { x = x, y = y, w = w, h = h }
     local alpha = self.captionTtl > 0 and math.min(1, self.captionTtl / 0.3) or 1
     if alpha < 1 then love.graphics.push('all') end
     Toy.plate(x, y, w, h)
@@ -291,13 +308,20 @@ function Hud.workerColor(w)
 end
 
 -- A morphi's caption: who, what it is doing, how it feels, its jobs.
-function Hud.workerCaption(w)
+-- lately: its last lines from the Chatter log, shown in the quote box.
+function Hud.workerCaption(w, lately)
+    local said
+    if lately and #lately > 0 then
+        local q = {}
+        for i, l in ipairs(lately) do q[i] = '"' .. l .. '"' end
+        said = 'Lately: ' .. table.concat(q, '\n')
+    end
     local bits = { w:describeState() }
     if not w.arcade then bits[#bits + 1] = w:hungerStatus() end
     if w.jobSet then bits[#bits + 1] = 'not keen on ' .. JobSets.label(w.jobSet.disliked):lower() .. ' work' end
     local hint = w.jobSet and 'Tap a job: first job (1). Hold, or right click: then, when there is nothing (2). The eye: follow.'
         or 'The eye: follow.'
-    return { title = w.name, sub = 'the ' .. w.species, line = table.concat(bits, ' · '), hint = hint }
+    return { title = w.name, sub = 'the ' .. w.species, line = table.concat(bits, ' · '), said = said, hint = hint }
 end
 
 return Hud

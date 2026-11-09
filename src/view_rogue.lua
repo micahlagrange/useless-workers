@@ -103,25 +103,11 @@ function Rogue:groundGlyph(t)
     return set[math.floor((t.colorSeed or 0) * #set) % #set + 1]
 end
 
-function Rogue:rebuildCanvas()
-    if self.canvasVersion == self.world.version then return end
-    self.canvasVersion = self.world.version
-    love.graphics.push()
-    love.graphics.origin()
-    love.graphics.setCanvas(self.canvas)
-    love.graphics.clear(0, 0, 0, 1)
-    for x = 1, self.world.w do
-        for y = 1, self.world.h do
-            local t = self.world.tiles[x][y]
-            local px, py = (x - 1) * TILE_SIZE, (y - 1) * TILE_SIZE
-            local r, g, b = self:tileColor(t)
-            local gain = self.GROUND_GAIN[t.type] or 1
-            self:glyph(self:groundGlyph(t), px, py, math.min(1, r * gain), math.min(1, g * gain), math.min(1, b * gain))
-        end
-    end
-    love.graphics.setCanvas()
-    love.graphics.pop()
-    love.graphics.setColor(1, 1, 1, 1)
+-- One tile of the baked map (View:rebuildCanvas redraws only what changed).
+function Rogue:bakeTile(t, x, y, px, py)
+    local r, g, b = self:tileColor(t)
+    local gain = self.GROUND_GAIN[t.type] or 1
+    self:glyph(self:groundGlyph(t), px, py, math.min(1, r * gain), math.min(1, g * gain), math.min(1, b * gain))
 end
 
 -- The camp: a fire in the middle that flickers, and the sign.

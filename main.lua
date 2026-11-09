@@ -22,6 +22,7 @@ local Effects = require('src.effects')
 local Audio = require('src.audio')
 local Stats = require('src.stats')
 local Version = require('src.version')
+local Chatter = require('src.chatter')
 local Hunt = require('src.hunt')
 
 love.graphics.setDefaultFilter('nearest', 'nearest')
@@ -170,8 +171,24 @@ local function onComplain(worker, reason, node)
     Audio.playSFX('complain')
 end
 
+-- Everything the bunch says goes in the Chatter log, made on first use so
+-- every way of starting a game has one.
+local function chatterLog()
+    if not game.chatter then game.chatter = Chatter.new() end
+    return game.chatter
+end
+
+local function logSay(worker, text)
+    local chat = chatterLog()
+    -- the same words from the same morphi again straight away are one line
+    local last = chat.lines[#chat.lines]
+    if last and last.speaker == worker and last.text == text and (game.clock or 0) - last.t < 5 then return end
+    chat:add(worker, text, Chatter.whereOf(worker, game.world), game.clock or 0)
+end
+
 local function onWorkerEvent(worker, name, data)
-    if name == 'eat' then Audio.playSFX('eat')
+    if name == 'say' then logSay(worker, data)
+    elseif name == 'eat' then Audio.playSFX('eat')
     elseif name == 'deliver' then Audio.playSFX('deliver')
     elseif name == 'pickup' then Audio.playSFX('click')
     elseif name == 'mined' then Audio.playSFX('dig')
@@ -434,6 +451,10 @@ local function newGame(seedString, difficultyIndex)
     -- and one baby in the home nest
     for i = 1, START_BABIES do hireBaby(i == 1 and FIRST_BABY_NAME or nil) end
     game.log = {}
+    game.chatter = Chatter.new()
+    local names = {}
+    for i = 1, 3 do names[i] = game.workers[i] and game.workers[i].name end
+    game.chatter:seed(names, 0)
     announce('Tap open grass to set out a stash (or a basket: 1 grass, holds 4) so foragers have somewhere to put berries. Drag across a stream to bridge it.')
     game.started = false
     state = 'goal'
@@ -448,6 +469,7 @@ local function newLevel(index, set, difficulty)
     local run = Campaign.load(index, Rng.new(index), set, difficulty or title.arcadeDifficulty)
     game = {}
     game.log = {}
+    game.chatter = Chatter.new()
     game.mode = set == 'arcade' and 'arcade' or 'level'
     if set == 'arcade' then simSpeed = 1 end
     setTools(set == 'arcade' and TOOLS_ARCADE or TOOLS_SURVIVAL)
@@ -939,6 +961,7 @@ function love.update(dt)
     syncTouches()
     if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' or state == 'doing' then
         game.speed = simSpeed
+        Worker.gameSpeed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
             -- tools still work
@@ -1074,6 +1097,7 @@ local function drawScene()
     drawWorld()
     game.muted = Audio.isMuted()
     ui:beginScaled()
+    ui:drawBubbles(game, game.camera, UI.RADIAL and hud:keepClear(game) or nil)
     if UI.RADIAL and state == 'playing' then hud:drawRing(game, love.timer.getTime()) end
     ui:drawHUD(game, state == 'menu')
     if UI.RADIAL and state == 'playing' then hud:drawCaption() end
@@ -1526,7 +1550,8 @@ local ringAct
 local function workerAtScreen(sx, sy)
     local wp = game.camera:toWorld(sx, sy)
     local wx, wy = wp.x, wp.y
-    local reach = math.max(10, 26 / game.camera.scale)
+    -- a finger covers more than a little blob: reach further on a touch screen
+    local reach = math.max(12, (ui.touch and 44 or 34) / game.camera.scale)
     local best, bestD = nil, reach
     for _, w in ipairs(game.workers) do
         if w.alive and w.state ~= 'quitting' then
@@ -1560,7 +1585,7 @@ end
 
 local function workerRing(w)
     local spec = Ring.forWorker(w) or { kind = 'morphi', worker = w, items = {}, center = { id = 'follow', icon = 'follow' } }
-    spec.caption = Hud.workerCaption(w)
+    spec.caption = Hud.workerCaption(w, game.chatter and game.chatter:lately(w, 2))
     if game.follow and game.selectedWorker == w then spec.center.on = true end
     return spec
 end
@@ -1883,6 +1908,38 @@ local function openLog()
 end
 
 -- The world stops; building, tools, panning and zooming carry on.
+local function toggleChatter()
+    game.chatterOpen = not game.chatterOpen
+    chatterLog():setOpen(game.chatterOpen)
+    -- it opens on the newest lines
+    if game.chatterOpen then chatterLog():setScroll(0) end
+    game.chatterPress = nil
+    Audio.playSFX('click')
+end
+
+-- A tapped Chatter row: go to that morphi and pick it. A phone's panel
+-- covers half the map, so it closes first.
+local function chatterJump(e)
+    local w = e.speaker
+    if ui.portrait then toggleChatter() end
+    if not (w and w.alive and w.x) then
+        ui:toast((e.name or 'That one') .. ' is not around now')
+        return
+    end
+    game.selectedWorker = w
+    game.focus = nil
+    game.abilities:select(ABILITY_SELECT)
+    if not game.follow then game.camera:centerOn(w.x, w.y) end
+    if UI.RADIAL then
+        -- its ring, with its last lines under Lately
+        hud:close()
+        openWorkerRing(w)
+        return
+    end
+    ui:toast(w.name)
+    Audio.playSFX('click')
+end
+
 local function togglePause()
     game.paused = not game.paused
 end
@@ -1905,6 +1962,7 @@ local function pressTopButton(id, x, b)
     elseif id == 'units' then openUnits()
     elseif id == 'pause' then togglePause()
     elseif id == 'log' then openLog()
+    elseif id == 'chat' then toggleChatter()
     elseif id == 'fingers' then fingerDebug = not fingerDebug
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'tiles' then cycleTileset()
@@ -1921,6 +1979,24 @@ local function pressTopButton(id, x, b)
     Audio.playSFX('click')
 end
 
+-- The next morphi: go to it, open its ring and follow it from here on.
+local function nextUnit()
+    local band, at = {}, 0
+    for _, w in ipairs(game.workers) do
+        if w.alive and w.state ~= 'quitting' and not w:isEgg() then
+            band[#band + 1] = w
+            if w == game.selectedWorker then at = #band end
+        end
+    end
+    if #band == 0 then ui:toast('Nobody is around') return end
+    local w = band[at % #band + 1]
+    hud:close()
+    game.focus = nil
+    openWorkerRing(w)
+    game.follow = true
+    game.camera:centerOn(w.x, w.y)
+end
+
 -- The Toybox top bar's buttons.
 local function pressToy(id)
     Audio.playSFX('click')
@@ -1928,6 +2004,8 @@ local function pressToy(id)
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'menu' then openMenu()
     elseif id == 'resmore' then ui.resOpen = not ui.resOpen
+    elseif id == 'chat' then toggleChatter()
+    elseif id == 'nextunit' then nextUnit()
     elseif id == 'bunch' then
         local br = game.world.breakroom
         if br then
@@ -2263,6 +2341,15 @@ local function pointerPressed(x, y, button, istouch)
         if id then pressTopButton(id) end
         return
     end
+    if game.chatterOpen then
+        local what, e = ui:chatterAt(vx, vy)
+        if what == 'close' then toggleChatter() return end
+        if what == 'row' or what == 'inside' then
+            -- a drag scrolls the list; a tap on a row (on release) goes there
+            game.chatterPress = { y = y, scroll = chatterLog().scroll, entry = what == 'row' and e or nil, moved = false }
+            return
+        end
+    end
     if ui:restartButtonAt(vx, vy) then
         restartGame()
         return
@@ -2347,6 +2434,12 @@ local function pointerReleased(x, y, button)
         if not p.moved and button == 1 then menuTap(ui:toVirtual(x, y)) end
         return
     end
+    if game.chatterPress then
+        local p = game.chatterPress
+        game.chatterPress = nil
+        if button == 1 and not p.moved and p.entry and state == 'playing' then chatterJump(p.entry) end
+        return
+    end
     if state ~= 'playing' then return end
     if button == 1 and hud.press then
         hud:released(ui:toVirtual(x, y))
@@ -2384,6 +2477,16 @@ local function pointerMoved(x, y, dx, dy)
         local p = game.menuPress
         if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
         if p.moved then ui.menuScroll = p.scroll - (y - p.y) / ui.scale end
+        return
+    end
+    if game.chatterPress then
+        -- dragging the Chatter list down brings older lines into view
+        local p = game.chatterPress
+        if not p.moved and math.abs(y - p.y) > 10 then p.moved = true end
+        if p.moved then
+            local rowPx = (ui.chatterRowH or 56) * ui.scale
+            chatterLog():setScroll(p.scroll + (y - p.y) / rowPx)
+        end
         return
     end
     if state ~= 'playing' or pinch then return end
@@ -2513,6 +2616,11 @@ function love.wheelmoved(_, y)
     if state == 'menu' then ui.menuScroll = (ui.menuScroll or 0) - y * 40 return end
     if state ~= 'playing' or y == 0 then return end
     local mx, my = pointerPosition()
+    if game.chatterOpen and ui:chatterAt(ui:toVirtual(mx, my)) then
+        -- the wheel over Chatter scrolls it: up for older lines
+        chatterLog():scrollBy(y > 0 and 1 or -1)
+        return
+    end
     game.camera:zoomAt(y > 0 and 1.15 or 1 / 1.15, mx, my)
 end
 
@@ -2589,6 +2697,8 @@ function love.keypressed(key)
             Audio.playSFX('click')
         elseif key == 'u' then
             if UI.RADIAL then pressToy('bunch') else openUnits() end
+        elseif key == 'c' then
+            toggleChatter()
         elseif key == 'j' then
             local w = game.selectedWorker
             if UI.RADIAL and w and w.alive then openWorkerRing(w) else openJobs() end
@@ -2747,6 +2857,10 @@ if TEST_HOOKS then
         stockUp = function() stockUp() end,
         pressTama = function(a) pressTama(a) end,
         pressJob = function(id) pressJob(id) end,
+        pressToy = function(id) pressToy(id) end,
+        chatterJump = function(e) chatterJump(e) end,
+        openWorkerRing = function(w) openWorkerRing(w) end,
+        drawScene = function() drawScene() end,
     }
 end
 

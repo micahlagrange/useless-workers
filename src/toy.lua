@@ -279,6 +279,11 @@ I.play = function() set(C.ink) love.graphics.polygon('fill', 10, 6, 26, 16, 10, 
 I.menu = function() set(C.ink) for _, x in ipairs({ 7, 16, 25 }) do love.graphics.circle('fill', x, 16, 3.5) end end
 I.close = function() line(4, 9, 9, 23, 23) line(4, 23, 9, 9, 23) end
 I.back = function() line(4, 28, 16, 8, 16) line(4, 15, 8, 7, 16, 15, 24) end
+I.nextunit = function()
+    poly('FFFFFF', { 5, 6, 21, 16, 5, 26 })
+    set(C.ink) love.graphics.setLineWidth(2.4) love.graphics.polygon('line', 5, 6, 21, 16, 5, 26)
+    line(3.4, 26, 6, 26, 26)
+end
 I.next = function() line(4, 4, 16, 24, 16) line(4, 17, 8, 25, 16, 17, 24) end
 I.more = function() line(4, 8, 12, 16, 20, 24, 12) end
 I.speed1 = function() line(4, 11, 7, 20, 16, 11, 25) end
