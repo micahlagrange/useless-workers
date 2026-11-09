@@ -22,9 +22,9 @@ Ring.__index = Ring
 Ring.PATCH_MAX = 16
 Ring.HOLD_SECONDS = 0.45
 
-local BUILD_ICON = { storage = 'stash', bin = 'basket', bed = 'nest', wall = 'wall', door = 'door' }
-local BUILD_LABEL = { storage = 'Stash', bin = 'Basket', bed = 'Nest', wall = 'Wall', door = 'Door' }
-local BUILD_BLURB = { storage = 'holds 1 thing', bin = 'holds 4', bed = 'naps here are shorter', wall = 'keeps the bunch in', door = 'a way through a wall' }
+local BUILD_ICON = { storage = 'stash', bin = 'basket', bed = 'nest', trade = 'swap', wall = 'wall', door = 'door' }
+local BUILD_LABEL = { storage = 'Stash', bin = 'Basket', bed = 'Nest', trade = 'Swap spot', wall = 'Wall', door = 'Door' }
+local BUILD_BLURB = { storage = 'holds 1 thing', bin = 'holds 4', bed = 'naps here are shorter', trade = 'trades happen here', wall = 'keeps the bunch in', door = 'a way through a wall' }
 Ring.BUILD_ICON, Ring.BUILD_LABEL = BUILD_ICON, BUILD_LABEL
 
 local function cap(s) return (s:gsub('^%l', string.upper)) end
@@ -145,7 +145,7 @@ function Ring.forTile(world, tx, ty, tools)
 
     -- something finished: take it away
     local part = t.binPart and world:get(t.binPart.x, t.binPart.y)
-    local built = (part and 'bin') or (t.storage >= (STORAGE_BIN_CAPACITY or 4) and 'bin') or (t.storage > 0 and 'storage') or (t.bed and 'bed') or nil
+    local built = (part and 'bin') or (t.storage >= (STORAGE_BIN_CAPACITY or 4) and 'bin') or (t.storage > 0 and 'storage') or (t.bed and 'bed') or (t.tradeSpot and 'trade') or nil
     if built then
         local base = part and { x = t.binPart.x, y = t.binPart.y } or { x = tx, y = ty }
         local bt = world:get(base.x, base.y)
@@ -156,7 +156,8 @@ function Ring.forTile(world, tx, ty, tools)
         items[#items + 1] = { id = 'takeaway', icon = 'trash', label = 'Take away', off = busy or nil,
             why = holding > 0 and 'Empty it first: it is holding food' or (bt.restingBy and 'Someone is napping there') or nil }
         local line
-        if built == 'bed' then line = 'Naps here are shorter and do more good.'
+        if built == 'trade' then line = 'Two of the bunch meet here to trade a shiny for happy thoughts.'
+        elseif built == 'bed' then line = 'Naps here are shorter and do more good.'
         else line = 'Holds ' .. holding .. ' of ' .. bt.storage .. '.' end
         spec.caption = { title = BUILD_LABEL[built], line = line }
         return spec
@@ -167,7 +168,7 @@ function Ring.forTile(world, tx, ty, tools)
 
     -- open ground: set something out
     spec.kind = 'grass'
-    for _, tool in ipairs({ ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_WALL, ABILITY_DOOR }) do
+    for _, tool in ipairs({ ABILITY_STORAGE, ABILITY_BIN, ABILITY_BED, ABILITY_TRADE, ABILITY_WALL, ABILITY_DOOR }) do
         if has[tool] then
             local kind = SITE_FOR_TOOL[tool]
             local missing = Ring.missing(world, costOf(world, kind))
