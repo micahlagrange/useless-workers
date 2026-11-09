@@ -35,10 +35,15 @@ function Hud:open(spec, now)
     self.press = nil
     self.openedAt = now or 0
     self.nudged = false
+    -- A morphi's ring stays where it opened: the morphi may walk on, the
+    -- buttons hold still so they can be pressed.
+    local w = spec.worker
+    self.at = w and { x = w.x, y = w.y - 2 } or nil
 end
 
 function Hud:close()
     self.ring = nil
+    self.at = nil
     self.press = nil
     self.preview = nil
     if self.captionTtl <= 0 then self.caption = nil end
@@ -56,7 +61,8 @@ function Hud:anchor(game)
     if not spec then return nil end
     local cam, s = game.camera, self.ui.scale
     if spec.worker then
-        local p = cam:toScreen(spec.worker.x, spec.worker.y - 2)
+        local at = self.at or { x = spec.worker.x, y = spec.worker.y - 2 }
+        local p = cam:toScreen(at.x, at.y)
         return p.x / s, p.y / s
     end
     local t = spec.tile

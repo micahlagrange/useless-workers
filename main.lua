@@ -832,7 +832,9 @@ local function updateCamera(dt)
         game.follow = false
         game.camera:pan(dx * PAN_SPEED * dt, dy * PAN_SPEED * dt)
     end
-    if game.follow then
+    -- an open ring holds the camera still, so its buttons do not slide away
+    -- under the finger; following carries on once it closes
+    if game.follow and not (hud and hud:isOpen()) then
         local w = game.selectedWorker
         if w and w.alive then
             game.camera:centerOn(w.x, w.y)
