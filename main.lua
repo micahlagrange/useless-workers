@@ -213,6 +213,19 @@ local function onWorkerEvent(worker, name, data)
         if game.stats then game.stats:event('trade', game, worker.name .. ' and ' .. data.partner.name, nil, t) end
         announce(worker.name .. ' and ' .. data.partner.name .. ' swapped snacks at the home nest'
             .. (data.gifts > 0 and (', ' .. data.gifts .. ' favourite treat' .. (data.gifts == 1 and '' or 's') .. ' sweetening it') or '') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'play' and game.mode == 'free' then
+        -- fun together: a talk or a dance had at the nest, both cheered up
+        local t = worker:tile()
+        local who = worker.name .. ' and ' .. data.partner.name
+        if game.stats then game.stats:event('play', game, who, data.category .. ': ' .. tostring(data.title), t) end
+        announce(who .. ' ' .. (PLAY_NEWS[data.title] or PLAY_NEWS_KIND[data.category] or 'played together') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'playstart' and game.mode == 'free' then
+        local t = worker:tile()
+        announce(worker.name .. ' and ' .. data.partner.name .. ' started ' .. (PLAY_STARTS[data.category] or 'playing together') .. '.', { x = t.x, y = t.y }, 'news')
+    elseif name == 'playcut' and game.mode == 'free' then
+        local t = worker:tile()
+        local what = (PLAY_STARTS[data.category] or 'playing together'):gsub('^an? ', '')
+        announce(worker.name .. ' and ' .. data.partner.name .. ' stopped ' .. what .. ' before it was over.', { x = t.x, y = t.y }, 'news')
     elseif name == 'lowmorale' then
         local t = worker:tile()
         announce(worker.name .. ' is very grumpy and thinking about leaving.', { x = t.x, y = t.y }, 'warning')
@@ -225,7 +238,7 @@ local function onWorkerEvent(worker, name, data)
         else
             announce(worker.name .. ' got far too hungry and toddled off to find snacks elsewhere.', { x = t.x, y = t.y }, 'left')
         end
-        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs') then
+        if game.mode == 'level' and (state == 'playing' or state == 'units' or state == 'jobs' or state == 'doing') then
             game.failReason = worker.name .. (data == 'morale' and ' had enough and left.' or ' starved.')
             state = 'levelfailed'
             love.mouse.setVisible(true)
@@ -753,7 +766,7 @@ function love.update(dt)
     debugClock = debugClock + dt
     Audio.update(dt)
     syncTouches()
-    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' then
+    if state == 'playing' or state == 'units' or state == 'log' or state == 'jobs' or state == 'doing' then
         game.speed = simSpeed
         if game.paused then
             -- paused: nothing in the world moves, but the camera and the
@@ -762,7 +775,7 @@ function love.update(dt)
         else
             for step = 1, simSpeed do
                 updatePlaying(dt, step > 1)
-                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' then break end
+                if state ~= 'playing' and state ~= 'units' and state ~= 'log' and state ~= 'jobs' and state ~= 'doing' then break end
             end
         end
         ui:update(dt)
@@ -900,7 +913,9 @@ local function drawScene()
     elseif state == 'annual' then
         ui:drawAnnual(game.scoring, game.highScore, game.isNewHigh, game.stats)
     elseif state == 'tools' then
-        ui:drawTools(fingerDebug)
+        ui:drawTools(fingerDebug, game.mode == 'free')
+    elseif state == 'funtest' then
+        ui:drawFunTest(game.workers, sub.funA, sub.funB)
     elseif state == 'export' then
         ui:drawExport(sub.text, sub.saved)
     elseif state == 'history' then
@@ -919,6 +934,8 @@ local function drawScene()
         ui:drawUnits(game, game.view)
     elseif state == 'jobs' then
         ui:drawJobs(game)
+    elseif state == 'doing' then
+        ui:drawDoing(game)
     elseif state == 'tama' then
         ui:drawTama(game, game.view)
     elseif state == 'log' then
@@ -1283,6 +1300,24 @@ local function openJobs()
     Audio.playSFX('click')
 end
 
+-- DETAILS: what the picked morphi is doing right now, in full (what it
+-- carries, a talk's transcript so far). The meadow keeps running under it.
+local function openDoing()
+    local w = game.selectedWorker
+    if not (w and w.alive and not w:isEgg()) then
+        ui:toast('Select a morphi first (SELECT tool, then tap one)')
+        return
+    end
+    state = 'doing'
+    love.mouse.setVisible(true)
+    Audio.playSFX('click')
+end
+
+local function closeDoing()
+    state = 'playing'
+    hideCursor()
+end
+
 local function closeJobs()
     state = 'playing'
     hideCursor()
@@ -1458,6 +1493,10 @@ function ringAct(item, hold)
     elseif id == 'follow' then
         toggleFollow()
         hud:close()
+    elseif id == 'details' then
+        game.selectedWorker = spec.worker
+        hud:close()
+        openDoing()
     end
 end
 
@@ -1532,6 +1571,35 @@ end
 
 local function closeSub()
     backTo(sub.back)
+end
+
+-- DEV, FUN TEST: pick two morphis, then a kind of fun; they start at once,
+-- this season's chance or not, and the tester is taken back to the game to
+-- watch.
+local function funTestPick(i)
+    local w = game.workers[i]
+    if not w then return end
+    if sub.funA == w then sub.funA = nil
+    elseif sub.funB == w then sub.funB = nil
+    elseif not sub.funA then sub.funA = w
+    elseif not sub.funB then sub.funB = w
+    else sub.funA, sub.funB = sub.funB, w end
+end
+
+local function funTestStart(kind)
+    if not (sub.funA and sub.funB) then
+        ui:toast('Pick two morphis first')
+        return
+    end
+    local pl = Worker.playPair(sub.funA, sub.funB, kind)
+    if not pl then
+        ui:toast('Both must be fed and free (not hungry, trading or away)')
+        return
+    end
+    backTo(sub.toolsBack)
+    game.selectedWorker = pl.a
+    ui:toast(pl.a.name .. ' and ' .. pl.b.name .. ': ' .. PLAY_KIND_NAMES[kind]:lower())
+    if game.camera then game.camera:centerOn(pl.a.x, pl.a.y) end
 end
 
 -- The screen the run was exported from, under any tester screens.
@@ -1734,6 +1802,9 @@ local function menuTap(vx, vy)
         stockUp()
         ui:toast('Stocked up: 20 of every material, a meal of every food')
         closeMenu()
+    elseif pb == 'funtest' and game.mode == 'free' then
+        sub.funA, sub.funB, sub.funBack = nil, nil, 'menu'
+        state = 'funtest'
     elseif pb == 'tamatest' then
         -- a fresh meadow with Morphi, straight into the baby screen, with a
         -- shelf of every food to put down for free
@@ -1818,7 +1889,17 @@ local function pointerPressed(x, y, button, istouch)
     if state == 'gameover' then
         if pb == 'title' then goToTitle() end
         return
+    elseif state == 'funtest' then
+        if pb == 'back' then state = sub.funBack or 'tools'
+        elseif pb and pb:sub(1, 3) == 'fm:' then funTestPick(tonumber(pb:sub(4)))
+        elseif pb and pb:sub(1, 3) == 'fk:' then funTestStart(pb:sub(4)) end
+        return
     elseif state == 'tools' then
+        if pb == 'funtest' then
+            sub.funA, sub.funB, sub.funBack = nil, nil, 'tools'
+            state = 'funtest'
+            return
+        end
         if pb == 'tamatest' then
             -- a fresh meadow with Morphi, straight into Tamagotchi mode, with a
             -- shelf of every food to put down for free
@@ -1921,6 +2002,9 @@ local function pointerPressed(x, y, button, istouch)
         elseif pb and pb:sub(1, 5) == 'tama:' then
             pressTama(pb:sub(6))
         end
+        return
+    elseif state == 'doing' then
+        if pb == 'close' or not ui:insideDoingPanel(vx, vy) then closeDoing() end
         return
     elseif state == 'jobs' then
         if pb and pb:sub(1, 4) == 'job:' then
@@ -2029,6 +2113,10 @@ local function pointerPressed(x, y, button, istouch)
     end
     if ui:jobsButtonAt(vx, vy) then
         openJobs()
+        return
+    end
+    if ui:doingButtonAt(vx, vy) then
+        openDoing()
         return
     end
     if vy > ui.vh - BOTTOM_BAR_H then
@@ -2334,6 +2422,8 @@ function love.keypressed(key)
             elseif game.tamaNap then game.tamaMenu = 'wakeLeave'
             else closeTama() end
         end
+    elseif state == 'doing' then
+        if key == 'escape' or key == 'return' then closeDoing() end
     elseif state == 'jobs' then
         if key == 'j' or key == 'escape' then
             closeJobs()
@@ -2367,6 +2457,8 @@ function love.keypressed(key)
         elseif key == 'e' then openSub('export') end
     elseif state == 'export' then
         if key == 'return' or key == 'kpenter' or key == 'escape' then closeExport() end
+    elseif state == 'funtest' then
+        if key == 'escape' then state = sub.funBack or 'tools' end
     elseif state == 'tools' then
         if key == 'escape' then backTo(sub.toolsBack) end
     elseif state == 'history' then

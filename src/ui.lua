@@ -1088,6 +1088,7 @@ function UI:drawBottomBar(game)
     local abilities = game.abilities
     self.jobsButton = nil
     self.followButton = nil
+    self.doingButton = nil
     if UI.RADIAL then return end
     setColor(C.bar)
     love.graphics.rectangle('fill', 0, self.vh - BOTTOM_BAR_H, self.vw, BOTTOM_BAR_H)
@@ -1220,7 +1221,10 @@ function UI:drawBottomBar(game)
                 sx = sx + 30
             end
             local under = w:isBaby() and w:babySummary() or w.jobSet and self:jobsSummary(w, true) or ('hauled ' .. w.delivered .. '  grumbles ' .. w.complaintCount)
-            self:printLine(under, sx + 6, py + 46, pw - 150 - 66, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
+            -- DETAILS, left of the HUNGER and MOOD column: what it is doing, in full
+            local dw = w:isEgg() and 0 or 72
+            if dw > 0 then self:doingButtonDraw({ x = px + pw - 150 - dw, y = py + 42, w = dw - 4, h = 22 }) end
+            self:printLine(under, sx + 6, py + 46, pw - 150 - 66 - dw, 'left', C.dim, { self.fonts.small, self.fonts.tiny })
             local bx = px + pw - 140
             setColor(C.dim)
             love.graphics.setFont(self.fonts.tiny)
@@ -1267,11 +1271,12 @@ function UI:drawBottomBar(game)
         local ty = self.vh - BOTTOM_BAR_H - 22
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle('fill', 8, ty, self.vw - 16, 20)
-        local room = self.vw - 28 - 76
-        local fx = self.vw - 8 - 70
+        local room = self.vw - 28 - 76 - 66
+        local fx = self.vw - 8 - 70 - 66
+        self:doingButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 })
         if w.jobSet or w:isBaby() then
             room = room - 70
-            self:jobsButtonDraw({ x = self.vw - 8 - 64, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
+            self:jobsButtonDraw({ x = self.vw - 8 - 64 - 66, y = ty, w = 64, h = 20 }, w:isBaby() and 'TEND' or 'JOBS')
             fx = fx - 70
         end
         self:followButtonDraw(game, { x = fx, y = ty, w = 70, h = 20 })
@@ -1305,6 +1310,50 @@ end
 
 function UI:followButtonAt(mx, my)
     return hit(self.followButton, mx, my)
+end
+
+-- The DETAILS button on the picked morphi's strip: what it is doing, in full.
+function UI:doingButtonDraw(r)
+    self:button(r, 'DETAILS', false)
+    self.doingButton = r
+end
+
+function UI:doingButtonAt(mx, my)
+    return hit(self.doingButton, mx, my)
+end
+
+function UI:insideDoingPanel(mx, my)
+    return hit(self.doingPanel, mx, my)
+end
+
+-- The DETAILS screen: the picked morphi's activity in full. A long talk
+-- shows its last lines, newest at the bottom.
+function UI:drawDoing(game)
+    local w = game.selectedWorker
+    if not (w and w.alive) then return end
+    local d = w:details()
+    local small = self.fonts.small
+    local lh = small:getHeight() + 6
+    local maxLines = math.max(3, math.floor((self.vh - 220) / lh))
+    local first = math.max(1, #d.lines - maxLines + 1)
+    local shown = #d.lines - first + 1
+    local x, y, pw, ph = self:panel(620, 150 + shown * lh)
+    self.doingPanel = { x = x, y = y, w = pw, h = ph }
+    self:printLine(d.title:upper(), x + 20, y + 16, pw - 160, 'left', C.text, { self.fonts.big, self.fonts.hud })
+    self:printLine(d.state, x + 20, y + 58, pw - 40, 'left', C.good, { self.fonts.hud, small })
+    local ly = y + 96
+    for i = first, #d.lines do
+        local l = d.lines[i]
+        if l.who then
+            local tag = l.who.name .. ': '
+            self:printLine(tag, x + 20, ly, pw - 40, 'left', C.accent, { small })
+            self:printLine(l.text, x + 20 + small:getWidth(tag), ly, pw - 40 - small:getWidth(tag), 'left', C.text, { small })
+        else
+            self:printLine(l.text, x + 20, ly, pw - 40, 'left', C.dim, { small, self.fonts.tiny })
+        end
+        ly = ly + lh
+    end
+    self:panelButton('close', { x = x + pw - 130, y = y + 14, w = 110, h = 30 }, 'CLOSE', false)
 end
 
 -- The JOBS button on the picked morphi's strip (free play only).
@@ -2551,8 +2600,8 @@ function UI:drawAnnual(scoring, highScore, isNew, stats)
 end
 
 -- The tester's corner: FINGERS, and the run's audit log.
-function UI:drawTools(fingerDebug)
-    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44) + self:buttonRowExtra(math.min(620, self.vw - 16), { { 'back', 'BACK' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
+function UI:drawTools(fingerDebug, canFunTest)
+    local x, y, pw, ph = self:panel(620, 300 + (self.touch and 52 or 44) + (canFunTest and (self.touch and 52 or 44) or 0) + self:buttonRowExtra(math.min(620, self.vw - 16), { { 'back', 'BACK' }, RUN_BUTTONS[1], RUN_BUTTONS[2] }))
     self:centeredFit('TESTER TOOLS', y + 24, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
     self:centeredFit('For finding bugs and tuning the meadow.', y + 76, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
     local bw, bh = math.min(260, pw - 40), self.touch and 44 or 36
@@ -2562,7 +2611,45 @@ function UI:drawTools(fingerDebug)
     local hw = math.floor((bw - 8) / 2)
     self:panelButton('tamatest', { x = bx, y = y + 118 + bh, w = hw, h = bh }, 'TAMA TEST', false)
     self:panelButton('stockup', { x = bx + hw + 8, y = y + 118 + bh, w = hw, h = bh }, 'STOCK UP', false)
+    -- free play: pick two morphis and a kind of fun for them to have now
+    if canFunTest then
+        self:panelButton('funtest', { x = bx, y = y + 126 + 2 * bh, w = bw, h = bh }, 'FUN TEST', false)
+    end
     self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true }, RUN_BUTTONS[1], RUN_BUTTONS[2] })
+end
+
+-- FUN TEST: the band as buttons (tap two), then a kind of fun to start for
+-- them. a and b are the picked workers. A * marks one that cannot play now.
+function UI:drawFunTest(workers, a, b)
+    local list, at = {}, {}
+    for i, w in ipairs(workers) do
+        if w:isWorking() then list[#list + 1] = w; at[#list] = i end
+    end
+    local rows = 6
+    local cols = math.max(1, math.min(3, math.ceil(#list / rows)))
+    local bh = self.touch and 44 or 34
+    local ph0 = 130 + rows * (bh + 6) + 20 + bh + 90
+    local x, y, pw, ph = self:panel(760, ph0)
+    self:centeredFit('FUN TEST', y + 20, pw - 40, C.text, { self.fonts.big, self.fonts.hud })
+    local picked = (a and a.name or '...') .. '  +  ' .. (b and b.name or '...')
+    self:centeredFit(picked, y + 62, pw - 40, C.good, { self.fonts.hud, self.fonts.small })
+    local gap = 8
+    local bw = math.floor((pw - 40 - gap * (cols - 1)) / cols)
+    for i, w in ipairs(list) do
+        if i > rows * cols then break end
+        local col, row = math.floor((i - 1) / rows), (i - 1) % rows
+        local r = { x = x + 20 + col * (bw + gap), y = y + 100 + row * (bh + 6), w = bw, h = bh }
+        local label = w.name .. (w:canBePaired() and '' or ' *')
+        self:panelButton('fm:' .. at[i], r, label, w == a or w == b)
+    end
+    local ky = y + 100 + rows * (bh + 6) + 8
+    self:centeredFit('Then pick the fun   (* = hungry, busy or away)', ky, pw - 40, C.dim, { self.fonts.small, self.fonts.tiny })
+    local kinds = PLAY_CATEGORIES
+    local kw = math.floor((pw - 40 - gap * (#kinds - 1)) / #kinds)
+    for i, kind in ipairs(kinds) do
+        self:panelButton('fk:' .. kind, { x = x + 20 + (i - 1) * (kw + gap), y = ky + 24, w = kw, h = bh }, PLAY_KIND_NAMES[kind] or kind:upper(), false)
+    end
+    self:panelButtonRow(x, y, pw, ph, { { 'back', 'BACK', true } })
 end
 
 -- EXPORT: a few words from the player, then the run is written out.
