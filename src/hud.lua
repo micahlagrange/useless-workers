@@ -302,11 +302,9 @@ function Hud:drawCaption()
     if alpha < 1 then love.graphics.pop() end
 end
 
--- Each species' colour, for its face on a button.
-local SPECIES_COLOR = { pupper = 'F2C27B', woofoof = '8FD3F0', twins = 'F59AC0', cwab = 'EF6B5B', blue = 'C7A6F2', ribbit = '8FD16A' }
+-- Each species' colour (MORPHI_COLOR), for its face on a button.
 function Hud.workerColor(w)
-    local h = SPECIES_COLOR[w.sheet] or 'F2C27B'
-    return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255, 1 }
+    return morphiColor(w.sheet)
 end
 
 -- A morphi's caption: who, what it is doing, how it feels, its jobs.

@@ -286,4 +286,55 @@ function TestFoodFeelings:test_the_food_bag_lists_the_stashes_and_what_it_thinks
     love.resize(1280, 720)
 end
 
+-- Micah's phone crash: closing the screen while a food scene still plays
+-- called finishScene before it was defined (main.lua:1111, a nil global).
+TestCloseMidScene = {}
+
+local function closeWithTap()
+    local ui = H.ui()
+    ui.touch = true
+    love.resize(1280, 720)
+    love.draw()
+    tap(ui, button(ui, 'tama:close'))
+    ui.touch = false
+end
+
+function TestCloseMidScene:test_a_real_baby_closes_mid_scene_and_eats()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    local g = H.game()
+    H.stockUp()
+    local b = baby(g)
+    H.openTama(b)
+    b.hunger = 30
+    H.dropFood(b.diet)
+    lu.assertNotNil(g.tamaScene, 'a scene is playing')
+    closeWithTap()
+    lu.assertEquals(H.state(), 'playing')
+    lu.assertNil(g.tamaScene)
+    lu.assertTrue(b.hunger > 30, 'leaving finishes the scene: it ate')
+    for _ = 1, 20 do love.update(0.1) end
+end
+
+function TestCloseMidScene:test_the_test_button_closes_mid_scene()
+    H.newGame('PUPPER', 1)
+    H.closeGoal()
+    H.setState('tools')
+    local ui = H.ui()
+    ui.touch = true
+    love.resize(1280, 720)
+    love.draw()
+    local tb
+    for _, bt in ipairs(ui.panelButtons) do if bt.id == 'tamatest' then tb = bt end end
+    tap(ui, tb)
+    ui.touch = false
+    local g = H.game()
+    lu.assertEquals(H.state(), 'tama')
+    H.dropFood(FOOD_KINDS[1])
+    lu.assertNotNil(g.tamaScene)
+    closeWithTap()
+    lu.assertEquals(H.state(), 'playing')
+    lu.assertNil(g.tamaScene)
+end
+
 os.exit(lu.LuaUnit.run())

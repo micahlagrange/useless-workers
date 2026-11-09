@@ -12,6 +12,7 @@ local Highscore = require('src.highscore')
 local Campaign = require('src.campaign')
 local Camera = require('src.camera')
 local Tileset = require('src.tileset')
+local Feel = require('src.feel')
 local Seeds = require('src.seeds')
 local UI = require('src.ui')
 local Ring = require('src.ring')
@@ -800,6 +801,7 @@ function love.load()
     hud = Hud.new(ui)
     Audio.loadVolumes()
     Tileset.load()
+    Feel.load()
     title.seed = Seeds.upcoming()
     love.keyboard.setKeyRepeat(true)
     buildTitleOptions()
@@ -874,6 +876,12 @@ local function updatePlaying(dt, substep)
                 game.jobs:postBaby(w)
             end
         end
+    end
+    -- a morphi just picked stops to look up at you (src/feel.lua)
+    local picked = game.selectedWorker
+    if picked ~= game.lastPicked then
+        game.lastPicked = picked
+        if picked and picked.alive then picked:feel('look') end
     end
     for _, w in ipairs(game.workers) do
         w:update(dt, game.clock)
@@ -1241,6 +1249,7 @@ local function followNext(step)
     if at == 0 then at = step > 0 and 0 or 1 end
     local w = band[(at - 1 + step) % #band + 1]
     game.selectedWorker = w
+    w:feel('wave')
     game.abilities:select(ABILITY_SELECT)
     if game.follow then
         ui:toast('Following ' .. w.name)
@@ -1287,7 +1296,7 @@ local function openTama(w)
     Audio.playSFX('click')
 end
 
-local wakeNap
+local wakeNap, finishScene
 local function closeTama()
     if game.tamaToss then game.tamaToss = nil end
     game.tamaMenu = nil
@@ -1352,7 +1361,7 @@ local function dropFood(food)
         or (b.name .. ' has never seen ' .. name .. ' before...')
 end
 
-local function finishScene()
+finishScene = function()
     local sc, b = game.tamaScene, game.tending
     game.tamaScene = nil
     if not (sc and b) then return end
@@ -1886,6 +1895,11 @@ local function lookAt(tile)
     local cam = game.camera
     cam.scale = math.max(cam.scale, math.min(cam.maxScale, 3))
     cam:centerOn((tile.x - 0.5) * TILE_SIZE, (tile.y - 0.5) * TILE_SIZE)
+    -- whoever is there waves, so you spot them at once
+    for _, w in ipairs(game.workers or {}) do
+        local t = w.alive and w:tile()
+        if t and t.x == tile.x and t.y == tile.y then w:feel('wave') end
+    end
 end
 
 local function openLog()
@@ -1952,6 +1966,8 @@ local function pressTopButton(id, x, b)
     elseif id == 'fingers' then fingerDebug = not fingerDebug
     elseif id == 'speed' then cycleSpeed()
     elseif id == 'tiles' then cycleTileset()
+    elseif id == 'calm' then
+        ui:toast(Feel.toggleCalm() and 'Less motion: on' or 'Less motion: off')
     elseif id == 'follow' then toggleFollow()
     elseif id == 'zoomin' then zoomBy(1.25)
     elseif id == 'zoomout' then zoomBy(1 / 1.25)
@@ -2279,6 +2295,7 @@ local function pointerPressed(x, y, button, istouch)
             openJobs()
         elseif w then
             game.selectedWorker = w
+            w:feel('wave')
             game.follow = true
             game.abilities:select(ABILITY_SELECT)
             ui:toast('Following ' .. w.name)
